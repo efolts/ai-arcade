@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//Users/data/.nvm/versions/node/**)",
+      "Bash(echo $PATH)",
+      "Bash(lsof -ti:5173 -ti:5174)",
+      "Bash(kill 45959 51716 53589)",
+      "Bash(lsof -ti:5173)",
+      "Bash(xargs kill:*)",
+      "Bash(find '/Users/data/Desktop/The Marketer/app' -maxdepth 3 -name *.mp3 -o -name *.wav -o -name *.ogg -o -name *.m4a -o -name *.aac -o -name *.webm)",
+      "Bash(find '/Users/data/Desktop/The Marketer' -maxdepth 2 -type f \\\\\\(-name *.mp3 -o -name *.wav -o -name *.ogg \\\\\\))"
+    ]
+  }
+}

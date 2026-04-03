@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "the-marketer-rpg",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/data/.nvm/versions/node/v20.20.0/bin:$PATH && cd app && npx vite --port 5173"],
+      "port": 5173
+    }
+  ]
+}
