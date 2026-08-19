@@ -40,9 +40,27 @@ export const ROOMS = {
     props: "atrium",
     grade: { mul: "#6ec8c8", mulA: 0.32, veil: "rgba(20,90,100,0.18)" },
     waves: [
-      { title: "GET READY / THEY'RE LIVE", ready: 3, queue: [{ kind: "grunt", n: 5, gap: 1.55, gates: ["S", "E"] }] },
-      { title: "THEY'RE IN THE ATRIUM", queue: [{ kind: "grunt", n: 6, gap: 0.55 }, { kind: "rusher", n: 4, gap: 0.5 }] },
-      { title: "LAST CALL — ATRIUM", queue: [{ kind: "shotgun", n: 3, gap: 0.7 }, { kind: "grunt", n: 4, gap: 0.45 }] },
+      {
+        title: "GET READY — LIVE FROM THE ATRIUM",
+        ready: 2.4,
+        queue: [
+          { kind: "grunt", n: 3, gap: 0.65, gates: ["S", "E"] },
+          { kind: "rusher", n: 1, gap: 0.2, gates: ["N"] },
+          { kind: "mannequin", n: 1, gap: 0.2, gates: ["W"] },
+          { kind: "shotgun", n: 1, gap: 0.2, gates: ["E"] },
+        ],
+      },
+      {
+        title: "THE FULL SET — EVERY KIND OF TROUBLE",
+        ready: 1.1,
+        queue: [
+          { kind: "grunt", n: 2, gap: 0.4, gates: ["S"] },
+          { kind: "rusher", n: 2, gap: 0.22, gates: ["N", "E"] },
+          { kind: "mannequin", n: 2, gap: 0.45, gates: ["W"] },
+          { kind: "shotgun", n: 1, gap: 0.2, gates: ["E"] },
+          { kind: "security", n: 1, gap: 0.2, gates: ["S"] },
+        ],
+      },
     ],
   },
   food: {
@@ -56,9 +74,35 @@ export const ROOMS = {
     props: "center",
     grade: { mul: "#d4c24a", mulA: 0.38, veil: "rgba(90,80,10,0.16)" },
     waves: [
-      { title: "TRAY LINE HOSTILES", queue: [{ kind: "grunt", n: 6, gap: 0.5, gates: ["N", "E", "W"] }] },
-      { title: "FOOD COURT RUSHERS", queue: [{ kind: "rusher", n: 6, gap: 0.38 }, { kind: "grunt", n: 3, gap: 0.55 }] },
-      { title: "CLOSING TIME", queue: [{ kind: "shotgun", n: 3, gap: 0.65 }, { kind: "rusher", n: 3, gap: 0.45 }] },
+      {
+        title: "FOOD COURT — THEY SMELL THE GREASE",
+        ready: 1.15,
+        queue: [
+          { kind: "rusher", n: 2, gap: 0.12, gates: ["N"] },
+          { kind: "rusher", n: 2, gap: 0.12, gates: ["E"] },
+          { kind: "rusher", n: 2, gap: 0.12, gates: ["W"] },
+          { kind: "grunt", n: 1, gap: 0.2, gates: ["S"] },
+        ],
+      },
+      {
+        title: "TRAY LINE STAMPEDE",
+        ready: 0.85,
+        queue: [
+          { kind: "rusher", n: 3, gap: 0.1, gates: ["N"] },
+          { kind: "rusher", n: 3, gap: 0.1, gates: ["E"] },
+          { kind: "rusher", n: 2, gap: 0.1, gates: ["W"] },
+        ],
+      },
+      {
+        title: "FOOD COURT FEEDING FRENZY",
+        ready: 0.7,
+        queue: [
+          { kind: "rusher", n: 3, gap: 0.08, gates: ["N"] },
+          { kind: "rusher", n: 3, gap: 0.08, gates: ["E"] },
+          { kind: "rusher", n: 3, gap: 0.08, gates: ["W"] },
+          { kind: "rusher", n: 2, gap: 0.08, gates: ["S"] },
+        ],
+      },
     ],
   },
   fashions: {
@@ -72,9 +116,27 @@ export const ROOMS = {
     props: "racks",
     grade: { mul: "#d4909a", mulA: 0.36, veil: "rgba(80,30,40,0.16)" },
     waves: [
-      { title: "MANNEQUIN AISLE", queue: [{ kind: "grunt", n: 6, gap: 0.48, gates: ["W", "N", "S"] }] },
-      { title: "FITTING ROOM SHOTGUNS", queue: [{ kind: "shotgun", n: 3, gap: 0.7 }, { kind: "grunt", n: 4, gap: 0.5 }] },
-      { title: "SECURITY ON THE FLOOR", queue: [{ kind: "security", n: 1, gap: 0.2 }, { kind: "rusher", n: 4, gap: 0.45 }] },
+      {
+        title: "MANNEQUIN WINDOWS",
+        ready: 1.15,
+        queue: [
+          { kind: "mannequin", n: 2, gap: 0.55, gates: ["W", "N"] },
+          { kind: "grunt", n: 2, gap: 0.5, gates: ["S"] },
+        ],
+      },
+      {
+        title: "DISPLAY FLOOR — DO NOT TOUCH",
+        ready: 0.85,
+        queue: [
+          { kind: "mannequin", n: 4, gap: 0.4, gates: ["W", "N", "S"] },
+          { kind: "grunt", n: 1, gap: 0.3, gates: ["E"] },
+        ],
+      },
+      {
+        title: "MANNEQUINS ON AISLE FOUR",
+        ready: 0.7,
+        queue: [{ kind: "mannequin", n: 6, gap: 0.28, gates: ["W", "N", "S"] }],
+      },
     ],
   },
   radio: {
@@ -88,9 +150,30 @@ export const ROOMS = {
     props: "counter",
     grade: { mul: "#3cb0b8", mulA: 0.4, veil: "rgba(10,50,60,0.2)" },
     waves: [
-      { title: "STATIC ON AISLE THREE", queue: [{ kind: "rusher", n: 6, gap: 0.4, gates: ["E", "N", "S"] }] },
-      { title: "TUBE GLOW SHOTGUNS", queue: [{ kind: "shotgun", n: 4, gap: 0.6 }, { kind: "grunt", n: 3, gap: 0.5 }] },
-      { title: "SIGN-OFF", queue: [{ kind: "security", n: 1, gap: 0.2 }, { kind: "rusher", n: 4, gap: 0.4 }] },
+      {
+        title: "TUBE GLOW — KEEP BACK",
+        ready: 1.15,
+        queue: [
+          { kind: "shotgun", n: 2, gap: 0.55, gates: ["E", "N"] },
+          { kind: "grunt", n: 2, gap: 0.45, gates: ["S"] },
+        ],
+      },
+      {
+        title: "STATIC SHOTGUNNERS",
+        ready: 0.85,
+        queue: [
+          { kind: "shotgun", n: 3, gap: 0.42, gates: ["E", "N", "S"] },
+          { kind: "grunt", n: 1, gap: 0.3, gates: ["W"] },
+        ],
+      },
+      {
+        title: "STATIC ON ALL FREQUENCIES",
+        ready: 0.7,
+        queue: [
+          { kind: "shotgun", n: 4, gap: 0.35, gates: ["E", "N", "S"] },
+          { kind: "grunt", n: 1, gap: 0.25, gates: ["W"] },
+        ],
+      },
     ],
   },
   service: {
@@ -104,9 +187,27 @@ export const ROOMS = {
     props: "corners",
     grade: { mul: "#d48840", mulA: 0.4, veil: "rgba(70,35,8,0.18)" },
     waves: [
-      { title: "BACK OF HOUSE", queue: [{ kind: "grunt", n: 6, gap: 0.45, gates: ["W", "E"] }] },
-      { title: "LOADING DOCK RUSHERS", queue: [{ kind: "rusher", n: 6, gap: 0.35 }, { kind: "shotgun", n: 2, gap: 0.7 }] },
-      { title: "KEY THE SOUTH LOCK", queue: [{ kind: "security", n: 1, gap: 0.2 }, { kind: "shotgun", n: 2, gap: 0.65 }, { kind: "grunt", n: 3, gap: 0.45 }] },
+      {
+        title: "BACK OF HOUSE",
+        ready: 1.15,
+        queue: [
+          { kind: "security", n: 1, gap: 0.2, gates: ["W"] },
+          { kind: "grunt", n: 3, gap: 0.4, gates: ["E", "W"] },
+        ],
+      },
+      {
+        title: "SODIUM SWEEP",
+        ready: 0.85,
+        queue: [
+          { kind: "security", n: 2, gap: 0.55, gates: ["W", "E"] },
+          { kind: "grunt", n: 2, gap: 0.4, gates: ["S"] },
+        ],
+      },
+      {
+        title: "ALL UNITS TO SERVICE",
+        ready: 0.7,
+        queue: [{ kind: "security", n: 3, gap: 0.45, gates: ["W", "E", "S"] }],
+      },
     ],
   },
   boss: {
@@ -123,17 +224,27 @@ export const ROOMS = {
       {
         title: "DIRECTORY OVERRIDE",
         boss: true,
-        ready: 1.4,
-        queue: [{ kind: "boss", n: 1, gap: 0.15 }, { kind: "rusher", n: 4, gap: 1.2 }],
+        ready: 1.5,
+        queue: [{ kind: "boss", n: 1, gap: 0.15 }],
       },
     ],
   },
 };
 
-export const TRASH_WAVE = {
-  title: "STRAY SIGNAL",
-  queue: [{ kind: "grunt", n: 2, gap: 0.9 }],
+const TRASH = {
+  atrium: { title: "STRAY SIGNAL — MIXED SET", ready: 1, queue: [{ kind: "rusher", n: 1, gap: 0.2, gates: ["N"] }, { kind: "mannequin", n: 1, gap: 0.35, gates: ["W"] }] },
+  food: { title: "STRAY RUSHERS", ready: 1, queue: [{ kind: "rusher", n: 3, gap: 0.18, gates: ["N", "E", "W"] }] },
+  fashions: { title: "STRAY MANNEQUINS", ready: 1, queue: [{ kind: "mannequin", n: 2, gap: 0.4, gates: ["W", "N"] }] },
+  radio: { title: "STRAY STATIC", ready: 1, queue: [{ kind: "shotgun", n: 1, gap: 0.2, gates: ["E"] }, { kind: "grunt", n: 1, gap: 0.4, gates: ["N"] }] },
+  service: { title: "STRAY SECURITY", ready: 1, queue: [{ kind: "security", n: 1, gap: 0.2, gates: ["W"] }] },
+  boss: { title: "STRAY SIGNAL", ready: 1, queue: [{ kind: "rusher", n: 2, gap: 0.3 }] },
 };
+
+export const TRASH_WAVE = TRASH.atrium;
+
+export function trashWaveFor(roomId) {
+  return TRASH[roomId] || TRASH.atrium;
+}
 
 export function wingsCleared(cleared) {
   return WING_IDS.every((id) => cleared[id]);

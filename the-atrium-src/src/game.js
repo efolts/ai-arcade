@@ -22,8 +22,8 @@ import {
   INWARD,
   OPPOSITE,
   ROOMS,
-  TRASH_WAVE,
   applyRoomGrade,
+  trashWaveFor,
   doorLabel,
   doorLocked,
   doorOpen,
@@ -128,13 +128,14 @@ function currentObs(world) {
 function botStats(kind, wave) {
   const f = 1 + (wave - 1) * 0.06;
   const table = {
-    grunt: { hp: 1, speed: 52, r: 20, score: 100, scale: 1 },
-    rusher: { hp: 1, speed: 110, r: 18, score: 150, scale: 0.94 },
-    shotgun: { hp: 3, speed: 50, r: 22, score: 250, scale: 1.08 },
-    security: { hp: 14, speed: 40, r: 26, score: 500, scale: 1.4 },
-    boss: { hp: 90 + wave * 8, speed: 36, r: 34, score: 5000, scale: 1.9 },
+    grunt: { hp: 1, speed: 58, r: 20, score: 100, scale: 1 },
+    rusher: { hp: 1, speed: 128, r: 18, score: 150, scale: 0.94 },
+    shotgun: { hp: 5, speed: 46, r: 22, score: 250, scale: 1.08 },
+    security: { hp: 18, speed: 32, r: 28, score: 500, scale: 1.4 },
+    mannequin: { hp: 5, speed: 12, r: 19, score: 220, scale: 1.02 },
+    boss: { hp: 96 + wave * 6, speed: 38, r: 34, score: 5000, scale: 1.9 },
   };
-  const s = table[kind];
+  const s = table[kind] || table.grunt;
   return { ...s, speed: s.speed * (kind === "boss" ? 1 : f) };
 }
 
@@ -193,7 +194,7 @@ export function createGame(canvas, input) {
       vy: 0,
       fireT: 0,
       muzzle: 0,
-      iframes: 3.2,
+      iframes: 2.85,
       powers: { spread: 0, rapid: 0, speed: 0 },
     };
     world.bots = [];
@@ -233,14 +234,7 @@ export function createGame(canvas, input) {
     world.wavePause = 0;
     if (revisit && world.cleared[world.roomId]) {
       world.roomWave = -1;
-      if (!world.trashDone[world.roomId]) {
-        beginWave(TRASH_WAVE, true);
-        world.trashDone[world.roomId] = true;
-      } else {
-        world.readyT = 0;
-        announce = `${room.short}  —  CLEAR`;
-        announceT = 1.2;
-      }
+      beginWave(trashWaveFor(world.roomId), false);
       return;
     }
     world.roomWave = 0;
@@ -257,10 +251,10 @@ export function createGame(canvas, input) {
     world.spawn.sort((a, b) => a.wait - b.wait);
     world.spawnT = 0;
     world.wavePause = 0;
-    world.readyT = def.ready || (firstAtrium ? 3 : 0.7);
+    world.readyT = def.ready || (firstAtrium ? 2.4 : 0.85);
     world.spawnGates = def.queue[0] && def.queue[0].gates ? def.queue[0].gates : null;
     announce = def.title;
-    announceT = firstAtrium ? 3.1 : def.boss ? 2.4 : 1.8;
+    announceT = firstAtrium ? 2.6 : def.boss ? 2.4 : 1.7;
     if (def.boss) sfx.boss();
     else sfx.wave();
   }
@@ -346,8 +340,15 @@ export function createGame(canvas, input) {
       score: st.score,
       scale: st.scale,
       facing: 0,
-      fireT: 0.4 + Math.random() * 0.6,
-      stun: world.wave === 1 ? 0.85 : 0.55,
+      vx: 0,
+      vy: 0,
+      pose: kind === "mannequin" ? "still" : "",
+      stillT: kind === "mannequin" ? 0.95 + Math.random() * 0.55 : 0,
+      lungeT: 0,
+      addT: kind === "boss" ? 3.8 : 0,
+      addI: 0,
+      fireT: kind === "shotgun" ? 0.35 + Math.random() * 0.3 : 0.4 + Math.random() * 0.55,
+      stun: world.roomId === "atrium" && world.wave === 1 ? 0.32 : 0.18,
       deadT: 0,
       dead: false,
     };
@@ -645,9 +646,50 @@ export function createGame(canvas, input) {
         b.facing = angOf(p.x - b.x, p.y - b.y);
         continue;
       }
-      const to = norm(p.x - b.x, p.y - b.y);
-      let sx = to.x;
-      let sy = to.y;
+      const ang = angOf(p.x - b.x, p.y - b.y);
+      const dist = Math.hypot(p.x - b.x, p.y - b.y);
+      let sx = Math.cos(ang);
+      let sy = Math.sin(ang);
+      let moveSpd = b.speed;
+
+      if (b.kind === "mannequin") {
+        b.stillT = (b.stillT ?? 0.5) - dt;
+        b.lungeT = (b.lungeT ?? 0) - dt;
+        if (b.pose !== "lunge") b.pose = "still";
+        if (b.pose === "still") {
+          if (b.stillT > 0.5) {
+            sx = 0;
+            sy = 0;
+            moveSpd = 0;
+          } else {
+            moveSpd = 12;
+          }
+          if (dist < 88 || b.stillT <= 0) {
+            b.pose = "lunge";
+            b.lungeT = 0.52;
+          }
+        } else {
+          moveSpd = 158;
+          if (b.lungeT <= 0) {
+            b.pose = "still";
+            b.stillT = 0.75 + Math.random() * 0.55;
+          }
+        }
+      } else if (b.kind === "shotgun") {
+        if (dist < 120) {
+          sx = -Math.cos(ang);
+          sy = -Math.sin(ang);
+          moveSpd = b.speed * 1.08;
+        } else if (dist > 190) {
+          sx = Math.cos(ang);
+          sy = Math.sin(ang);
+        } else {
+          sx = -Math.sin(ang);
+          sy = Math.cos(ang);
+          moveSpd = b.speed * 0.88;
+        }
+      }
+
       for (const o of obs) {
         const dx = b.x - o.x;
         const dy = b.y - o.y;
@@ -657,12 +699,25 @@ export function createGame(canvas, input) {
           sy += (dy / (d || 1)) * 0.8;
         }
       }
-      const sl = norm(sx, sy);
-      b.x += sl.x * b.speed * dt;
-      b.y += sl.y * b.speed * dt;
-      b.facing = angOf(sl.x, sl.y);
+      const sl = moveSpd <= 0 && Math.hypot(sx, sy) < 0.01 ? { x: 0, y: 0 } : norm(sx, sy);
+      b.vx = sl.x * moveSpd;
+      b.vy = sl.y * moveSpd;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.facing = b.kind === "shotgun" || b.kind === "mannequin" ? ang : angOf(sl.x || Math.cos(ang), sl.y || Math.sin(ang));
       resolveWorld(b, obs);
       if (hits(b, p)) {
+        if (b.kind === "security") {
+          p.x += Math.cos(ang) * 20;
+          p.y += Math.sin(ang) * 20;
+          resolveWorld(p, obs);
+          const d2 = Math.hypot(b.x - p.x, b.y - p.y) || 1;
+          const min = b.r + p.r + 2;
+          if (d2 < min) {
+            b.x = p.x + ((b.x - p.x) / d2) * min;
+            b.y = p.y + ((b.y - p.y) / d2) * min;
+          }
+        }
         if (p.iframes > 0 || (world.readyT || 0) > 0) {
           const dx = b.x - p.x;
           const dy = b.y - p.y;
@@ -676,22 +731,19 @@ export function createGame(canvas, input) {
       }
 
       b.fireT -= dt;
-      if (b.kind === "shotgun" && b.fireT <= 0) {
-        const d = Math.hypot(p.x - b.x, p.y - b.y);
-        if (d < 210) {
-          b.fireT = 1.15;
-          const base = angOf(p.x - b.x, p.y - b.y);
-          for (const off of [-0.2, 0, 0.2]) {
-            const a = base + off;
-            world.eShots.push({
-              x: b.x + Math.cos(a) * 16,
-              y: b.y + Math.sin(a) * 16,
-              vx: Math.cos(a) * 240,
-              vy: Math.sin(a) * 240,
-              r: 3.5,
-              life: 0.55,
-            });
-          }
+      if (b.kind === "shotgun" && b.fireT <= 0 && dist < 245) {
+        b.fireT = 0.68;
+        const base = ang;
+        for (const off of [-0.22, 0, 0.22]) {
+          const a = base + off;
+          world.eShots.push({
+            x: b.x + Math.cos(a) * 16,
+            y: b.y + Math.sin(a) * 16,
+            vx: Math.cos(a) * 255,
+            vy: Math.sin(a) * 255,
+            r: 3.5,
+            life: 0.62,
+          });
         }
       }
       if (b.kind === "boss" && b.fireT <= 0) {
@@ -707,6 +759,29 @@ export function createGame(canvas, input) {
             r: 4.5,
             life: 2.2,
           });
+        }
+      }
+      if (b.kind === "boss") {
+        b.addT = (b.addT ?? 3.8) - dt;
+        const liveAdds = world.bots.filter((x) => x !== b && !x.dead).length;
+        if (b.addT <= 0 && liveAdds < 5) {
+          b.addT = 4.0;
+          const cycle = ["rushers", "mannequin", "shotgun"];
+          const pick = cycle[(b.addI || 0) % 3];
+          b.addI = (b.addI || 0) + 1;
+          if (pick === "rushers") {
+            spawnBot("rusher", ["N", "E"]);
+            spawnBot("rusher", ["S", "W"]);
+            spawnBot("rusher", ["N", "S"]);
+            announce = "THE MALL COMES WITH YOU — RUSHERS";
+          } else if (pick === "mannequin") {
+            spawnBot("mannequin", ["W", "E"]);
+            announce = "THE MALL COMES WITH YOU — MANNEQUIN";
+          } else {
+            spawnBot("shotgun", ["N", "S"]);
+            announce = "THE MALL COMES WITH YOU — STATIC";
+          }
+          announceT = 1.6;
         }
       }
     }
@@ -767,7 +842,7 @@ export function createGame(canvas, input) {
 
     if (!world.spawn.length && world.bots.every((b) => b.dead || !b)) {
       world.wavePause += dt;
-      if (world.wavePause > 1.35) {
+      if (world.wavePause > 1.15) {
         world.wavePause = 0;
         const room = ROOMS[world.roomId];
         if (world.cleared[world.roomId]) return;

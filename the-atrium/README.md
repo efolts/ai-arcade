@@ -5,7 +5,7 @@ Twin-stick horde shooter for the Rapid City Digital arcade cabinet. Static build
 ## Canon (RCD video team lock)
 
 - **CRT-head:** wood-grain TV, two cyan dots, trench coat. The graveyard/shovel still is the character lock. In-arena bodies are SNES pixel sprites (integer scale, nearest-neighbor). Cyan is CRT-faction only.
-- **Tessera:** pearl-white, black wraparound visor, no face, no chest logo, no Tesla badges, no cyan on the bots.
+- **Tessera:** pearl-white, black wraparound visor, no face, no chest logo, no Tesla badges, no cyan on the bots. Same SNES sheet for variants (scale / slight shift).
 - **Uplink** is retired. City of Presidents / statues stay silent.
 - Arena key art stays the attached top-down atrium until a real mall-inside endframe arrives.
 

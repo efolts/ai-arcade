@@ -316,7 +316,16 @@ export function drawBotFallback(ctx, e, t) {
   ctx.translate(0, bob);
 
   const body = e.kind === "security" ? 1.15 : e.kind === "boss" ? 1.25 : 1;
-  const white = e.kind === "security" ? "#ece8e0" : "#f6f3ec";
+  const white =
+    e.kind === "security"
+      ? "#ece8e0"
+      : e.kind === "mannequin"
+        ? "#e8c4b8"
+        : e.kind === "shotgun"
+          ? "#d0d6dc"
+          : e.kind === "rusher"
+            ? "#fff0e6"
+            : "#f6f3ec";
   const joint = "#1a1a1c";
 
   ctx.strokeStyle = joint;

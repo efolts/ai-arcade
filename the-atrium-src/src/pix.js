@@ -27,7 +27,14 @@ export const CRT_CELL = { w: 40, h: 56 };
 export const TES_CELL = { w: 36, h: 52 };
 export const SCALE = 1;
 
-const KIND_SCALE = { rusher: 1, grunt: 1, shotgun: 1, security: 2, boss: 3 };
+const KIND_SCALE = { rusher: 1, grunt: 1, shotgun: 1, mannequin: 1, security: 2, boss: 3 };
+const KIND_TINT = {
+  mannequin: "rgba(214,148,138,0.48)",
+  shotgun: "rgba(118,148,178,0.42)",
+  rusher: "rgba(255,208,188,0.24)",
+};
+
+const tintScratch = makeCanvas(48, 64);
 
 const TES_SHARDS = ["#f4f0e8", "#dcd8d0", "#c4c0b8", "#9a9690", "#6a6662", "#2a2a2c", "#ece8e0"];
 const CRT_SHARDS = ["#5ef6ff", "#b8fff8", "#ffffff", "#2ee8e0", "#8ffff8", "#0a6060"];
@@ -199,21 +206,32 @@ function blitCooked(ctx, frame, x, y, scale, opt = {}) {
   if (!frame) return;
   const dw = frame.width * scale;
   const dh = frame.height * scale;
+  const dx = Math.round(x - dw / 2);
+  const dy = Math.round(y - dh + scale * 2);
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   if (opt.alpha != null) ctx.globalAlpha = opt.alpha;
   if (opt.flash) ctx.globalCompositeOperation = "lighter";
-  ctx.drawImage(
-    frame,
-    0,
-    0,
-    frame.width,
-    frame.height,
-    Math.round(x - dw / 2),
-    Math.round(y - dh + scale * 2),
-    dw,
-    dh,
-  );
+  if (opt.tint) {
+    const tw = Math.max(1, Math.ceil(dw));
+    const th = Math.max(1, Math.ceil(dh));
+    if (tintScratch.width !== tw || tintScratch.height !== th) {
+      tintScratch.width = tw;
+      tintScratch.height = th;
+    }
+    const tx = tintScratch.getContext("2d");
+    tx.imageSmoothingEnabled = false;
+    tx.clearRect(0, 0, tw, th);
+    tx.globalCompositeOperation = "source-over";
+    tx.drawImage(frame, 0, 0, frame.width, frame.height, 0, 0, dw, dh);
+    tx.globalCompositeOperation = "source-atop";
+    tx.fillStyle = opt.tint;
+    tx.fillRect(0, 0, tw, th);
+    tx.globalCompositeOperation = "source-over";
+    ctx.drawImage(tintScratch, 0, 0, tw, th, dx, dy, tw, th);
+  } else {
+    ctx.drawImage(frame, 0, 0, frame.width, frame.height, dx, dy, dw, dh);
+  }
   ctx.restore();
 }
 
@@ -312,9 +330,10 @@ export function drawTesseraSprite(ctx, e, t) {
   if (!bank) return false;
   const kind = e.kind || "grunt";
   const scale = KIND_SCALE[kind] || SCALE;
-  const moving = !e.dead && e.speed > 0.1;
+  const stillPose = kind === "mannequin" && e.pose !== "lunge";
+  const moving = !e.dead && !stillPose && (e.vx || 0) * (e.vx || 0) + (e.vy || 0) * (e.vy || 0) > 16;
   const face = dir4(e.facing || 0);
-  const frame = moving ? 1 + (Math.floor(t * (kind === "rusher" ? 12 : 8)) % 2) : 0;
+  const frame = moving ? 1 + (Math.floor(t * (kind === "rusher" ? 12 : kind === "mannequin" ? 10 : 8)) % 2) : 0;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -327,7 +346,7 @@ export function drawTesseraSprite(ctx, e, t) {
     return true;
   }
   if (kind === "security") ctx.filter = "sepia(0.25) contrast(1.05)";
-  blitFrame(ctx, bank, face, frame, e.x, e.y, scale);
+  blitFrame(ctx, bank, face, frame, e.x, e.y, scale, { tint: KIND_TINT[kind] || null });
   ctx.filter = "none";
   if (kind === "boss" && !e.dead) {
     ctx.imageSmoothingEnabled = false;
