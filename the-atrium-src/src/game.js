@@ -102,16 +102,28 @@ function resolveWorld(e, obs) {
   const m = e.r + 8;
   e.x = clamp(e.x, ARENA.x + m, ARENA.x + ARENA.s - m);
   e.y = clamp(e.y, ARENA.y + m, ARENA.y + ARENA.s - m);
+  for (let n = 0; n < 3; n++) {
+    for (const o of obs) {
+      const dx = e.x - o.x;
+      const dy = e.y - o.y;
+      const d = Math.hypot(dx, dy) || 0.001;
+      const min = e.r + o.r;
+      if (d < min) {
+        e.x = o.x + (dx / d) * min;
+        e.y = o.y + (dy / d) * min;
+      }
+    }
+  }
+}
+
+function hitsObs(e, obs) {
   for (const o of obs) {
     const dx = e.x - o.x;
     const dy = e.y - o.y;
-    const d = Math.hypot(dx, dy) || 0.001;
-    const min = e.r + o.r;
-    if (d < min) {
-      e.x = o.x + (dx / d) * min;
-      e.y = o.y + (dy / d) * min;
-    }
+    const rr = e.r + o.r;
+    if (dx * dx + dy * dy < rr * rr) return true;
   }
+  return false;
 }
 
 function hits(a, b) {
@@ -791,6 +803,11 @@ export function createGame(canvas, input) {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
+      if (hitsObs(b, obs)) {
+        b.life = 0;
+        burst(b.x, b.y, 4, "#7ffff8", 0.18);
+        continue;
+      }
       for (const e of world.bots) {
         if (e.dead || !hits(b, e)) continue;
         e.hp -= 1;
@@ -808,6 +825,10 @@ export function createGame(canvas, input) {
       s.x += s.vx * dt;
       s.y += s.vy * dt;
       s.life -= dt;
+      if (hitsObs(s, obs)) {
+        s.life = 0;
+        continue;
+      }
       if (hits(s, p)) {
         s.life = 0;
         if (p.iframes > 0 || (world.readyT || 0) > 0) continue;

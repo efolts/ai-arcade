@@ -275,6 +275,32 @@ export function doorLabel(roomId, dir, cleared) {
   return ROOMS[dest].short;
 }
 
+function stampLine(out, x0, y0, x1, y1, r, spacing) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  const n = Math.max(1, Math.round(len / spacing));
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    out.push({ x: x0 + dx * t, y: y0 + dy * t, r });
+  }
+}
+
+/** radio.jpg is 1024² and cover-fits the square arena 1:1. Desk measured from the paint. */
+function radioDeskObstacles(arena) {
+  const k = arena.s / 1024;
+  const X = (px) => arena.x + px * k;
+  const Y = (py) => arena.y + py * k;
+  const out = [];
+  const r = 21;
+  const step = 14;
+  // Closed south bar; arms run north; open on the north so you can walk into the U.
+  stampLine(out, X(348), Y(352), X(348), Y(588), r, step);
+  stampLine(out, X(676), Y(352), X(676), Y(588), r, step);
+  stampLine(out, X(328), Y(628), X(696), Y(628), r, step);
+  return out;
+}
+
 export function roomObstacles(roomId, arena) {
   const cx = arena.x + arena.s / 2;
   const cy = arena.y + arena.s / 2;
@@ -305,13 +331,7 @@ export function roomObstacles(roomId, arena) {
       { x: cx + q, y: cy + q, r: 16 },
     ];
   }
-  if (id === "radio") {
-    return [
-      { x: cx, y: cy + 8, r: 28 },
-      { x: cx - 34, y: cy + 18, r: 20 },
-      { x: cx + 34, y: cy + 18, r: 20 },
-    ];
-  }
+  if (id === "radio") return radioDeskObstacles(arena);
   if (id === "service") {
     return [
       { x: arena.x + 70, y: arena.y + 70, r: 26 },
