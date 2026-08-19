@@ -12,24 +12,83 @@ OUT.mkdir(parents=True, exist_ok=True)
 MAG_R, MAG_G, MAG_B = 255, 0, 255
 
 
+def _is_magenta(r, g, b):
+    ri, gi, bi = r.astype(np.int32), g.astype(np.int32), b.astype(np.int32)
+    near = (ri > 200) & (gi < 90) & (bi > 200)
+    dist2 = (ri - MAG_R) ** 2 + (gi - MAG_G) ** 2 + (bi - MAG_B) ** 2
+    score = ri + bi - 2 * gi
+    fringe = ((gi < 55) & (ri >= 70) & (bi >= 50) & (score > 90)) | (
+        (ri >= 140) & (bi >= 100) & (gi < 80) & (score > 160)
+    )
+    return near | (dist2 < 160 * 160) | fringe
+
+
+def _is_card_dark(r, g, b):
+    """Sprite-card black / brown-magenta, not interior coat or visor."""
+    ri, gi, bi = r.astype(np.int32), g.astype(np.int32), b.astype(np.int32)
+    lum = ri + gi + bi
+    mx = np.maximum(np.maximum(ri, gi), bi)
+    score = ri + bi - 2 * gi
+    dark = (lum <= 16) | (mx <= 8)
+    tint = ((lum < 150) & (gi < 45) & (score > 30)) | (
+        (lum < 100) & (score > 18) & ((ri > gi + 6) | (bi > gi + 6))
+    )
+    return dark | tint
+
+
+def key_frame_arr(arr: np.ndarray) -> np.ndarray:
+    """Zero-alpha magenta, card background (flood from edges), and 1px fringe."""
+    h, w = arr.shape[:2]
+    r, g, b, a = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2], arr[:, :, 3]
+    keyed = (a < 8) | _is_magenta(r, g, b)
+    card = keyed | _is_card_dark(r, g, b)
+    seen = np.zeros((h, w), dtype=bool)
+    stack = []
+    for x in range(w):
+        stack.append((0, x))
+        stack.append((h - 1, x))
+    for y in range(h):
+        stack.append((y, 0))
+        stack.append((y, w - 1))
+    while stack:
+        y, x = stack.pop()
+        if y < 0 or x < 0 or y >= h or x >= w or seen[y, x]:
+            continue
+        seen[y, x] = True
+        if not card[y, x]:
+            continue
+        keyed[y, x] = True
+        stack.extend(((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)))
+    pad = np.pad(keyed, 1, constant_values=True)
+    neigh = (
+        pad[0:-2, 0:-2].astype(np.uint8)
+        + pad[0:-2, 1:-1]
+        + pad[0:-2, 2:]
+        + pad[1:-1, 0:-2]
+        + pad[1:-1, 2:]
+        + pad[2:, 0:-2]
+        + pad[2:, 1:-1]
+        + pad[2:, 2:]
+    )
+    keyed = keyed | ((~keyed) & (neigh >= 5))
+    out = arr.copy()
+    out[keyed] = (0, 0, 0, 0)
+    return out
+
+
 def key_magenta(im: Image.Image) -> Image.Image:
     arr = np.array(im.convert("RGBA"))
-    r, g, b = arr[:, :, 0].astype(int), arr[:, :, 1].astype(int), arr[:, :, 2].astype(int)
-    # exact + near magenta (generated art is not #FF00FF)
-    mag = (r >= 170) & (b >= 150) & (g <= 100) & (r + b - 2 * g >= 180)
-    pink = (r >= 190) & (b >= 130) & (g <= 85)
-    arr[:, :, 3] = np.where(mag | pink, 0, 255)
-    # drop 1px magenta fringe
-    a = arr[:, :, 3]
-    neigh = (
-        np.pad(a, 1)[0:-2, 1:-1]
-        + np.pad(a, 1)[2:, 1:-1]
-        + np.pad(a, 1)[1:-1, 0:-2]
-        + np.pad(a, 1)[1:-1, 2:]
-    )
-    fringe = (a > 0) & (neigh < 200) & mag
-    arr[fringe | mag | pink, 3] = 0
-    return Image.fromarray(arr)
+    return Image.fromarray(key_frame_arr(arr), "RGBA")
+
+
+def key_atlas(im: Image.Image, cw: int, ch: int) -> Image.Image:
+    arr = np.array(im.convert("RGBA"))
+    h, w = arr.shape[:2]
+    out = np.zeros_like(arr)
+    for y in range(0, h, ch):
+        for x in range(0, w, cw):
+            out[y : y + ch, x : x + cw] = key_frame_arr(arr[y : y + ch, x : x + cw])
+    return Image.fromarray(out, "RGBA")
 
 
 def content_bbox(arr, pad=2):
@@ -273,7 +332,7 @@ def main():
                 if not fp.exists():
                     fp = OUT / f"{prefix}-idle.png"
                 fr = Image.open(fp).convert("RGBA")
-                fr = pad_to(fr, cw, ch)
+                fr = key_magenta(pad_to(fr, cw, ch))
                 atlas.paste(fr, (ci * cw, ri * ch), fr)
         atlas.save(OUT / f"{prefix}-atlas.png")
         print("atlas", prefix, atlas.size)
@@ -288,5 +347,25 @@ def main():
     print("wrote", sorted(p.name for p in OUT.iterdir()))
 
 
+def rekey_existing():
+    """Bake real alpha into already-sliced frames / atlases (no lock-sheet regen)."""
+    for name, cell in (("crt-atlas.png", (40, 56)), ("tessera-atlas.png", (36, 52))):
+        fp = OUT / name
+        if not fp.exists():
+            continue
+        key_atlas(Image.open(fp), *cell).save(fp)
+        print("rekeyed atlas", name)
+    for fp in sorted(OUT.glob("*.png")):
+        if fp.name.endswith("-atlas.png"):
+            continue
+        key_magenta(Image.open(fp)).save(fp)
+        print("rekeyed", fp.name)
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--rekey":
+        rekey_existing()
+    else:
+        main()

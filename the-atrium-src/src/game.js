@@ -141,11 +141,11 @@ function waveDef(n) {
 function botStats(kind, wave) {
   const f = 1 + (wave - 1) * 0.06;
   const table = {
-    grunt: { hp: 1, speed: 52, r: 20, score: 100, scale: 1 },
-    rusher: { hp: 1, speed: 110, r: 16, score: 150, scale: 0.94 },
-    shotgun: { hp: 3, speed: 50, r: 20, score: 250, scale: 1.08 },
-    security: { hp: 14, speed: 40, r: 26, score: 500, scale: 1.4 },
-    boss: { hp: 90 + wave * 8, speed: 36, r: 36, score: 5000, scale: 1.9 },
+    grunt: { hp: 1, speed: 52, r: 12, score: 100, scale: 1 },
+    rusher: { hp: 1, speed: 110, r: 12, score: 150, scale: 0.94 },
+    shotgun: { hp: 3, speed: 50, r: 13, score: 250, scale: 1.08 },
+    security: { hp: 14, speed: 40, r: 16, score: 500, scale: 1.4 },
+    boss: { hp: 90 + wave * 8, speed: 36, r: 20, score: 5000, scale: 1.9 },
   };
   const s = table[kind];
   return { ...s, speed: s.speed * (kind === "boss" ? 1 : f) };
@@ -190,7 +190,7 @@ export function createGame(canvas, input) {
     world.player = {
       x: cx,
       y: cy,
-      r: 22,
+      r: 14,
       aim: -Math.PI / 2,
       vx: 0,
       vy: 0,
@@ -365,7 +365,7 @@ export function createGame(canvas, input) {
 
   function hurtPlayer() {
     const p = world.player;
-    if (p.iframes > 0) return;
+    if ((world.readyT || 0) > 0 || p.iframes > 0) return;
     world.lives -= 1;
     p.iframes = 1.6;
     world.mult = 1;
@@ -510,7 +510,7 @@ export function createGame(canvas, input) {
 
     world.readyT = Math.max(0, (world.readyT || 0) - dt);
     if (world.readyT > 0) {
-      p.iframes = Math.max(p.iframes, 0.2);
+      p.iframes = Math.max(p.iframes, world.readyT + 0.45);
     } else {
       world.spawnT += dt;
       while (world.spawn.length && world.spawn[0].wait <= world.spawnT) {
@@ -546,7 +546,18 @@ export function createGame(canvas, input) {
       b.y += sl.y * b.speed * dt;
       b.facing = angOf(sl.x, sl.y);
       resolveWorld(b, obs);
-      if (hits(b, p)) hurtPlayer();
+      if (hits(b, p)) {
+        if (p.iframes > 0 || (world.readyT || 0) > 0) {
+          const dx = b.x - p.x;
+          const dy = b.y - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const min = b.r + p.r + 2;
+          b.x = p.x + (dx / d) * min;
+          b.y = p.y + (dy / d) * min;
+        } else {
+          hurtPlayer();
+        }
+      }
 
       b.fireT -= dt;
       if (b.kind === "shotgun" && b.fireT <= 0) {
@@ -608,6 +619,7 @@ export function createGame(canvas, input) {
       s.life -= dt;
       if (hits(s, p)) {
         s.life = 0;
+        if (p.iframes > 0 || (world.readyT || 0) > 0) continue;
         hurtPlayer();
       }
     }
