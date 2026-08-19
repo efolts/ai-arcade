@@ -466,13 +466,18 @@ export function drawBolt(ctx, b) {
 export function drawEnemyShot(ctx, b) {
   ctx.save();
   ctx.translate(b.x, b.y);
-  ctx.fillStyle = "#2a2a2e";
-  ctx.strokeStyle = "rgba(255,220,180,0.5)";
-  ctx.lineWidth = 1;
+  ctx.fillStyle = "#14100c";
   ctx.beginPath();
-  ctx.arc(0, 0, b.r, 0, Math.PI * 2);
+  ctx.arc(0, 0, b.r + 0.8, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
+  ctx.fillStyle = "#c47820";
+  ctx.beginPath();
+  ctx.arc(0, 0, b.r * 0.62, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#e8b060";
+  ctx.beginPath();
+  ctx.arc(-0.7, -0.6, 1.15, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 

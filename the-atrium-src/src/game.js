@@ -751,18 +751,18 @@ export function createGame(canvas, input) {
       }
 
       b.fireT -= dt;
-      if (b.kind === "shotgun" && b.fireT <= 0 && dist < 245) {
-        b.fireT = 0.68;
+      if (b.kind === "shotgun" && b.fireT <= 0 && dist < 270) {
+        b.fireT = 0.56;
         const base = ang;
-        for (const off of [-0.22, 0, 0.22]) {
+        for (const off of [-0.2, 0, 0.2]) {
           const a = base + off;
           world.eShots.push({
             x: b.x + Math.cos(a) * 16,
             y: b.y + Math.sin(a) * 16,
-            vx: Math.cos(a) * 255,
-            vy: Math.sin(a) * 255,
-            r: 3.5,
-            life: 0.62,
+            vx: Math.cos(a) * 270,
+            vy: Math.sin(a) * 270,
+            r: 4,
+            life: 0.7,
           });
         }
       }

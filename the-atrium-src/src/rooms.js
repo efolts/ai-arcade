@@ -91,6 +91,7 @@ export const ROOMS = {
           { kind: "rusher", n: 3, gap: 0.1, gates: ["N"] },
           { kind: "rusher", n: 3, gap: 0.1, gates: ["E"] },
           { kind: "rusher", n: 2, gap: 0.1, gates: ["W"] },
+          { kind: "shotgun", n: 1, gap: 0.2, gates: ["S"] },
         ],
       },
       {
@@ -101,6 +102,7 @@ export const ROOMS = {
           { kind: "rusher", n: 3, gap: 0.08, gates: ["E"] },
           { kind: "rusher", n: 3, gap: 0.08, gates: ["W"] },
           { kind: "rusher", n: 2, gap: 0.08, gates: ["S"] },
+          { kind: "shotgun", n: 2, gap: 0.35, gates: ["S", "E"] },
         ],
       },
     ],
@@ -135,7 +137,10 @@ export const ROOMS = {
       {
         title: "MANNEQUINS ON AISLE FOUR",
         ready: 0.7,
-        queue: [{ kind: "mannequin", n: 6, gap: 0.28, gates: ["W", "N", "S"] }],
+        queue: [
+          { kind: "mannequin", n: 6, gap: 0.28, gates: ["W", "N", "S"] },
+          { kind: "shotgun", n: 1, gap: 0.2, gates: ["E"] },
+        ],
       },
     ],
   },
@@ -192,6 +197,7 @@ export const ROOMS = {
         ready: 1.15,
         queue: [
           { kind: "security", n: 1, gap: 0.2, gates: ["W"] },
+          { kind: "shotgun", n: 1, gap: 0.25, gates: ["E"] },
           { kind: "grunt", n: 3, gap: 0.4, gates: ["E", "W"] },
         ],
       },
@@ -200,13 +206,17 @@ export const ROOMS = {
         ready: 0.85,
         queue: [
           { kind: "security", n: 2, gap: 0.55, gates: ["W", "E"] },
+          { kind: "shotgun", n: 1, gap: 0.25, gates: ["S"] },
           { kind: "grunt", n: 2, gap: 0.4, gates: ["S"] },
         ],
       },
       {
         title: "ALL UNITS TO SERVICE",
         ready: 0.7,
-        queue: [{ kind: "security", n: 3, gap: 0.45, gates: ["W", "E", "S"] }],
+        queue: [
+          { kind: "security", n: 3, gap: 0.45, gates: ["W", "E", "S"] },
+          { kind: "shotgun", n: 1, gap: 0.25, gates: ["N"] },
+        ],
       },
     ],
   },
