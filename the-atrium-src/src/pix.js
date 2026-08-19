@@ -1,14 +1,36 @@
-import crtAtlasUrl from "./art/sprites/crt-atlas.png";
-import tesAtlasUrl from "./art/sprites/tessera-atlas.png";
-import crtIdleUrl from "./art/sprites/crt-idle.png";
-import tesIdleUrl from "./art/sprites/tessera-idle.png";
+import crtDown0 from "./art/sprites/crt-down-0.png";
+import crtDown1 from "./art/sprites/crt-down-1.png";
+import crtDown2 from "./art/sprites/crt-down-2.png";
+import crtUp0 from "./art/sprites/crt-up-0.png";
+import crtUp1 from "./art/sprites/crt-up-1.png";
+import crtUp2 from "./art/sprites/crt-up-2.png";
+import crtLeft0 from "./art/sprites/crt-left-0.png";
+import crtLeft1 from "./art/sprites/crt-left-1.png";
+import crtLeft2 from "./art/sprites/crt-left-2.png";
+import crtRight0 from "./art/sprites/crt-right-0.png";
+import crtRight1 from "./art/sprites/crt-right-1.png";
+import crtRight2 from "./art/sprites/crt-right-2.png";
+import tesDown0 from "./art/sprites/tessera-down-0.png";
+import tesDown1 from "./art/sprites/tessera-down-1.png";
+import tesDown2 from "./art/sprites/tessera-down-2.png";
+import tesUp0 from "./art/sprites/tessera-up-0.png";
+import tesUp1 from "./art/sprites/tessera-up-1.png";
+import tesUp2 from "./art/sprites/tessera-up-2.png";
+import tesLeft0 from "./art/sprites/tessera-left-0.png";
+import tesLeft1 from "./art/sprites/tessera-left-1.png";
+import tesLeft2 from "./art/sprites/tessera-left-2.png";
+import tesRight0 from "./art/sprites/tessera-right-0.png";
+import tesRight1 from "./art/sprites/tessera-right-1.png";
+import tesRight2 from "./art/sprites/tessera-right-2.png";
 
 export const CRT_CELL = { w: 40, h: 56 };
 export const TES_CELL = { w: 36, h: 52 };
-export const SCALE = 2;
+export const SCALE = 1;
 
-const KIND_SCALE = { rusher: 2, grunt: 2, shotgun: 2, security: 3, boss: 4 };
-const DIRS = ["down", "up", "left", "right"];
+const KIND_SCALE = { rusher: 1, grunt: 1, shotgun: 1, security: 2, boss: 3 };
+
+const TES_SHARDS = ["#f4f0e8", "#dcd8d0", "#c4c0b8", "#9a9690", "#6a6662", "#2a2a2c", "#ece8e0"];
+const CRT_SHARDS = ["#5ef6ff", "#b8fff8", "#ffffff", "#2ee8e0", "#8ffff8", "#0a6060"];
 
 function load(src) {
   const img = new Image();
@@ -24,16 +46,25 @@ function makeCanvas(w, h) {
   return c;
 }
 
-const raw = {
-  crtAtlas: load(crtAtlasUrl),
-  tesAtlas: load(tesAtlasUrl),
-  crtIdle: load(crtIdleUrl),
-  tesIdle: load(tesIdleUrl),
+/**
+ * Filenames are backwards: crt-left-* / tessera-left-* pixels face EAST,
+ * *-right-* pixels face WEST (TV screen / visor is the face).
+ * Map gameplay dir → the files whose pixels actually face that way.
+ */
+const CRT_SRC = {
+  down: [crtDown0, crtDown1, crtDown2].map(load),
+  up: [crtUp0, crtUp1, crtUp2].map(load),
+  left: [crtRight0, crtRight1, crtRight2].map(load),
+  right: [crtLeft0, crtLeft1, crtLeft2].map(load),
+};
+const TES_SRC = {
+  down: [tesDown0, tesDown1, tesDown2].map(load),
+  up: [tesUp0, tesUp1, tesUp2].map(load),
+  left: [tesRight0, tesRight1, tesRight2].map(load),
+  right: [tesLeft0, tesLeft1, tesLeft2].map(load),
 };
 
-/** Per-frame cooked canvases: 4 rows × 3 cols, real alpha, never the raw sheet rect. */
 const frames = { crt: null, tes: null };
-const idleCooked = { crt: null, tes: null };
 
 function isMagenta(r, g, b) {
   if (r > 200 && g < 90 && b > 200) return true;
@@ -67,7 +98,6 @@ function keyFrame(src, sx, sy, w, h) {
   const p = img.data;
   const n = w * h;
   const keyed = new Uint8Array(n);
-
   const idx = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? -1 : y * w + x);
 
   for (let i = 0; i < n; i++) {
@@ -76,12 +106,8 @@ function keyFrame(src, sx, sy, w, h) {
   }
 
   const stack = [];
-  for (let x = 0; x < w; x++) {
-    stack.push(idx(x, 0), idx(x, h - 1));
-  }
-  for (let y = 0; y < h; y++) {
-    stack.push(idx(0, y), idx(w - 1, y));
-  }
+  for (let x = 0; x < w; x++) stack.push(idx(x, 0), idx(x, h - 1));
+  for (let y = 0; y < h; y++) stack.push(idx(0, y), idx(w - 1, y));
   const seen = new Uint8Array(n);
   while (stack.length) {
     const i = stack.pop();
@@ -131,29 +157,20 @@ function keyFrame(src, sx, sy, w, h) {
   return out;
 }
 
-function cookSheet(img, cell) {
-  if (!img.complete || !img.naturalWidth) return null;
-  const grid = [];
-  for (let row = 0; row < 4; row++) {
-    const line = [];
-    for (let col = 0; col < 3; col++) {
-      line.push(keyFrame(img, col * cell.w, row * cell.h, cell.w, cell.h));
+function cookNamed(srcMap) {
+  const out = { down: [], up: [], left: [], right: [] };
+  for (const dir of Object.keys(srcMap)) {
+    for (const img of srcMap[dir]) {
+      if (!img.complete || !img.naturalWidth) return null;
+      out[dir].push(keyFrame(img, 0, 0, img.naturalWidth, img.naturalHeight));
     }
-    grid.push(line);
   }
-  return grid;
-}
-
-function cookIdle(img) {
-  if (!img.complete || !img.naturalWidth) return null;
-  return keyFrame(img, 0, 0, img.naturalWidth, img.naturalHeight);
+  return out;
 }
 
 function ensureCooked() {
-  if (!frames.crt) frames.crt = cookSheet(raw.crtAtlas, CRT_CELL);
-  if (!frames.tes) frames.tes = cookSheet(raw.tesAtlas, TES_CELL);
-  if (!idleCooked.crt) idleCooked.crt = cookIdle(raw.crtIdle);
-  if (!idleCooked.tes) idleCooked.tes = cookIdle(raw.tesIdle);
+  if (!frames.crt) frames.crt = cookNamed(CRT_SRC);
+  if (!frames.tes) frames.tes = cookNamed(TES_SRC);
   return !!(frames.crt && frames.tes);
 }
 
@@ -169,10 +186,19 @@ export function dir4(ang) {
   return "right";
 }
 
+/** Feet are at e.x,e.y. Hands/gun sit ~2/3 up the 1× CRT body, then along aim. */
+export function gunOrigin(e) {
+  const aim = e.aim || 0;
+  return {
+    x: e.x + Math.cos(aim) * 14,
+    y: e.y - 22 + Math.sin(aim) * 8,
+  };
+}
+
 function blitCooked(ctx, frame, x, y, scale, opt = {}) {
   if (!frame) return;
   const dw = frame.width * scale;
-  const dh = Math.round(frame.height * scale * (opt.squash || 1));
+  const dh = frame.height * scale;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   if (opt.alpha != null) ctx.globalAlpha = opt.alpha;
@@ -191,19 +217,68 @@ function blitCooked(ctx, frame, x, y, scale, opt = {}) {
   ctx.restore();
 }
 
-export function blitFrame(ctx, grid, dir, frame, x, y, scale, opt = {}) {
-  const row = Math.max(0, DIRS.indexOf(dir));
+function shatterLife(kind) {
+  return kind === "boss" ? 0.95 : kind === "player" ? 0.72 : 0.55;
+}
+
+function shatterFreeze(kind) {
+  return kind === "boss" ? 0.1 : 0.066;
+}
+
+function ensureShards(e, colors, count, force) {
+  if (e.shards) return e.shards;
+  const shards = [];
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = force * (0.35 + Math.random());
+    shards.push({
+      ox: (Math.random() - 0.5) * 18,
+      oy: (Math.random() - 0.6) * 28 - 10,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s - force * 0.25,
+      w: 1 + (i % 3),
+      h: 1 + ((i + 1) % 3),
+      spin: (Math.random() - 0.5) * 18,
+      color: colors[i % colors.length],
+    });
+  }
+  e.shards = shards;
+  return shards;
+}
+
+function drawShatter(ctx, e, kind, scale) {
+  const age = Math.max(0, (e.deadT || 0) - shatterFreeze(kind));
+  const life = shatterLife(kind);
+  const n = kind === "boss" ? 56 : kind === "player" ? 40 : 28;
+  const force = kind === "boss" ? 140 : kind === "player" ? 110 : 90;
+  const colors = kind === "player" ? CRT_SHARDS : TES_SHARDS;
+  const shards = ensureShards(e, colors, n, force);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  for (const sh of shards) {
+    const fade = Math.max(0, 1 - age / life);
+    if (fade <= 0) continue;
+    const x = e.x + sh.ox * scale + sh.vx * age;
+    const y = e.y + sh.oy * scale + sh.vy * age + 90 * age * age;
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = sh.color;
+    const tumble = Math.abs(Math.sin(age * sh.spin + sh.ox)) > 0.35;
+    ctx.fillRect(Math.round(x), Math.round(y), tumble ? sh.h : sh.w, tumble ? sh.w : sh.h);
+  }
+  ctx.restore();
+}
+
+export function blitFrame(ctx, bank, dir, frame, x, y, scale, opt = {}) {
   const col = ((frame % 3) + 3) % 3;
-  const cell = grid && grid[row] && grid[row][col];
+  const cell = bank && bank[dir] && bank[dir][col];
   blitCooked(ctx, cell, x, y, scale, opt);
 }
 
 export function drawCrtSprite(ctx, e, t) {
   ensureCooked();
-  const grid = frames.crt;
-  const idle = idleCooked.crt;
-  if (!grid && !idle) return false;
-  const moving = e.vx * e.vx + e.vy * e.vy > 16;
+  const bank = frames.crt;
+  if (!bank) return false;
+  const moving = !e.dead && e.vx * e.vx + e.vy * e.vy > 16;
   const face = moving ? dir4(Math.atan2(e.vy, e.vx)) : dir4(e.aim);
   const frame = moving ? 1 + (Math.floor(t * 8) % 2) : 0;
   const ghost = e.iframes > 0 && Math.floor(t * 14) % 2 === 0;
@@ -212,17 +287,20 @@ export function drawCrtSprite(ctx, e, t) {
   if (ghost) ctx.globalAlpha = 0.4;
   ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.beginPath();
-  ctx.ellipse(e.x, e.y + 5, 10, 3.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(e.x, e.y + 4, 7, 2.5, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (grid) blitFrame(ctx, grid, face, frame, e.x, e.y, SCALE);
-  else blitCooked(ctx, idle, e.x, e.y, SCALE);
+  if (e.dead && (e.deadT || 0) > shatterFreeze("player")) {
+    drawShatter(ctx, e, "player", SCALE);
+    ctx.restore();
+    return true;
+  }
+  blitFrame(ctx, bank, face, frame, e.x, e.y, SCALE);
   if (e.muzzle > 0) {
-    const ox = Math.cos(e.aim) * 22;
-    const oy = Math.sin(e.aim) * 22;
+    const g = gunOrigin(e);
     ctx.fillStyle = "#b8fff8";
-    ctx.fillRect(Math.round(e.x + ox - 3), Math.round(e.y + oy - 8), 3 * SCALE, SCALE);
+    ctx.fillRect(Math.round(g.x - 2), Math.round(g.y - 1), 4, 2);
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(Math.round(e.x + ox - 1), Math.round(e.y + oy - 10), SCALE, 3 * SCALE);
+    ctx.fillRect(Math.round(g.x - 1), Math.round(g.y - 2), 2, 4);
   }
   ctx.restore();
   return true;
@@ -230,43 +308,35 @@ export function drawCrtSprite(ctx, e, t) {
 
 export function drawTesseraSprite(ctx, e, t) {
   ensureCooked();
-  const grid = frames.tes;
-  const idle = idleCooked.tes;
-  if (!grid && !idle) return false;
+  const bank = frames.tes;
+  if (!bank) return false;
   const kind = e.kind || "grunt";
   const scale = KIND_SCALE[kind] || SCALE;
   const moving = !e.dead && e.speed > 0.1;
   const face = dir4(e.facing || 0);
   const frame = moving ? 1 + (Math.floor(t * (kind === "rusher" ? 12 : 8)) % 2) : 0;
-  const squash = e.dead ? Math.max(0.25, 1 - (e.deadT || 0) * 1.4) : 1;
-  const alpha = e.dead ? Math.max(0, 1 - (e.deadT || 0) * 1.5) : 1;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.beginPath();
-  ctx.ellipse(e.x, e.y + 4, 7 * (scale / 2), 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(e.x, e.y + 4, 6 * scale, 2.5, 0, 0, Math.PI * 2);
   ctx.fill();
+  if (e.dead && (e.deadT || 0) > shatterFreeze(kind)) {
+    drawShatter(ctx, e, kind, scale);
+    ctx.restore();
+    return true;
+  }
   if (kind === "security") ctx.filter = "sepia(0.25) contrast(1.05)";
-  if (grid) blitFrame(ctx, grid, face, frame, e.x, e.y, scale, { squash, alpha });
-  else blitCooked(ctx, idle, e.x, e.y, scale, { squash, alpha });
+  blitFrame(ctx, bank, face, frame, e.x, e.y, scale);
   ctx.filter = "none";
   if (kind === "boss" && !e.dead) {
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = "#1c1c20";
-    ctx.fillRect(Math.round(e.x - 14), Math.round(e.y - 52), 28, 11);
+    ctx.fillRect(Math.round(e.x - 12), Math.round(e.y - 40), 24, 10);
     ctx.fillStyle = "#d0d0d4";
     ctx.font = "bold 8px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("DIR", e.x, e.y - 44);
-  }
-  if (e.dead && e.deadT < 0.5) {
-    ctx.fillStyle = "#d8d8d8";
-    for (let i = 0; i < 22; i++) {
-      const a = i * 1.4 + e.deadT * 18;
-      const r = 8 + e.deadT * 40;
-      ctx.globalAlpha = 1 - e.deadT * 2;
-      ctx.fillRect(Math.round(e.x + Math.cos(a) * r), Math.round(e.y + Math.sin(a) * r), 2 + (i % 3), 1 + (i % 2));
-    }
+    ctx.fillText("DIR", e.x, e.y - 33);
   }
   ctx.restore();
   return true;

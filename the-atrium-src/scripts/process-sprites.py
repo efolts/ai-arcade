@@ -321,8 +321,8 @@ def main():
             for n in range(3):
                 tes_idle.save(OUT / f"tessera-{d}-{n}.png")
 
-    # packed atlases: 4 rows (down, up, left, right) x 3 frames
-    def pack(prefix, cw, ch, dirs=("down", "up", "left", "right")):
+    # packed atlases: 4 rows (down, up, right, left) x 3 frames
+    def pack(prefix, cw, ch, dirs=("down", "up", "right", "left")):
         atlas = Image.new("RGBA", (cw * 3, ch * 4), (0, 0, 0, 0))
         for ri, d in enumerate(dirs):
             for ci in range(3):

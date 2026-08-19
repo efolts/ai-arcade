@@ -307,9 +307,7 @@ export function drawBotFallback(ctx, e, t) {
   ctx.save();
   ctx.translate(e.x, e.y);
   if (dying) {
-    ctx.globalAlpha = Math.max(0, 1 - dying);
-    ctx.translate(0, dying * 8);
-    ctx.scale(1 + dying * 0.15, 1 - dying * 0.55);
+    ctx.globalAlpha = Math.max(0, 1 - dying * 1.4);
   }
 
   drawShadow(ctx, 0, e.r * 0.85, e.r * 0.85, e.r * 0.32, 0.4);

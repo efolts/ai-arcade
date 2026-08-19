@@ -16,6 +16,7 @@ import {
   drawPlayer,
 } from "./sprites.js";
 import { sfx, startMusic, stopMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./audio.js";
+import { gunOrigin } from "./pix.js";
 import {
   GATES,
   INWARD,
@@ -127,11 +128,11 @@ function currentObs(world) {
 function botStats(kind, wave) {
   const f = 1 + (wave - 1) * 0.06;
   const table = {
-    grunt: { hp: 1, speed: 52, r: 12, score: 100, scale: 1 },
-    rusher: { hp: 1, speed: 110, r: 12, score: 150, scale: 0.94 },
-    shotgun: { hp: 3, speed: 50, r: 13, score: 250, scale: 1.08 },
-    security: { hp: 14, speed: 40, r: 16, score: 500, scale: 1.4 },
-    boss: { hp: 90 + wave * 8, speed: 36, r: 20, score: 5000, scale: 1.9 },
+    grunt: { hp: 1, speed: 52, r: 20, score: 100, scale: 1 },
+    rusher: { hp: 1, speed: 110, r: 18, score: 150, scale: 0.94 },
+    shotgun: { hp: 3, speed: 50, r: 22, score: 250, scale: 1.08 },
+    security: { hp: 14, speed: 40, r: 26, score: 500, scale: 1.4 },
+    boss: { hp: 90 + wave * 8, speed: 36, r: 34, score: 5000, scale: 1.9 },
   };
   const s = table[kind];
   return { ...s, speed: s.speed * (kind === "boss" ? 1 : f) };
@@ -186,7 +187,7 @@ export function createGame(canvas, input) {
     world.player = {
       x: cx,
       y: cy,
-      r: 14,
+      r: 12,
       aim: -Math.PI / 2,
       vx: 0,
       vy: 0,
@@ -458,7 +459,7 @@ export function createGame(canvas, input) {
 
   function hurtPlayer() {
     const p = world.player;
-    if ((world.readyT || 0) > 0 || p.iframes > 0) return;
+    if (p.dead || (world.readyT || 0) > 0 || p.iframes > 0) return;
     world.lives -= 1;
     p.iframes = 1.6;
     world.mult = 1;
@@ -469,7 +470,11 @@ export function createGame(canvas, input) {
     burst(p.x, p.y, 18, "#5ef6ff", 0.4);
     if (world.lives <= 0) {
       world.lives = 0;
-      state = "gameover";
+      p.dead = true;
+      p.deadT = 0.001;
+      p.iframes = 99;
+      p.vx = 0;
+      p.vy = 0;
       stopMusic();
       sfx.roar();
       announce = "SIGNAL LOST";
@@ -483,12 +488,13 @@ export function createGame(canvas, input) {
     if (p.fireT > 0) return;
     p.fireT = rate;
     p.muzzle = 0.09;
+    const hand = gunOrigin(p);
     const angles = p.powers.spread > 0 ? [-0.22, 0, 0.22] : [0];
     for (const off of angles) {
       const a = p.aim + off;
       world.bullets.push({
-        x: p.x + Math.cos(a) * 22,
-        y: p.y + Math.sin(a) * 22,
+        x: hand.x + Math.cos(a) * 6,
+        y: hand.y + Math.sin(a) * 6,
         vx: Math.cos(a) * 560,
         vy: Math.sin(a) * 560,
         ang: a,
@@ -572,13 +578,20 @@ export function createGame(canvas, input) {
       mx /= ml;
       my /= ml;
     }
-    const spd = 210 * (p.powers.speed > 0 ? 1.38 : 1);
-    p.vx = mx * spd;
-    p.vy = my * spd;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    resolveWorld(p, obs);
-    tryDoors(p);
+    if (p.dead) {
+      p.deadT = (p.deadT || 0) + dt;
+      p.vx = 0;
+      p.vy = 0;
+      if (p.deadT > 0.78 && state === "play") state = "gameover";
+    } else {
+      const spd = 210 * (p.powers.speed > 0 ? 1.38 : 1);
+      p.vx = mx * spd;
+      p.vy = my * spd;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      resolveWorld(p, obs);
+      tryDoors(p);
+    }
 
     const mouseFresh = performance.now() - input.mouse.lastMove < 1600;
     const stickAim = len(input.pad.ax, input.pad.ay) > 0.2;
@@ -599,7 +612,7 @@ export function createGame(canvas, input) {
       input.pad.fire ||
       input.touch.firing ||
       (fallbackGun && world.bots.some((b) => !b.dead));
-    if (wantFire) firePlayer();
+    if (wantFire && !p.dead) firePlayer();
 
     p.fireT = Math.max(0, p.fireT - dt);
     p.muzzle = Math.max(0, p.muzzle - dt);
@@ -697,7 +710,7 @@ export function createGame(canvas, input) {
         }
       }
     }
-    world.bots = world.bots.filter((b) => !b.dead || b.deadT < 0.55);
+    world.bots = world.bots.filter((b) => !b.dead || b.deadT < (b.kind === "boss" ? 1.1 : 0.68));
 
     for (const b of world.bullets) {
       b.x += b.vx * dt;
@@ -923,9 +936,12 @@ export function createGame(canvas, input) {
       ctx.fillText(f.text, f.x, f.y);
       ctx.restore();
     }
-    if (world.player && state === "play") {
+    if (world.player && (state === "play" || world.player.dead)) {
       drawPlayer(ctx, world.player, t);
       const p = world.player;
+      if (p.dead) {
+        /* shatter only */
+      } else {
       const rx = p.x + Math.cos(p.aim) * 36;
       const ry = p.y + Math.sin(p.aim) * 36;
       ctx.strokeStyle = "rgba(94,246,255,0.7)";
@@ -937,6 +953,7 @@ export function createGame(canvas, input) {
       ctx.moveTo(rx, ry - 8);
       ctx.lineTo(rx, ry + 8);
       ctx.stroke();
+      }
     }
 
     if (world.boss && !world.boss.dead) {
