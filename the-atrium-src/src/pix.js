@@ -22,6 +22,9 @@ import tesLeft2 from "./art/sprites/tessera-left-2.png";
 import tesRight0 from "./art/sprites/tessera-right-0.png";
 import tesRight1 from "./art/sprites/tessera-right-1.png";
 import tesRight2 from "./art/sprites/tessera-right-2.png";
+import crtArmorUrl from "./art/sprites/crt-armor-snes.png";
+import crtWeaponUrl from "./art/sprites/crt-weapon-snes.png";
+import crtFullUrl from "./art/sprites/crt-upgraded-snes.png";
 
 export const CRT_CELL = { w: 40, h: 56 };
 export const TES_CELL = { w: 36, h: 52 };
@@ -72,6 +75,12 @@ const TES_SRC = {
 };
 
 const frames = { crt: null, tes: null };
+const skins = { armor: null, weapon: null, full: null };
+const SKIN_SRC = {
+  armor: load(crtArmorUrl),
+  weapon: load(crtWeaponUrl),
+  full: load(crtFullUrl),
+};
 
 function isMagenta(r, g, b) {
   if (r > 200 && g < 90 && b > 200) return true;
@@ -175,9 +184,17 @@ function cookNamed(srcMap) {
   return out;
 }
 
+function cookSkin(img) {
+  if (!img.complete || !img.naturalWidth) return null;
+  return keyFrame(img, 0, 0, img.naturalWidth, img.naturalHeight);
+}
+
 function ensureCooked() {
   if (!frames.crt) frames.crt = cookNamed(CRT_SRC);
   if (!frames.tes) frames.tes = cookNamed(TES_SRC);
+  for (const k of Object.keys(SKIN_SRC)) {
+    if (!skins[k]) skins[k] = cookSkin(SKIN_SRC[k]);
+  }
   return !!(frames.crt && frames.tes);
 }
 
@@ -323,7 +340,21 @@ export function drawCrtSprite(ctx, e, t) {
     ctx.restore();
     return true;
   }
-  blitFrame(ctx, bank, face, frame, e.x, e.y, SCALE);
+  const skin = e.skin && e.skin !== "base" ? skins[e.skin] : null;
+  if (skin) {
+    const match = 56 / skin.height;
+    ctx.save();
+    if (face === "left") {
+      ctx.translate(e.x, 0);
+      ctx.scale(-1, 1);
+      blitCooked(ctx, skin, 0, e.y, match);
+    } else {
+      blitCooked(ctx, skin, e.x, e.y, match);
+    }
+    ctx.restore();
+  } else {
+    blitFrame(ctx, bank, face, frame, e.x, e.y, SCALE);
+  }
   if (e.muzzle > 0) {
     const g = gunOrigin(e);
     ctx.fillStyle = "#b8fff8";
@@ -356,8 +387,9 @@ export function drawTesseraSprite(ctx, e, t) {
     ctx.restore();
     return true;
   }
-  if (kind === "security") ctx.filter = "sepia(0.25) contrast(1.05)";
-  blitFrame(ctx, bank, face, frame, e.x, e.y, scale, { tint: KIND_TINT[kind] || null });
+  if (e.elite) ctx.filter = "brightness(0.55) contrast(1.2) saturate(0.25)";
+  else if (kind === "security") ctx.filter = "sepia(0.25) contrast(1.05)";
+  blitFrame(ctx, bank, face, frame, e.x, e.y, scale, { tint: e.elite ? null : KIND_TINT[kind] || null });
   ctx.filter = "none";
   if (kind === "boss" && !e.dead) {
     ctx.imageSmoothingEnabled = false;
@@ -380,11 +412,12 @@ export function drawPixelPickup(ctx, p, t) {
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(x - 10, y + 10, 20, 4);
-  ctx.fillStyle = "#5ef6ff";
+  const ink = p.kind === "token" ? "#e8b44a" : p.kind === "health" ? "#7cff9a" : "#5ef6ff";
+  ctx.fillStyle = ink;
   ctx.fillRect(x - 12, y - 12, 24, 24);
   ctx.fillStyle = "#071014";
   ctx.fillRect(x - 10, y - 10, 20, 20);
-  ctx.fillStyle = "#5ef6ff";
+  ctx.fillStyle = ink;
   ctx.fillRect(x - 10, y - 10, 20, 2);
   ctx.fillRect(x - 10, y + 8, 20, 2);
   ctx.font = "bold 9px Courier New, monospace";

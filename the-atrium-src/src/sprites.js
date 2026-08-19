@@ -560,3 +560,27 @@ export function drawParticle(ctx, p) {
   }
   ctx.restore();
 }
+
+export function drawKiosk(ctx, x, y, t) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 6, 16, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#3a2a18";
+  ctx.fillRect(Math.round(x - 14), Math.round(y - 18), 28, 22);
+  ctx.fillStyle = "#5a4030";
+  ctx.fillRect(Math.round(x - 16), Math.round(y - 22), 32, 6);
+  ctx.fillStyle = "#0a1012";
+  ctx.fillRect(Math.round(x - 10), Math.round(y - 16), 20, 12);
+  const glow = 0.45 + Math.sin(t * 6) * 0.25;
+  ctx.fillStyle = `rgba(94,246,255,${glow})`;
+  ctx.fillRect(Math.round(x - 8), Math.round(y - 14), 16, 8);
+  ctx.fillStyle = "#e8b44a";
+  ctx.font = "bold 7px Courier New, monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("PRIZE", x, y + 2);
+  ctx.fillText("BOOTH", x, y + 10);
+  ctx.restore();
+}
