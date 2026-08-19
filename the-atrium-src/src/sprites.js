@@ -49,9 +49,9 @@ export function drawFountain(ctx, x, y, t) {
   ctx.fill();
 
   const water = ctx.createRadialGradient(0, 0, 2, 0, 0, 30);
-  water.addColorStop(0, `rgba(180,255,255,${0.85 * pulse})`);
-  water.addColorStop(0.5, `rgba(40,230,240,${0.55 * pulse})`);
-  water.addColorStop(1, "rgba(10,80,90,0.5)");
+  water.addColorStop(0, `rgba(210,255,255,${0.95 * pulse})`);
+  water.addColorStop(0.5, `rgba(60,245,250,${0.7 * pulse})`);
+  water.addColorStop(1, "rgba(10,80,90,0.55)");
   ctx.fillStyle = water;
   ctx.beginPath();
   ctx.arc(0, 0, 28, 0, Math.PI * 2);
@@ -129,9 +129,18 @@ export function drawPlayer(ctx, e, t) {
   ctx.translate(e.x, e.y);
   if (ghost) ctx.globalAlpha = 0.45;
 
-  drawShadow(ctx, 0, 10, 13, 5, 0.45);
+  const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, 28);
+  halo.addColorStop(0, "rgba(94,246,255,0.22)");
+  halo.addColorStop(1, "rgba(94,246,255,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(0, 0, 28, 0, Math.PI * 2);
+  ctx.fill();
+
+  drawShadow(ctx, 0, 14, 16, 6, 0.5);
 
   ctx.rotate(aim);
+  ctx.scale(1.4, 1.4);
   ctx.translate(0, bob);
 
   ctx.strokeStyle = "#1a1210";
@@ -307,7 +316,7 @@ export function drawBot(ctx, e, t) {
 
   drawShadow(ctx, 0, e.r * 0.85, e.r * 0.85, e.r * 0.32, 0.4);
   ctx.rotate(e.facing);
-  ctx.scale(s, s);
+  ctx.scale(s * 1.22, s * 1.22);
   ctx.translate(0, bob);
 
   const body = e.kind === "security" ? 1.15 : e.kind === "boss" ? 1.25 : 1;
@@ -487,17 +496,20 @@ export function drawCrtLife(ctx, x, y, on) {
   ctx.translate(x, y);
   ctx.globalAlpha = on ? 1 : 0.22;
   ctx.fillStyle = "#3a2414";
-  roundRect(ctx, -8, -6, 16, 12, 1.5);
+  roundRect(ctx, -10, -7, 20, 14, 2);
   ctx.fill();
   ctx.fillStyle = on ? "#5ef6ff" : "#244";
-  roundRect(ctx, -6, -4, 12, 8, 1);
+  roundRect(ctx, -7.5, -5, 15, 10, 1);
   ctx.fill();
   if (on) {
     ctx.fillStyle = "#fff";
+    ctx.shadowColor = "#7ffff8";
+    ctx.shadowBlur = 4;
     ctx.beginPath();
-    ctx.arc(-2, 0, 1.4, 0, Math.PI * 2);
-    ctx.arc(2, 0, 1.4, 0, Math.PI * 2);
+    ctx.arc(-2.6, 0, 1.7, 0, Math.PI * 2);
+    ctx.arc(2.6, 0, 1.7, 0, Math.PI * 2);
     ctx.fill();
+    ctx.shadowBlur = 0;
   }
   ctx.restore();
 }

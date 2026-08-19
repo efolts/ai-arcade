@@ -1,6 +1,6 @@
 export function createInput(canvas, sticks) {
   const keys = new Set();
-  const mouse = { x: 480, y: 390, down: false, moved: false, lastMove: 0 };
+  const mouse = { x: 480, y: 390, down: false, clicked: false, moved: false, lastMove: 0 };
   const pad = { mx: 0, my: 0, ax: 0, ay: 0, fire: false, connected: false };
   const touch = {
     active: false,
@@ -55,12 +55,22 @@ export function createInput(canvas, sticks) {
     mouse.moved = true;
     mouse.lastMove = performance.now();
   });
-  canvas.addEventListener("mousedown", (e) => {
-    if (e.button === 0) mouse.down = true;
-    const p = canvasPoint(e);
-    mouse.x = p.x;
-    mouse.y = p.y;
-    mouse.moved = true;
+  function onDown(e) {
+    if (e.button != null && e.button !== 0) return;
+    mouse.down = true;
+    mouse.clicked = true;
+    if (e.clientX != null) {
+      const p = canvasPoint(e);
+      mouse.x = p.x;
+      mouse.y = p.y;
+    }
+  }
+  canvas.addEventListener("mousedown", onDown);
+  window.addEventListener("mousedown", (e) => {
+    if (e.button === 0) {
+      mouse.down = true;
+      mouse.clicked = true;
+    }
   });
   window.addEventListener("mouseup", () => {
     mouse.down = false;

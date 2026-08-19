@@ -122,7 +122,7 @@ function waveDef(n) {
     };
   }
   const tables = [
-    { title: "WELCOME TO THE ATRIUM", queue: [{ kind: "grunt", n: 10, gap: 0.55 }] },
+    { title: "WELCOME TO THE ATRIUM", queue: [{ kind: "grunt", n: 8, gap: 0.9 }] },
     { title: "THEY'RE COMING FROM FASHIONS", queue: [{ kind: "grunt", n: 8, gap: 0.45 }, { kind: "rusher", n: 6, gap: 0.4 }] },
     { title: "SHOTGUNS IN ASTORIA", queue: [{ kind: "grunt", n: 8, gap: 0.4 }, { kind: "shotgun", n: 5, gap: 0.7 }] },
     { title: "MALL SECURITY", queue: [{ kind: "rusher", n: 8, gap: 0.35 }, { kind: "shotgun", n: 4, gap: 0.6 }, { kind: "security", n: 2, gap: 1.2 }] },
@@ -140,11 +140,11 @@ function waveDef(n) {
 function botStats(kind, wave) {
   const f = 1 + (wave - 1) * 0.06;
   const table = {
-    grunt: { hp: 2, speed: 78, r: 12, score: 100, scale: 1 },
-    rusher: { hp: 1, speed: 145, r: 11, score: 150, scale: 0.92 },
-    shotgun: { hp: 3, speed: 62, r: 13, score: 250, scale: 1.05 },
-    security: { hp: 14, speed: 48, r: 18, score: 500, scale: 1.35 },
-    boss: { hp: 90 + wave * 8, speed: 42, r: 28, score: 5000, scale: 1.85 },
+    grunt: { hp: 1, speed: 58, r: 14, score: 100, scale: 1 },
+    rusher: { hp: 1, speed: 118, r: 13, score: 150, scale: 0.94 },
+    shotgun: { hp: 3, speed: 54, r: 15, score: 250, scale: 1.08 },
+    security: { hp: 14, speed: 42, r: 20, score: 500, scale: 1.4 },
+    boss: { hp: 90 + wave * 8, speed: 38, r: 30, score: 5000, scale: 1.9 },
   };
   const s = table[kind];
   return { ...s, speed: s.speed * (kind === "boss" ? 1 : f) };
@@ -186,13 +186,13 @@ export function createGame(canvas, input) {
     world.player = {
       x: cx,
       y: cy,
-      r: 14,
+      r: 16,
       aim: -Math.PI / 2,
       vx: 0,
       vy: 0,
       fireT: 0,
       muzzle: 0,
-      iframes: 1.2,
+      iframes: 2.2,
       powers: { spread: 0, rapid: 0, speed: 0 },
     };
     world.bots = [];
@@ -241,6 +241,7 @@ export function createGame(canvas, input) {
       scale: st.scale,
       facing: 0,
       fireT: 0.4 + Math.random() * 0.6,
+      stun: 0.55,
       deadT: 0,
       dead: false,
     };
@@ -360,7 +361,7 @@ export function createGame(canvas, input) {
 
   function firePlayer() {
     const p = world.player;
-    const rate = p.powers.rapid > 0 ? 0.055 : 0.11;
+    const rate = p.powers.rapid > 0 ? 0.05 : 0.09;
     if (p.fireT > 0) return;
     p.fireT = rate;
     p.muzzle = 0.05;
@@ -411,20 +412,23 @@ export function createGame(canvas, input) {
     tickMusic(dt);
     if (input.consume("mute")) muted = toggleMute();
     if (state === "title") {
-      if (input.consume("start") || input.mouse.down || input.pad.fire) {
+      if (input.consume("start") || input.mouse.clicked || input.pad.fire) {
+        input.mouse.clicked = false;
         input.mouse.down = false;
         startPlay();
       }
       return;
     }
     if (state === "gameover") {
-      if (input.consume("start") || input.consume("fire") || input.mouse.down) {
+      if (input.consume("start") || input.consume("fire") || input.mouse.clicked) {
+        input.mouse.clicked = false;
         input.mouse.down = false;
         startPlay();
       }
       return;
     }
 
+    input.mouse.clicked = false;
     const p = world.player;
     input.pollGamepad();
     const km = input.keyboardMove();
@@ -481,6 +485,11 @@ export function createGame(canvas, input) {
     for (const b of world.bots) {
       if (b.dead) {
         b.deadT += dt;
+        continue;
+      }
+      b.stun = Math.max(0, (b.stun || 0) - dt);
+      if (b.stun > 0) {
+        b.facing = angOf(p.x - b.x, p.y - b.y);
         continue;
       }
       const to = norm(p.x - b.x, p.y - b.y);
@@ -658,7 +667,7 @@ export function createGame(canvas, input) {
       ctx.fillStyle = "#ddd";
       ctx.font = "bold 12px Trebuchet MS, sans-serif";
       ctx.fillText(`WAVE ${world.wave}`, 16, H - HUD_BOT / 2);
-      for (let i = 0; i < 5; i++) drawCrtLife(ctx, 100 + i * 22, H - HUD_BOT / 2, i < world.lives);
+      for (let i = 0; i < 5; i++) drawCrtLife(ctx, 108 + i * 26, H - HUD_BOT / 2, i < world.lives);
       ctx.fillStyle = "#5ef6ff";
       ctx.font = "bold 14px Courier New, monospace";
       ctx.fillText(`x${world.mult.toFixed(1)}`, 230, H - HUD_BOT / 2 + 1);
@@ -717,7 +726,21 @@ export function createGame(canvas, input) {
     for (const b of sorted) drawBot(ctx, b, t);
     for (const s of world.eShots) drawEnemyShot(ctx, s);
     for (const b of world.bullets) drawBolt(ctx, b);
-    if (world.player && state === "play") drawPlayer(ctx, world.player, t);
+    if (world.player && state === "play") {
+      drawPlayer(ctx, world.player, t);
+      const p = world.player;
+      const rx = p.x + Math.cos(p.aim) * 36;
+      const ry = p.y + Math.sin(p.aim) * 36;
+      ctx.strokeStyle = "rgba(94,246,255,0.7)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(rx, ry, 5, 0, Math.PI * 2);
+      ctx.moveTo(rx - 8, ry);
+      ctx.lineTo(rx + 8, ry);
+      ctx.moveTo(rx, ry - 8);
+      ctx.lineTo(rx, ry + 8);
+      ctx.stroke();
+    }
 
     if (world.boss && !world.boss.dead) {
       const bx = ARENA.x + 40;
