@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#050608" />
+    <title>THE ATRIUM — KRCD 7 LIVE</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  </head>
+  <body>
+    <div id="frame">
+      <div id="stage">
+        <canvas id="game" width="960" height="780"></canvas>
+        <div id="crt" aria-hidden="true"></div>
+      </div>
+      <div id="touch" hidden>
+        <div class="stick" id="stickL" data-side="left"><i></i></div>
+        <div class="stick" id="stickR" data-side="right"><i></i></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
