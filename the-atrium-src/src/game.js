@@ -500,7 +500,7 @@ export function createGame(canvas, input) {
     const rate = p.powers.rapid > 0 ? 0.05 : 0.09;
     if (p.fireT > 0) return;
     p.fireT = rate;
-    p.muzzle = 0.09;
+    p.muzzle = 0.07;
     const hand = gunOrigin(p);
     const angles = p.powers.spread > 0 ? [-0.22, 0, 0.22] : [0];
     for (const off of angles) {
@@ -515,10 +515,9 @@ export function createGame(canvas, input) {
         life: 0.7,
       });
     }
-    p.x -= Math.cos(p.aim) * 2.2;
-    p.y -= Math.sin(p.aim) * 2.2;
+    p.x -= Math.cos(p.aim) * 1.4;
+    p.y -= Math.sin(p.aim) * 1.4;
     sfx.shoot();
-    shake = Math.max(shake, 3.4);
   }
 
   function nearestBot(p) {
@@ -814,7 +813,6 @@ export function createGame(canvas, input) {
         b.life = 0;
         sfx.hit();
         burst(b.x, b.y, 6, "#7ffff8", 0.25);
-        shake = Math.max(shake, 3);
         if (e.hp <= 0) killBot(e);
         break;
       }

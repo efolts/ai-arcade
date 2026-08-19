@@ -451,14 +451,14 @@ export function drawBolt(ctx, b) {
   ctx.translate(b.x, b.y);
   ctx.rotate(b.ang);
   ctx.shadowColor = "#7ffff8";
-  ctx.shadowBlur = 12;
-  const g = ctx.createLinearGradient(-10, 0, 10, 0);
+  ctx.shadowBlur = 4;
+  const g = ctx.createLinearGradient(-8, 0, 8, 0);
   g.addColorStop(0, "rgba(80,255,255,0)");
-  g.addColorStop(0.4, "#8ffff8");
+  g.addColorStop(0.45, "#8ffff8");
   g.addColorStop(1, "#ffffff");
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.ellipse(0, 0, 9, 2.1, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 0, 7, 1.7, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
