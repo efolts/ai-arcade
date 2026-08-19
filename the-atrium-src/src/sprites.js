@@ -101,18 +101,33 @@ export function drawPlanter(ctx, x, y) {
   ctx.restore();
 }
 
-export function drawGate(ctx, x, y, ang, label, t) {
+export function drawGate(ctx, x, y, ang, label, t, mode = "closed") {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(ang);
   const flicker = 0.35 + Math.sin(t * 7 + x) * 0.08;
-  ctx.fillStyle = `rgba(0,0,0,${0.72 + flicker * 0.1})`;
+  const open = mode === "open";
+  const locked = mode === "locked";
+  if (open) {
+    const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, 40);
+    glow.addColorStop(0, `rgba(94,246,255,${0.35 + flicker * 0.25})`);
+    glow.addColorStop(1, "rgba(94,246,255,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, 40, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = open ? `rgba(4,22,24,${0.7 + flicker * 0.08})` : `rgba(0,0,0,${0.78 + flicker * 0.08})`;
   roundRect(ctx, -34, -18, 68, 36, 4);
   ctx.fill();
-  ctx.strokeStyle = "rgba(255,120,160,0.22)";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = open ? `rgba(94,246,255,${0.55 + flicker})` : locked ? "rgba(180,40,50,0.55)" : "rgba(255,120,160,0.22)";
+  ctx.lineWidth = open ? 2 : 1;
   ctx.stroke();
-  ctx.fillStyle = `rgba(255,176,168,${0.45 + flicker})`;
+  ctx.fillStyle = open
+    ? `rgba(180,255,255,${0.75 + flicker})`
+    : locked
+      ? "rgba(255,120,120,0.7)"
+      : `rgba(255,176,168,${0.35 + flicker * 0.4})`;
   ctx.font = "bold 8px Trebuchet MS, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";

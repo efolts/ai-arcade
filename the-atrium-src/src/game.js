@@ -1,5 +1,4 @@
 import titlePosterUrl from "./art/title-poster.jpg";
-import arenaUrl from "./art/arena-topdown.jpg";
 import playerRefUrl from "./art/player-ref.jpg";
 import tesseraRefUrl from "./art/tessera-ref.jpg";
 import crtCanonUrl from "./art/crt-canon.jpg";
@@ -17,6 +16,20 @@ import {
   drawPlayer,
 } from "./sprites.js";
 import { sfx, startMusic, stopMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./audio.js";
+import {
+  GATES,
+  INWARD,
+  OPPOSITE,
+  ROOMS,
+  TRASH_WAVE,
+  applyRoomGrade,
+  doorLabel,
+  doorLocked,
+  doorOpen,
+  drawMinimap,
+  roomObstacles,
+  wingsCleared,
+} from "./rooms.js";
 
 export const W = 960;
 export const H = 780;
@@ -24,13 +37,6 @@ const HUD_TOP = 50;
 const HUD_BOT = 38;
 const ARENA = { x: 128, y: HUD_TOP, s: H - HUD_TOP - HUD_BOT };
 const HI_KEY = "the-atrium-hi";
-
-const GATES = [
-  { name: "N", label: "FOOD CT", x: 0.5, y: 0.06, ang: 0 },
-  { name: "S", label: "RADIO", x: 0.5, y: 0.94, ang: Math.PI },
-  { name: "W", label: "FASHIONS", x: 0.07, y: 0.5, ang: -Math.PI / 2 },
-  { name: "E", label: "ASTORIA", x: 0.93, y: 0.5, ang: Math.PI / 2 },
-];
 
 const PICKUPS = {
   spread: { glyph: "SPR", name: "SPREAD SHOT", t: 10 },
@@ -48,7 +54,6 @@ function loadImg(src) {
 
 const art = {
   title: loadImg(titlePosterUrl),
-  arena: loadImg(arenaUrl),
   player: loadImg(playerRefUrl),
   tessera: loadImg(tesseraRefUrl),
   crt: loadImg(crtCanonUrl),
@@ -77,17 +82,19 @@ function gateWorld(g) {
   };
 }
 
-function obstacles() {
-  const cx = ARENA.x + ARENA.s / 2;
-  const cy = ARENA.y + ARENA.s / 2;
-  const q = ARENA.s * 0.22;
-  return [
-    { x: cx, y: cy, r: 30 },
-    { x: cx - q, y: cy - q, r: 20 },
-    { x: cx + q, y: cy - q, r: 20 },
-    { x: cx - q, y: cy + q, r: 20 },
-    { x: cx + q, y: cy + q, r: 20 },
-  ];
+function closedDoorBlocks(roomId, cleared, enterFrom) {
+  const blocks = [];
+  for (const g of GATES) {
+    if (doorOpen(roomId, g.name, cleared, enterFrom)) continue;
+    if (!ROOMS[roomId].doors[g.name]) {
+      const p = gateWorld(g);
+      blocks.push({ x: p.x, y: p.y, r: 32 });
+      continue;
+    }
+    const p = gateWorld(g);
+    blocks.push({ x: p.x, y: p.y, r: 30 });
+  }
+  return blocks;
 }
 
 function resolveWorld(e, obs) {
@@ -113,29 +120,8 @@ function hits(a, b) {
   return dx * dx + dy * dy < r * r;
 }
 
-function waveDef(n) {
-  if (n === 6 || (n > 6 && n % 6 === 0)) {
-    return {
-      title: n === 6 ? "DIRECTORY OVERRIDE" : `CORE LOCK  ${n}`,
-      boss: true,
-      queue: [{ kind: "boss", n: 1, gap: 0.2 }, { kind: "rusher", n: 6, gap: 1.1 }],
-    };
-  }
-  const tables = [
-    { title: "GET READY / THEY'RE LIVE", queue: [{ kind: "grunt", n: 5, gap: 1.55, gates: ["S", "E"] }], ready: 3 },
-    { title: "THEY'RE COMING FROM FASHIONS", queue: [{ kind: "grunt", n: 8, gap: 0.45 }, { kind: "rusher", n: 6, gap: 0.4 }] },
-    { title: "SHOTGUNS IN ASTORIA", queue: [{ kind: "grunt", n: 8, gap: 0.4 }, { kind: "shotgun", n: 5, gap: 0.7 }] },
-    { title: "MALL SECURITY", queue: [{ kind: "rusher", n: 8, gap: 0.35 }, { kind: "shotgun", n: 4, gap: 0.6 }, { kind: "security", n: 2, gap: 1.2 }] },
-    { title: "FOOD COURT FEEDING FRENZY", queue: [{ kind: "grunt", n: 10, gap: 0.3 }, { kind: "rusher", n: 8, gap: 0.28 }, { kind: "shotgun", n: 4, gap: 0.5 }] },
-  ];
-  const base = tables[(n - 1) % tables.length];
-  const extra = Math.floor((n - 1) / 5);
-  return {
-    title: n > 5 ? `${base.title}  +${extra}` : base.title,
-    boss: false,
-    ready: base.ready || 0,
-    queue: base.queue.map((q) => ({ ...q, n: q.n + extra * (q.kind === "grunt" ? 3 : 1) })),
-  };
+function currentObs(world) {
+  return roomObstacles(world.roomId, ARENA).concat(closedDoorBlocks(world.roomId, world.cleared, world.enterFrom));
 }
 
 function botStats(kind, wave) {
@@ -153,7 +139,6 @@ function botStats(kind, wave) {
 
 export function createGame(canvas, input) {
   const ctx = canvas.getContext("2d");
-  const obs = obstacles();
   let state = "title";
   let t = 0;
   let shake = 0;
@@ -182,6 +167,17 @@ export function createGame(canvas, input) {
     readyT: 0,
     spawnGates: null,
     boss: null,
+    roomId: "atrium",
+    enterFrom: null,
+    cleared: { atrium: false, food: false, fashions: false, radio: false, service: false, boss: false },
+    visited: { atrium: true },
+    roomWave: 0,
+    cutT: 0,
+    cutMax: 0,
+    pendingRoom: null,
+    pendingDir: null,
+    trashDone: {},
+    won: false,
   };
 
   function resetRun() {
@@ -211,12 +207,46 @@ export function createGame(canvas, input) {
     world.mult = 1;
     world.multT = 0;
     world.boss = null;
-    startWave(1);
+    world.roomId = "atrium";
+    world.enterFrom = null;
+    world.cleared = { atrium: false, food: false, fashions: false, radio: false, service: false, boss: false };
+    world.visited = { atrium: true };
+    world.roomWave = 0;
+    world.cutT = 0;
+    world.cutMax = 0;
+    world.pendingRoom = null;
+    world.pendingDir = null;
+    world.trashDone = {};
+    world.won = false;
+    startRoomWaves(false);
   }
 
-  function startWave(n) {
-    world.wave = n;
-    const def = waveDef(n);
+  function startRoomWaves(revisit) {
+    const room = ROOMS[world.roomId];
+    world.bots = [];
+    world.bullets = [];
+    world.eShots = [];
+    world.boss = null;
+    world.spawn = [];
+    world.spawnT = 0;
+    world.wavePause = 0;
+    if (revisit && world.cleared[world.roomId]) {
+      world.roomWave = -1;
+      if (!world.trashDone[world.roomId]) {
+        beginWave(TRASH_WAVE, true);
+        world.trashDone[world.roomId] = true;
+      } else {
+        world.readyT = 0;
+        announce = `${room.short}  —  CLEAR`;
+        announceT = 1.2;
+      }
+      return;
+    }
+    world.roomWave = 0;
+    beginWave(room.waves[0], world.roomId === "atrium");
+  }
+
+  function beginWave(def, firstAtrium) {
     world.spawn = [];
     for (const q of def.queue) {
       for (let i = 0; i < q.n; i++) {
@@ -226,12 +256,75 @@ export function createGame(canvas, input) {
     world.spawn.sort((a, b) => a.wait - b.wait);
     world.spawnT = 0;
     world.wavePause = 0;
-    world.readyT = def.ready || (n === 1 ? 3 : 0.8);
+    world.readyT = def.ready || (firstAtrium ? 3 : 0.7);
     world.spawnGates = def.queue[0] && def.queue[0].gates ? def.queue[0].gates : null;
-    announce = n === 1 ? "GET READY / THEY'RE LIVE" : `WAVE ${n}  —  ${def.title}`;
-    announceT = n === 1 ? 3.1 : 2.3;
+    announce = def.title;
+    announceT = firstAtrium ? 3.1 : def.boss ? 2.4 : 1.8;
     if (def.boss) sfx.boss();
     else sfx.wave();
+  }
+
+  function clearRoom() {
+    const room = ROOMS[world.roomId];
+    const firstClear = !world.cleared[world.roomId];
+    world.cleared[world.roomId] = true;
+    if (world.roomId === "boss") {
+      world.won = true;
+      state = "win";
+      stopMusic();
+      sfx.boss();
+      announce = "DIRECTORY UNIT DOWN  —  KRCD 7";
+      announceT = 99;
+      return;
+    }
+    if (!firstClear) return;
+    sfx.wave();
+    if (world.roomId === "atrium") {
+      announce = "WING CLEAR — PICK A DOOR";
+    } else if (wingsCleared(world.cleared) && world.roomId !== "service") {
+      announce = "ALL WINGS CLEAR — SERVICE SOUTH UNLOCKS";
+    } else {
+      announce = "DOOR OPEN  —  " + Object.keys(room.doors)
+        .filter((d) => doorOpen(world.roomId, d, world.cleared, world.enterFrom))
+        .map((d) => doorLabel(world.roomId, d, world.cleared))
+        .join(" / ");
+    }
+    announceT = 2.6;
+    flash = 0.22;
+  }
+
+  function enterDoor(dir) {
+    const dest = ROOMS[world.roomId].doors[dir];
+    if (!dest || !doorOpen(world.roomId, dir, world.cleared, world.enterFrom)) return;
+    if (world.cutT > 0) return;
+    sfx.ui();
+    world.pendingRoom = dest;
+    world.pendingDir = dir;
+    world.cutT = 0.55;
+    world.cutMax = 0.55;
+  }
+
+  function finishCut() {
+    const dest = world.pendingRoom;
+    const used = world.pendingDir;
+    if (!dest || !used) return;
+    const arrive = OPPOSITE[used];
+    world.roomId = dest;
+    world.enterFrom = arrive;
+    world.visited[dest] = true;
+    world.pendingRoom = null;
+    world.pendingDir = null;
+    const g = GATES.find((x) => x.name === arrive);
+    const gp = gateWorld(g);
+    const inn = INWARD[arrive];
+    world.player.x = gp.x + inn.x * 52;
+    world.player.y = gp.y + inn.y * 52;
+    world.player.iframes = 1.4;
+    world.player.vx = 0;
+    world.player.vy = 0;
+    startRoomWaves(!!world.cleared[dest]);
+    announce = ROOMS[dest].name;
+    announceT = Math.max(announceT, 1.3);
   }
 
   function spawnBot(kind, gateNames) {
@@ -450,7 +543,7 @@ export function createGame(canvas, input) {
       }
       return;
     }
-    if (state === "gameover") {
+    if (state === "gameover" || state === "win") {
       if (input.consume("start") || input.consume("fire") || input.mouse.clicked) {
         input.mouse.clicked = false;
         input.mouse.down = false;
@@ -459,8 +552,17 @@ export function createGame(canvas, input) {
       return;
     }
 
+    if (world.cutT > 0) {
+      const before = world.cutT;
+      world.cutT = Math.max(0, world.cutT - dt);
+      if (before > world.cutMax * 0.45 && world.cutT <= world.cutMax * 0.45) finishCut();
+      announceT = Math.max(0, announceT - dt);
+      return;
+    }
+
     input.mouse.clicked = false;
     const p = world.player;
+    const obs = currentObs(world);
     input.pollGamepad();
     const km = input.keyboardMove();
     let mx = km.x + input.pad.mx + input.touch.move.x;
@@ -476,6 +578,7 @@ export function createGame(canvas, input) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     resolveWorld(p, obs);
+    tryDoors(p);
 
     const mouseFresh = performance.now() - input.mouse.lastMove < 1600;
     const stickAim = len(input.pad.ax, input.pad.ay) > 0.2;
@@ -651,7 +754,27 @@ export function createGame(canvas, input) {
 
     if (!world.spawn.length && world.bots.every((b) => b.dead || !b)) {
       world.wavePause += dt;
-      if (world.wavePause > 1.6) startWave(world.wave + 1);
+      if (world.wavePause > 1.35) {
+        world.wavePause = 0;
+        const room = ROOMS[world.roomId];
+        if (world.cleared[world.roomId]) return;
+        if (world.roomWave >= 0 && world.roomWave < room.waves.length - 1) {
+          world.roomWave += 1;
+          world.wave += 1;
+          beginWave(room.waves[world.roomWave], false);
+        } else {
+          clearRoom();
+        }
+      }
+    }
+  }
+
+  function tryDoors(p) {
+    for (const g of GATES) {
+      if (!doorOpen(world.roomId, g.name, world.cleared, world.enterFrom)) continue;
+      const gp = gateWorld(g);
+      const d = Math.hypot(p.x - gp.x, p.y - gp.y);
+      if (d < 34) enterDoor(g.name);
     }
   }
 
@@ -707,7 +830,8 @@ export function createGame(canvas, input) {
 
     ctx.fillStyle = "#9aa";
     ctx.font = "11px Courier New, monospace";
-    ctx.fillText("THE ATRIUM  //  ABANDONED MALL FEED", 150, 19);
+    const feed = state === "title" ? "THE ATRIUM  //  ABANDONED MALL FEED" : ROOMS[world.roomId].chyron;
+    ctx.fillText(feed, 150, 19);
 
     ctx.textAlign = "right";
     ctx.fillStyle = "#5ef6ff";
@@ -721,7 +845,7 @@ export function createGame(canvas, input) {
       ctx.textAlign = "left";
       ctx.fillStyle = "#ddd";
       ctx.font = "bold 12px Trebuchet MS, sans-serif";
-      ctx.fillText(`WAVE ${world.wave}`, 16, H - HUD_BOT / 2);
+      ctx.fillText(`${ROOMS[world.roomId].short}  W${Math.max(1, world.roomWave + 1)}`, 16, H - HUD_BOT / 2);
       for (let i = 0; i < 5; i++) drawCrtLife(ctx, 108 + i * 26, H - HUD_BOT / 2, i < world.lives);
       ctx.fillStyle = "#5ef6ff";
       ctx.font = "bold 14px Courier New, monospace";
@@ -756,25 +880,32 @@ export function createGame(canvas, input) {
     ctx.rect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
     ctx.clip();
     ctx.imageSmoothingEnabled = true;
-    if (!coverImage(art.arena, ARENA.x, ARENA.y, ARENA.s, ARENA.s)) {
+    const floor = ROOMS[world.roomId].floor;
+    if (!coverImage(floor, ARENA.x, ARENA.y, ARENA.s, ARENA.s)) {
       ctx.fillStyle = "#14110e";
       ctx.fillRect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
     }
-    ctx.fillStyle = "rgba(0,0,0,0.28)";
-    ctx.fillRect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
+    applyRoomGrade(ctx, world.roomId, ARENA);
     ctx.imageSmoothingEnabled = false;
 
     const cx = ARENA.x + ARENA.s / 2;
     const cy = ARENA.y + ARENA.s / 2;
-    drawFountain(ctx, cx, cy, t);
-    const q = ARENA.s * 0.22;
-    drawPlanter(ctx, cx - q, cy - q);
-    drawPlanter(ctx, cx + q, cy - q);
-    drawPlanter(ctx, cx - q, cy + q);
-    drawPlanter(ctx, cx + q, cy + q);
+    if (world.roomId === "atrium") {
+      drawFountain(ctx, cx, cy, t);
+      const q = ARENA.s * 0.22;
+      drawPlanter(ctx, cx - q, cy - q);
+      drawPlanter(ctx, cx + q, cy - q);
+      drawPlanter(ctx, cx - q, cy + q);
+      drawPlanter(ctx, cx + q, cy + q);
+    }
     for (const g of GATES) {
-      const p = gateWorld(g);
-      drawGate(ctx, p.x, p.y, g.ang, g.label, t);
+      const dest = ROOMS[world.roomId].doors[g.name];
+      if (!dest) continue;
+      const gp = gateWorld(g);
+      const open = doorOpen(world.roomId, g.name, world.cleared, world.enterFrom);
+      const locked = doorLocked(world.roomId, g.name, world.cleared);
+      const mode = locked ? "locked" : open ? "open" : "closed";
+      drawGate(ctx, gp.x, gp.y, g.ang, doorLabel(world.roomId, g.name, world.cleared), t, mode);
     }
 
     for (const u of world.pickups) drawPickup(ctx, u, t);
@@ -832,7 +963,7 @@ export function createGame(canvas, input) {
       ctx.fillRect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
     }
 
-    if (announceT > 0 && state === "play") {
+    if (announceT > 0 && (state === "play" || state === "win")) {
       ctx.save();
       ctx.globalAlpha = clamp(announceT, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.45)";
@@ -843,6 +974,19 @@ export function createGame(canvas, input) {
       ctx.textBaseline = "middle";
       ctx.fillText(announce, W / 2, ARENA.y + 88);
       ctx.restore();
+    }
+
+    if (world.cutT > 0) {
+      const k = world.cutT / (world.cutMax || 0.55);
+      const a = k > 0.5 ? (1 - k) * 2 : k * 2;
+      ctx.fillStyle = `rgba(0,0,0,${0.15 + a * 0.85})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(94,246,255,${a * 0.08})`;
+      for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+    }
+
+    if (state === "play" || state === "win") {
+      drawMinimap(ctx, world, t, { x: 6, y: HUD_TOP + 6, w: 116, h: 200 });
     }
   }
 
@@ -906,11 +1050,31 @@ export function createGame(canvas, input) {
     if (Math.sin(t * 4) > -0.2) ctx.fillText("ENTER / SPACE  —  REBOOT THE FEED", W / 2, 490);
   }
 
+  function drawWin() {
+    drawPlay();
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#5ef6ff";
+    ctx.font = "bold 36px Trebuchet MS, Arial Black, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("DIRECTORY DOWN", W / 2, 340);
+    ctx.fillStyle = "#fff";
+    ctx.font = "18px Courier New, monospace";
+    ctx.fillText(`SCORE  ${String(world.score).padStart(7, "0")}`, W / 2, 392);
+    ctx.fillStyle = "#9aa";
+    ctx.font = "13px Courier New, monospace";
+    ctx.fillText("KRCD 7  —  THE ATRIUM IS CLEAR", W / 2, 424);
+    ctx.fillStyle = "#5ef6ff";
+    ctx.font = "bold 16px Trebuchet MS, sans-serif";
+    if (Math.sin(t * 4) > -0.2) ctx.fillText("ENTER / SPACE  —  BROADCAST AGAIN", W / 2, 478);
+  }
+
   function draw() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (state === "title") drawTitle();
     else if (state === "gameover") drawGameOver();
+    else if (state === "win") drawWin();
     else drawPlay();
     drawChyron();
     if (state === "title") {
