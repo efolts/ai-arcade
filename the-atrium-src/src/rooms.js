@@ -286,18 +286,18 @@ function stampLine(out, x0, y0, x1, y1, r, spacing) {
   }
 }
 
-/** radio.jpg is 1024² and cover-fits the square arena 1:1. Desk measured from the paint. */
+/** radio.jpg is 1024² and cover-fits the square arena 1:1. Desk footprint from the paint. */
 function radioDeskObstacles(arena) {
   const k = arena.s / 1024;
   const X = (px) => arena.x + px * k;
   const Y = (py) => arena.y + py * k;
   const out = [];
-  const r = 21;
-  const step = 14;
-  // Closed south bar; arms run north; open on the north so you can walk into the U.
-  stampLine(out, X(348), Y(352), X(348), Y(588), r, step);
-  stampLine(out, X(676), Y(352), X(676), Y(588), r, step);
-  stampLine(out, X(328), Y(628), X(696), Y(628), r, step);
+  const r = 22;
+  const step = 13;
+  // U-desk: north bar across the top, arms run south, OPEN on the south.
+  stampLine(out, X(328), Y(358), X(696), Y(358), r, step);
+  stampLine(out, X(348), Y(358), X(348), Y(640), r, step);
+  stampLine(out, X(676), Y(358), X(676), Y(640), r, step);
   return out;
 }
 
