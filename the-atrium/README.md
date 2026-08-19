@@ -2,6 +2,13 @@
 
 Twin-stick horde shooter for the Rapid City Digital arcade cabinet. Static build lives in this folder so Cloudflare Pages can serve it at `/the-atrium/`.
 
+## Canon (RCD video team lock)
+
+- **CRT-head:** wood-grain TV, two cyan dots, trench coat. The graveyard/shovel still is the character lock. Cyan is CRT-faction only.
+- **Tessera:** pearl-white, black wraparound visor, no face, no chest logo, no Tesla badges, no cyan on the bots.
+- **Uplink** is retired. City of Presidents / statues stay silent.
+- Arena key art stays the attached top-down atrium until a real mall-inside endframe arrives.
+
 ## Play
 
 Open `index.html` (or https://ai-arcade-a2e.pages.dev/the-atrium/). Native playfield is **960×780** and letterboxes to fit the cabinet iframe or fullscreen without stretching.

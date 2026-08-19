@@ -169,6 +169,7 @@ export function createGame(canvas, input) {
     eShots: [],
     pickups: [],
     parts: [],
+    floats: [],
     score: 0,
     wave: 1,
     lives: 3,
@@ -200,6 +201,7 @@ export function createGame(canvas, input) {
     world.eShots = [];
     world.pickups = [];
     world.parts = [];
+    world.floats = [];
     world.score = 0;
     world.wave = 1;
     world.lives = 3;
@@ -270,10 +272,16 @@ export function createGame(canvas, input) {
     }
   }
 
-  function addScore(n) {
-    world.score += Math.floor(n * world.mult);
+  function floater(x, y, text, color = "#5ef6ff") {
+    world.floats.push({ x, y, text, color, life: 0.85, max: 0.85 });
+  }
+
+  function addScore(n, x, y) {
+    const gained = Math.floor(n * world.mult);
+    world.score += gained;
     world.mult = clamp(world.mult + 0.2, 1, 9);
     world.multT = 4;
+    if (x != null) floater(x, y - 18, `+${gained}`);
     if (world.score > hi) {
       hi = world.score;
       localStorage.setItem(HI_KEY, String(hi));
@@ -330,8 +338,15 @@ export function createGame(canvas, input) {
     if (b.dead) return;
     b.dead = true;
     b.deadT = 0.001;
-    addScore(b.score);
+    addScore(b.score, b.x, b.y);
     sfx.crunch();
+    if (b.kind === "boss") {
+      announce = "DIRECTORY UNIT DOWN  —  KRCD 7";
+      announceT = 2;
+    } else if (world.mult >= 4 && Math.random() < 0.35) {
+      announce = "PHOSPHOR ON AISLE FOUR";
+      announceT = 1.1;
+    }
     shake = Math.max(shake, b.kind === "boss" ? 16 : 6);
     burst(b.x, b.y, b.kind === "boss" ? 36 : 16, "#e8e8e8", 0.4, true);
     dropPickup(b.x, b.y, b.kind === "boss" ? "bomb" : null);
@@ -594,6 +609,12 @@ export function createGame(canvas, input) {
     }
     world.parts = world.parts.filter((p) => p.life > 0);
 
+    for (const f of world.floats) {
+      f.y -= 22 * dt;
+      f.life -= dt;
+    }
+    world.floats = world.floats.filter((f) => f.life > 0);
+
     if (!world.spawn.length && world.bots.every((b) => b.dead || !b)) {
       world.wavePause += dt;
       if (world.wavePause > 1.6) startWave(world.wave + 1);
@@ -726,6 +747,15 @@ export function createGame(canvas, input) {
     for (const b of sorted) drawBot(ctx, b, t);
     for (const s of world.eShots) drawEnemyShot(ctx, s);
     for (const b of world.bullets) drawBolt(ctx, b);
+    for (const f of world.floats) {
+      ctx.save();
+      ctx.globalAlpha = clamp(f.life / f.max, 0, 1);
+      ctx.fillStyle = f.color;
+      ctx.font = "bold 12px Courier New, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.restore();
+    }
     if (world.player && state === "play") {
       drawPlayer(ctx, world.player, t);
       const p = world.player;
@@ -787,11 +817,17 @@ export function createGame(canvas, input) {
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.fillRect(0, 0, W, H);
 
-    if (art.player.complete && art.player.naturalWidth) {
-      ctx.drawImage(art.player, 18, H - 250, 120, 180);
+    if (art.crt.complete && art.crt.naturalWidth) {
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(art.crt, 14, H - 268, 128, 192);
+      ctx.restore();
     }
-    if (art.tessera.complete && art.tessera.naturalWidth) {
-      ctx.drawImage(art.tessera, W - 138, H - 250, 120, 180);
+    if (art.botStill.complete && art.botStill.naturalWidth) {
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(art.botStill, W - 142, H - 268, 128, 192);
+      ctx.restore();
     }
 
     ctx.fillStyle = "rgba(0,0,0,0.55)";
