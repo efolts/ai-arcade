@@ -122,7 +122,7 @@ function waveDef(n) {
     };
   }
   const tables = [
-    { title: "WELCOME TO THE ATRIUM", queue: [{ kind: "grunt", n: 8, gap: 0.9 }] },
+    { title: "GET READY / THEY'RE LIVE", queue: [{ kind: "grunt", n: 5, gap: 1.55, gates: ["S", "E"] }], ready: 3 },
     { title: "THEY'RE COMING FROM FASHIONS", queue: [{ kind: "grunt", n: 8, gap: 0.45 }, { kind: "rusher", n: 6, gap: 0.4 }] },
     { title: "SHOTGUNS IN ASTORIA", queue: [{ kind: "grunt", n: 8, gap: 0.4 }, { kind: "shotgun", n: 5, gap: 0.7 }] },
     { title: "MALL SECURITY", queue: [{ kind: "rusher", n: 8, gap: 0.35 }, { kind: "shotgun", n: 4, gap: 0.6 }, { kind: "security", n: 2, gap: 1.2 }] },
@@ -133,6 +133,7 @@ function waveDef(n) {
   return {
     title: n > 5 ? `${base.title}  +${extra}` : base.title,
     boss: false,
+    ready: base.ready || 0,
     queue: base.queue.map((q) => ({ ...q, n: q.n + extra * (q.kind === "grunt" ? 3 : 1) })),
   };
 }
@@ -140,11 +141,11 @@ function waveDef(n) {
 function botStats(kind, wave) {
   const f = 1 + (wave - 1) * 0.06;
   const table = {
-    grunt: { hp: 1, speed: 58, r: 14, score: 100, scale: 1 },
-    rusher: { hp: 1, speed: 118, r: 13, score: 150, scale: 0.94 },
-    shotgun: { hp: 3, speed: 54, r: 15, score: 250, scale: 1.08 },
-    security: { hp: 14, speed: 42, r: 20, score: 500, scale: 1.4 },
-    boss: { hp: 90 + wave * 8, speed: 38, r: 30, score: 5000, scale: 1.9 },
+    grunt: { hp: 1, speed: 52, r: 20, score: 100, scale: 1 },
+    rusher: { hp: 1, speed: 110, r: 16, score: 150, scale: 0.94 },
+    shotgun: { hp: 3, speed: 50, r: 20, score: 250, scale: 1.08 },
+    security: { hp: 14, speed: 40, r: 26, score: 500, scale: 1.4 },
+    boss: { hp: 90 + wave * 8, speed: 36, r: 36, score: 5000, scale: 1.9 },
   };
   const s = table[kind];
   return { ...s, speed: s.speed * (kind === "boss" ? 1 : f) };
@@ -178,6 +179,8 @@ export function createGame(canvas, input) {
     spawn: [],
     spawnT: 0,
     wavePause: 0,
+    readyT: 0,
+    spawnGates: null,
     boss: null,
   };
 
@@ -187,13 +190,13 @@ export function createGame(canvas, input) {
     world.player = {
       x: cx,
       y: cy,
-      r: 16,
+      r: 22,
       aim: -Math.PI / 2,
       vx: 0,
       vy: 0,
       fireT: 0,
       muzzle: 0,
-      iframes: 2.2,
+      iframes: 3.2,
       powers: { spread: 0, rapid: 0, speed: 0 },
     };
     world.bots = [];
@@ -216,19 +219,26 @@ export function createGame(canvas, input) {
     const def = waveDef(n);
     world.spawn = [];
     for (const q of def.queue) {
-      for (let i = 0; i < q.n; i++) world.spawn.push({ kind: q.kind, wait: i * q.gap });
+      for (let i = 0; i < q.n; i++) {
+        world.spawn.push({ kind: q.kind, wait: i * q.gap, gates: q.gates || null });
+      }
     }
     world.spawn.sort((a, b) => a.wait - b.wait);
     world.spawnT = 0;
     world.wavePause = 0;
-    announce = `WAVE ${n}  —  ${def.title}`;
-    announceT = 2.3;
+    world.readyT = def.ready || (n === 1 ? 3 : 0.8);
+    world.spawnGates = def.queue[0] && def.queue[0].gates ? def.queue[0].gates : null;
+    announce = n === 1 ? "GET READY / THEY'RE LIVE" : `WAVE ${n}  —  ${def.title}`;
+    announceT = n === 1 ? 3.1 : 2.3;
     if (def.boss) sfx.boss();
     else sfx.wave();
   }
 
-  function spawnBot(kind) {
-    const g = GATES[(Math.random() * GATES.length) | 0];
+  function spawnBot(kind, gateNames) {
+    const pool = gateNames
+      ? GATES.filter((g) => gateNames.includes(g.name))
+      : GATES;
+    const g = (pool.length ? pool : GATES)[(Math.random() * (pool.length || GATES.length)) | 0];
     const p = gateWorld(g);
     const st = botStats(kind, world.wave);
     const bot = {
@@ -243,7 +253,7 @@ export function createGame(canvas, input) {
       scale: st.scale,
       facing: 0,
       fireT: 0.4 + Math.random() * 0.6,
-      stun: 0.55,
+      stun: world.wave === 1 ? 0.85 : 0.55,
       deadT: 0,
       dead: false,
     };
@@ -291,7 +301,7 @@ export function createGame(canvas, input) {
   function dropPickup(x, y, force) {
     const roll = force || (Math.random() < 0.22 ? pickWeighted() : null);
     if (!roll) return;
-    world.pickups.push({ x, y, r: 12, kind: roll, glyph: PICKUPS[roll].glyph, t: 12 });
+    world.pickups.push({ x, y, r: 16, kind: roll, glyph: PICKUPS[roll].glyph, t: 12 });
   }
 
   function pickWeighted() {
@@ -347,8 +357,8 @@ export function createGame(canvas, input) {
       announce = "PHOSPHOR ON AISLE FOUR";
       announceT = 1.1;
     }
-    shake = Math.max(shake, b.kind === "boss" ? 16 : 6);
-    burst(b.x, b.y, b.kind === "boss" ? 36 : 16, "#e8e8e8", 0.4, true);
+    shake = Math.max(shake, b.kind === "boss" ? 22 : 12);
+    burst(b.x, b.y, b.kind === "boss" ? 48 : 28, "#e8e8e8", 0.55, true);
     dropPickup(b.x, b.y, b.kind === "boss" ? "bomb" : null);
     if (b.kind === "boss") world.boss = null;
   }
@@ -379,7 +389,7 @@ export function createGame(canvas, input) {
     const rate = p.powers.rapid > 0 ? 0.05 : 0.09;
     if (p.fireT > 0) return;
     p.fireT = rate;
-    p.muzzle = 0.05;
+    p.muzzle = 0.09;
     const angles = p.powers.spread > 0 ? [-0.22, 0, 0.22] : [0];
     for (const off of angles) {
       const a = p.aim + off;
@@ -396,7 +406,7 @@ export function createGame(canvas, input) {
     p.x -= Math.cos(p.aim) * 2.2;
     p.y -= Math.sin(p.aim) * 2.2;
     sfx.shoot();
-    shake = Math.max(shake, 1.6);
+    shake = Math.max(shake, 3.4);
   }
 
   function nearestBot(p) {
@@ -427,7 +437,13 @@ export function createGame(canvas, input) {
     tickMusic(dt);
     if (input.consume("mute")) muted = toggleMute();
     if (state === "title") {
-      if (input.consume("start") || input.mouse.clicked || input.pad.fire) {
+      if (
+        input.consume("start") ||
+        input.consume("fire") ||
+        input.consumeStart() ||
+        input.mouse.clicked ||
+        input.pad.fire
+      ) {
         input.mouse.clicked = false;
         input.mouse.down = false;
         startPlay();
@@ -492,9 +508,15 @@ export function createGame(canvas, input) {
     shake *= Math.pow(0.04, dt);
     flash = Math.max(0, flash - dt);
 
-    world.spawnT += dt;
-    while (world.spawn.length && world.spawn[0].wait <= world.spawnT) {
-      spawnBot(world.spawn.shift().kind);
+    world.readyT = Math.max(0, (world.readyT || 0) - dt);
+    if (world.readyT > 0) {
+      p.iframes = Math.max(p.iframes, 0.2);
+    } else {
+      world.spawnT += dt;
+      while (world.spawn.length && world.spawn[0].wait <= world.spawnT) {
+        const job = world.spawn.shift();
+        spawnBot(job.kind, job.gates);
+      }
     }
 
     for (const b of world.bots) {
@@ -721,12 +743,14 @@ export function createGame(canvas, input) {
     ctx.beginPath();
     ctx.rect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
     ctx.clip();
+    ctx.imageSmoothingEnabled = true;
     if (!coverImage(art.arena, ARENA.x, ARENA.y, ARENA.s, ARENA.s)) {
       ctx.fillStyle = "#14110e";
       ctx.fillRect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
     }
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.fillRect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
+    ctx.imageSmoothingEnabled = false;
 
     const cx = ARENA.x + ARENA.s / 2;
     const cy = ARENA.y + ARENA.s / 2;

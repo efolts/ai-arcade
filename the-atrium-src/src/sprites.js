@@ -1,5 +1,6 @@
-// Canon: CRT-head = graveyard still (boxy wood TV, two cyan dots, trench).
-// Tessera = pearl-white, black visor, blank chest, zero cyan. No Uplink. No statues.
+// Canon: CRT-head = wood TV, two cyan dots, trench. Tessera = pearl-white + black visor.
+// In-game bodies are SNES pixel sprites (pix.js). These draws are fallback only.
+import { drawCrtSprite, drawPixelLife, drawPixelPickup, drawTesseraSprite } from "./pix.js";
 
 function roundRect(ctx, x, y, w, h, r) {
   const rr = Math.min(r, w / 2, h / 2);
@@ -178,7 +179,7 @@ function drawCrtHead(ctx, ghost) {
   ctx.restore();
 }
 
-export function drawPlayer(ctx, e, t) {
+export function drawPlayerFallback(ctx, e, t) {
   const aim = e.aim;
   const moving = e.vx * e.vx + e.vy * e.vy > 8;
   const walk = moving ? t * 11 : 0;
@@ -281,7 +282,7 @@ export function drawPlayer(ctx, e, t) {
   ctx.restore();
 }
 
-export function drawBot(ctx, e, t) {
+export function drawBotFallback(ctx, e, t) {
   const walk = e.speed > 0.1 ? t * (8 + (e.kind === "rusher" ? 4 : 0)) : t * 2;
   const bob = Math.sin(walk * 10) * (e.kind === "rusher" ? 1.6 : 1);
   const stride = Math.sin(walk * 10) * (e.r * 0.22);
@@ -453,7 +454,21 @@ export function drawEnemyShot(ctx, b) {
   ctx.restore();
 }
 
+export function drawPlayer(ctx, e, t) {
+  if (drawCrtSprite(ctx, e, t)) return;
+  drawPlayerFallback(ctx, e, t);
+}
+
+export function drawBot(ctx, e, t) {
+  if (drawTesseraSprite(ctx, e, t)) return;
+  drawBotFallback(ctx, e, t);
+}
+
 export function drawPickup(ctx, p, t) {
+  drawPixelPickup(ctx, p, t);
+}
+
+export function drawPickupFallback(ctx, p, t) {
   const bob = Math.sin(t * 6 + p.x) * 3;
   ctx.save();
   ctx.translate(p.x, p.y + bob);
@@ -479,6 +494,10 @@ export function drawPickup(ctx, p, t) {
 }
 
 export function drawCrtLife(ctx, x, y, on) {
+  drawPixelLife(ctx, x, y, on);
+}
+
+export function drawCrtLifeFallback(ctx, x, y, on) {
   ctx.save();
   ctx.translate(x, y);
   ctx.globalAlpha = on ? 1 : 0.22;

@@ -36,13 +36,22 @@ export function createInput(canvas, sticks) {
     };
   }
 
-  window.addEventListener("keydown", (e) => {
-    const k = keyMap[e.code];
-    if (!k) return;
-    if (e.repeat && (k === "start" || k === "mute" || k === "esc")) return;
-    keys.add(k);
-    if (k === "fire" || k === "start") e.preventDefault();
-  });
+  let startTap = false;
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (!e.repeat && (e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Space")) {
+        startTap = true;
+        e.preventDefault();
+      }
+      const k = keyMap[e.code];
+      if (!k) return;
+      if (e.repeat && (k === "start" || k === "mute" || k === "esc")) return;
+      keys.add(k);
+      if (k === "fire" || k === "start") e.preventDefault();
+    },
+    true,
+  );
   window.addEventListener("keyup", (e) => {
     const k = keyMap[e.code];
     if (k) keys.delete(k);
@@ -196,6 +205,11 @@ export function createInput(canvas, sticks) {
     consume(name) {
       if (!keys.has(name) || consumed.has(name)) return false;
       consumed.add(name);
+      return true;
+    },
+    consumeStart() {
+      if (!startTap) return false;
+      startTap = false;
       return true;
     },
     endFrame() {
