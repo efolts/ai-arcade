@@ -36,7 +36,7 @@ const KIND_TINT = {
 
 const tintScratch = makeCanvas(48, 64);
 
-const TES_SHARDS = ["#f4f0e8", "#dcd8d0", "#c4c0b8", "#9a9690", "#6a6662", "#2a2a2c", "#ece8e0"];
+const TES_SHARDS = ["#ffffff", "#f4f0e8", "#ece8e0", "#dcd8d0", "#c4c0b8", "#9a9690", "#6a6662", "#3a3836"];
 const CRT_SHARDS = ["#5ef6ff", "#b8fff8", "#ffffff", "#2ee8e0", "#8ffff8", "#0a6060"];
 
 function load(src) {
@@ -235,29 +235,40 @@ function blitCooked(ctx, frame, x, y, scale, opt = {}) {
   ctx.restore();
 }
 
-function shatterLife(kind) {
-  return kind === "boss" ? 0.95 : kind === "player" ? 0.72 : 0.55;
+function shatterSpec(kind) {
+  if (kind === "boss") return { n: 240, force: 430, life: 0.86 };
+  if (kind === "security") return { n: 170, force: 370, life: 0.7 };
+  if (kind === "player") return { n: 96, force: 300, life: 0.7 };
+  return { n: 118, force: 350, life: 0.56 };
 }
 
 function shatterFreeze(kind) {
-  return kind === "boss" ? 0.1 : 0.066;
+  return kind === "player" ? 0.04 : 0;
 }
 
-function ensureShards(e, colors, count, force) {
+export function shatterDuration(kind) {
+  return shatterFreeze(kind) + shatterSpec(kind).life;
+}
+
+function ensureShards(e, colors, spec) {
   if (e.shards) return e.shards;
   const shards = [];
-  for (let i = 0; i < count; i++) {
+  const { n, force } = spec;
+  for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2;
-    const s = force * (0.35 + Math.random());
+    const ring = i % 6 === 0 ? 0.42 : 1;
+    const s = force * (0.22 + Math.random() * 0.78) * ring;
+    const sz = i % 8 === 0 ? 3 : 1 + (i % 2);
     shards.push({
-      ox: (Math.random() - 0.5) * 18,
-      oy: (Math.random() - 0.6) * 28 - 10,
+      ox: (Math.random() - 0.5) * 14,
+      oy: (Math.random() - 0.55) * 20 - 8,
       vx: Math.cos(a) * s,
-      vy: Math.sin(a) * s - force * 0.25,
-      w: 1 + (i % 3),
-      h: 1 + ((i + 1) % 3),
-      spin: (Math.random() - 0.5) * 18,
+      vy: Math.sin(a) * s,
+      w: sz,
+      h: sz,
+      spin: (Math.random() - 0.5) * 24,
       color: colors[i % colors.length],
+      spark: Math.random(),
     });
   }
   e.shards = shards;
@@ -265,23 +276,23 @@ function ensureShards(e, colors, count, force) {
 }
 
 function drawShatter(ctx, e, kind, scale) {
+  const spec = shatterSpec(kind);
   const age = Math.max(0, (e.deadT || 0) - shatterFreeze(kind));
-  const life = shatterLife(kind);
-  const n = kind === "boss" ? 56 : kind === "player" ? 40 : 28;
-  const force = kind === "boss" ? 140 : kind === "player" ? 110 : 90;
   const colors = kind === "player" ? CRT_SHARDS : TES_SHARDS;
-  const shards = ensureShards(e, colors, n, force);
+  const shards = ensureShards(e, colors, spec);
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   for (const sh of shards) {
-    const fade = Math.max(0, 1 - age / life);
-    if (fade <= 0) continue;
-    const x = e.x + sh.ox * scale + sh.vx * age;
-    const y = e.y + sh.oy * scale + sh.vy * age + 90 * age * age;
-    ctx.globalAlpha = fade;
-    ctx.fillStyle = sh.color;
-    const tumble = Math.abs(Math.sin(age * sh.spin + sh.ox)) > 0.35;
-    ctx.fillRect(Math.round(x), Math.round(y), tumble ? sh.h : sh.w, tumble ? sh.w : sh.h);
+    const u = age / spec.life;
+    if (u >= 1) continue;
+    const fade = u < 0.28 ? 1 : 1 - (u - 0.28) / 0.72;
+    const drag = 1 - u * 0.18;
+    const x = e.x + sh.ox * scale + sh.vx * age * drag;
+    const y = e.y + sh.oy * scale + sh.vy * age * drag;
+    const sparkle = ((age * 30 + sh.spark * 11) % 1) > 0.84;
+    ctx.globalAlpha = sparkle ? Math.min(1, fade + 0.4) : fade;
+    ctx.fillStyle = sparkle ? "#ffffff" : sh.color;
+    ctx.fillRect(Math.round(x), Math.round(y), sh.w, sh.h);
   }
   ctx.restore();
 }

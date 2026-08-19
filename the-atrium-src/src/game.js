@@ -16,7 +16,7 @@ import {
   drawPlayer,
 } from "./sprites.js";
 import { sfx, startMusic, stopMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./audio.js";
-import { gunOrigin } from "./pix.js";
+import { gunOrigin, shatterDuration } from "./pix.js";
 import {
   GATES,
   INWARD,
@@ -155,7 +155,10 @@ export function createGame(canvas, input) {
   const ctx = canvas.getContext("2d");
   let state = "title";
   let t = 0;
-  let shake = 0;
+  let punchX = 0;
+  let punchY = 0;
+  let punchT = 0;
+  let punchMax = 0.08;
   let flash = 0;
   let announce = "";
   let announceT = 0;
@@ -437,10 +440,18 @@ export function createGame(canvas, input) {
     announceT = 1.2;
   }
 
+  function cameraPunch(mag, dur = 0.08) {
+    const a = Math.random() * Math.PI * 2;
+    punchX = Math.cos(a) * mag;
+    punchY = Math.sin(a) * mag;
+    punchT = dur;
+    punchMax = dur;
+  }
+
   function smartBomb() {
     sfx.bomb();
     flash = 0.35;
-    shake = 14;
+    cameraPunch(11, 0.1);
     for (const b of world.bots) {
       if (b.dead) continue;
       if (b.kind === "boss" || b.kind === "security") b.hp -= 22;
@@ -464,8 +475,6 @@ export function createGame(canvas, input) {
       announce = "PHOSPHOR ON AISLE FOUR";
       announceT = 1.1;
     }
-    shake = Math.max(shake, b.kind === "boss" ? 22 : 12);
-    burst(b.x, b.y, b.kind === "boss" ? 48 : 28, "#e8e8e8", 0.55, true);
     dropPickup(b.x, b.y, b.kind === "boss" ? "bomb" : null);
     if (b.kind === "boss") world.boss = null;
   }
@@ -477,7 +486,7 @@ export function createGame(canvas, input) {
     p.iframes = 1.6;
     world.mult = 1;
     world.multT = 0;
-    shake = 12;
+    cameraPunch(9, 0.09);
     flash = 0.18;
     sfx.playerHit();
     burst(p.x, p.y, 18, "#5ef6ff", 0.4);
@@ -633,7 +642,7 @@ export function createGame(canvas, input) {
     world.multT = Math.max(0, world.multT - dt);
     if (world.multT <= 0) world.mult = 1;
     announceT = Math.max(0, announceT - dt);
-    shake *= Math.pow(0.04, dt);
+    punchT = Math.max(0, punchT - dt);
     flash = Math.max(0, flash - dt);
 
     world.readyT = Math.max(0, (world.readyT || 0) - dt);
@@ -796,7 +805,7 @@ export function createGame(canvas, input) {
         }
       }
     }
-    world.bots = world.bots.filter((b) => !b.dead || b.deadT < (b.kind === "boss" ? 1.1 : 0.68));
+    world.bots = world.bots.filter((b) => !b.dead || b.deadT < shatterDuration(b.kind) + 0.02);
 
     for (const b of world.bullets) {
       b.x += b.vx * dt;
@@ -975,10 +984,9 @@ export function createGame(canvas, input) {
   }
 
   function drawPlay() {
-    const sx = (Math.random() * 2 - 1) * shake;
-    const sy = (Math.random() * 2 - 1) * shake;
+    const pk = punchMax > 0 ? punchT / punchMax : 0;
     ctx.save();
-    ctx.translate(sx, sy);
+    ctx.translate(punchX * pk, punchY * pk);
 
     ctx.fillStyle = "#0a0c10";
     ctx.fillRect(ARENA.x - 8, ARENA.y - 8, ARENA.s + 16, ARENA.s + 16);
