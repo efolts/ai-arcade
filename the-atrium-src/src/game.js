@@ -379,12 +379,25 @@ export function createGame(canvas, input) {
       for (let i = 0; i < rank.elites; i++) {
         world.spawn.push({ kind: primary, wait: lateWait + 0.08 + i * 0.18, gates: last && last.gates, elite: true });
       }
-      if (world.roomId !== "food") {
-        const late = world.roomWave >= ROOMS[world.roomId].waves.length - 1;
-        const nShot = world.pass >= 2 ? rank.shots : late && rank.extraShot ? 1 : 0;
-        for (let i = 0; i < nShot; i++) {
-          world.spawn.push({ kind: "shotgun", wait: lateWait + 0.2 + i * 0.16, gates: last && last.gates });
-        }
+      const waveCount = ROOMS[world.roomId].waves.length;
+      const lastWave = world.roomWave >= waveCount - 1;
+      const late = world.roomWave >= 1;
+      let nShot = 0;
+      if (world.roomId === "food") {
+        if (lastWave) nShot = world.pass >= 2 ? 2 : 1;
+        else if (late) nShot = 1;
+      } else if (world.roomId === "fashions") {
+        nShot = 0;
+      } else if (world.roomId === "radio") {
+        nShot = world.pass >= 2 ? rank.shots : late && rank.extraShot ? 1 : 0;
+      } else if (world.roomId === "service") {
+        nShot = lastWave && (world.pass >= 2 || rank.extraShot) ? 1 : 0;
+      } else {
+        nShot = lastWave ? 1 : 0;
+        if (world.pass >= 2 && rank.shots) nShot += 1;
+      }
+      for (let i = 0; i < nShot; i++) {
+        world.spawn.push({ kind: "shotgun", wait: lateWait + 0.2 + i * 0.16, gates: last && last.gates });
       }
     }
     world.spawn.sort((a, b) => a.wait - b.wait);
@@ -457,6 +470,54 @@ export function createGame(canvas, input) {
     announceT = Math.max(announceT, 1.3);
   }
 
+  function botCanShoot(kind, extra) {
+    if (kind === "rusher") return false;
+    if (kind === "shotgun" || kind === "boss" || kind === "security") return true;
+    if (extra && extra.elite) return true;
+    const room = world.roomId;
+    const waves = ROOMS[room] && ROOMS[room].waves;
+    const lastWave = waves ? world.roomWave >= waves.length - 1 : false;
+    const late = world.roomWave >= 1;
+    const pass2 = world.pass >= 2;
+    if (kind === "grunt") {
+      let p = 0.36;
+      if (room === "atrium") p = 0.5;
+      if (room === "radio") p = 0.55;
+      if (room === "food") p = late ? (lastWave ? 0.5 : 0.32) : 0.1;
+      if (room === "fashions") p = lastWave ? 0.15 : late ? 0.1 : 0;
+      if (room === "service") p = 0.4;
+      if (pass2) p = Math.min(0.7, p + 0.18);
+      return Math.random() < p;
+    }
+    if (kind === "mannequin") {
+      if (room === "fashions") return false;
+      if (late || lastWave || pass2) return Math.random() < 0.32;
+      return Math.random() < 0.1;
+    }
+    return false;
+  }
+
+  function shooterCadence(b) {
+    let gap = 0.88;
+    if (b.kind === "shotgun") gap = 0.56;
+    else if (b.kind === "security") gap = 1.65;
+    else if (b.kind === "mannequin") gap = 1.15;
+    if (b.elite) gap *= 0.72;
+    if (world.pass >= 2) gap *= 0.82;
+    return gap;
+  }
+
+  function fireAmber(x, y, ang, spd, r = 4) {
+    world.eShots.push({
+      x,
+      y,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd,
+      r,
+      life: 1,
+    });
+  }
+
   function spawnBot(kind, gateNames, extra = {}) {
     const pool = gateNames
       ? GATES.filter((g) => gateNames.includes(g.name))
@@ -483,7 +544,8 @@ export function createGame(canvas, input) {
       lungeT: 0,
       addT: kind === "boss" ? 2.8 : 0,
       addI: 0,
-      fireT: kind === "shotgun" ? 0.35 + Math.random() * 0.3 : kind === "boss" ? 0.9 : 0.4 + Math.random() * 0.55,
+      fireT: kind === "shotgun" ? 0.35 + Math.random() * 0.3 : kind === "boss" ? 0.9 : kind === "security" ? 0.9 + Math.random() * 0.5 : 0.5 + Math.random() * 0.6,
+      canShoot: botCanShoot(kind, extra),
       stun: world.roomId === "atrium" && world.wave === 1 ? 0.32 : 0.18,
       deadT: 0,
       dead: false,
@@ -1113,19 +1175,17 @@ export function createGame(canvas, input) {
       }
 
       b.fireT -= dt;
-      if (b.kind === "shotgun" && b.fireT <= 0 && dist < 270) {
-        b.fireT = 0.56;
-        const base = ang;
-        for (const off of [-0.2, 0, 0.2]) {
-          const a = base + off;
-          world.eShots.push({
-            x: b.x + Math.cos(a) * 16,
-            y: b.y + Math.sin(a) * 16,
-            vx: Math.cos(a) * 270,
-            vy: Math.sin(a) * 270,
-            r: 4,
-            life: 0.7,
-          });
+      if (b.canShoot && b.kind !== "boss" && b.fireT <= 0) {
+        b.fireT = shooterCadence(b);
+        if (b.kind === "shotgun") {
+          for (const off of [-0.2, 0, 0.2]) {
+            const a = ang + off;
+            fireAmber(b.x + Math.cos(a) * 16, b.y + Math.sin(a) * 16, a, 270, 4);
+          }
+        } else if (b.kind === "security") {
+          fireAmber(b.x + Math.cos(ang) * 20, b.y + Math.sin(ang) * 20, ang, 190, 5.5);
+        } else {
+          fireAmber(b.x + Math.cos(ang) * 14, b.y + Math.sin(ang) * 14, ang, 240, 4);
         }
       }
       if (b.kind === "boss" && b.fireT <= 0) {
@@ -1135,44 +1195,30 @@ export function createGame(canvas, input) {
         b.fireT = gap;
         b.tele = 0.12;
         const aim = ang;
-        const ring = (n, spd, life, rad) => {
+        const ring = (n, spd, rad) => {
           for (let i = 0; i < n; i++) {
             const a = (i / n) * Math.PI * 2 + t;
-            world.eShots.push({
-              x: b.x + Math.cos(a) * rad,
-              y: b.y + Math.sin(a) * rad,
-              vx: Math.cos(a) * spd,
-              vy: Math.sin(a) * spd,
-              r: 4.5,
-              life,
-            });
+            fireAmber(b.x + Math.cos(a) * rad, b.y + Math.sin(a) * rad, a, spd, 4.5);
           }
         };
         const aimed = (offs, spd) => {
           for (const off of offs) {
             const a = aim + off;
-            world.eShots.push({
-              x: b.x + Math.cos(a) * 22,
-              y: b.y + Math.sin(a) * 22,
-              vx: Math.cos(a) * spd,
-              vy: Math.sin(a) * spd,
-              r: 4.2,
-              life: 1.4,
-            });
+            fireAmber(b.x + Math.cos(a) * 22, b.y + Math.sin(a) * 22, a, spd, 4.2);
           }
         };
         if (phase === 1) {
-          ring(8, 150, 2.1, 24);
+          ring(8, 150, 24);
           if ((b.addI || 0) % 2 === 1) aimed([-0.16, 0, 0.16], 240);
         } else if (phase === 2) {
-          if ((b.addI || 0) % 2 === 0) ring(10, 168, 2.0, 24);
+          if ((b.addI || 0) % 2 === 0) ring(10, 168, 24);
           else aimed([-0.28, -0.12, 0, 0.12, 0.28], 250);
         } else if (phase === 3) {
-          ring(12, 190, 1.9, 22);
+          ring(12, 190, 22);
           aimed([-0.2, 0, 0.2], 270);
         } else {
-          ring(16, 88, 2.6, 20);
-          ring(10, 210, 1.6, 28);
+          ring(16, 88, 20);
+          ring(10, 210, 28);
           aimed([-0.14, 0, 0.14], 280);
         }
       }
@@ -1213,7 +1259,6 @@ export function createGame(canvas, input) {
     for (const b of world.bullets) {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
-      b.life -= dt;
       if (b.streak) b.streak = Math.max(0, b.streak - dt);
       if (hitsObs(b, obs)) {
         b.life = 0;
@@ -1237,7 +1282,6 @@ export function createGame(canvas, input) {
     for (const s of world.eShots) {
       s.x += s.vx * dt;
       s.y += s.vy * dt;
-      s.life -= dt;
       if (hitsObs(s, obs)) {
         s.life = 0;
         continue;

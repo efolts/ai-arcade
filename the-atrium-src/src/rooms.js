@@ -47,7 +47,7 @@ export const ROOMS = {
           { kind: "grunt", n: 3, gap: 0.65, gates: ["S", "E"] },
           { kind: "rusher", n: 1, gap: 0.2, gates: ["N"] },
           { kind: "mannequin", n: 1, gap: 0.2, gates: ["W"] },
-          { kind: "shotgun", n: 1, gap: 0.2, gates: ["E"] },
+          { kind: "shotgun", n: 2, gap: 0.25, gates: ["E"] },
         ],
       },
       {
@@ -57,7 +57,7 @@ export const ROOMS = {
           { kind: "grunt", n: 2, gap: 0.4, gates: ["S"] },
           { kind: "rusher", n: 2, gap: 0.22, gates: ["N", "E"] },
           { kind: "mannequin", n: 2, gap: 0.45, gates: ["W"] },
-          { kind: "shotgun", n: 1, gap: 0.2, gates: ["E"] },
+          { kind: "shotgun", n: 2, gap: 0.22, gates: ["E"] },
           { kind: "security", n: 1, gap: 0.2, gates: ["S"] },
         ],
       },
@@ -132,6 +132,7 @@ export const ROOMS = {
         queue: [
           { kind: "mannequin", n: 4, gap: 0.4, gates: ["W", "N", "S"] },
           { kind: "grunt", n: 1, gap: 0.3, gates: ["E"] },
+          { kind: "shotgun", n: 1, gap: 0.25, gates: ["E"] },
         ],
       },
       {
@@ -139,7 +140,7 @@ export const ROOMS = {
         ready: 0.7,
         queue: [
           { kind: "mannequin", n: 6, gap: 0.28, gates: ["W", "N", "S"] },
-          { kind: "shotgun", n: 1, gap: 0.2, gates: ["E"] },
+          { kind: "shotgun", n: 2, gap: 0.22, gates: ["E"] },
         ],
       },
     ],
