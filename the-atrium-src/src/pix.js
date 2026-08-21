@@ -2,18 +2,7 @@ import crtBaseWalkUrl from "./art/sprites/crt-base-walk.png";
 import crtArmorWalkUrl from "./art/sprites/crt-armor-walk.png";
 import crtWeaponWalkUrl from "./art/sprites/crt-weapon-walk.png";
 import crtFullWalkUrl from "./art/sprites/crt-full-walk.png";
-import tesDown0 from "./art/sprites/tessera-down-0.png";
-import tesDown1 from "./art/sprites/tessera-down-1.png";
-import tesDown2 from "./art/sprites/tessera-down-2.png";
-import tesUp0 from "./art/sprites/tessera-up-0.png";
-import tesUp1 from "./art/sprites/tessera-up-1.png";
-import tesUp2 from "./art/sprites/tessera-up-2.png";
-import tesLeft0 from "./art/sprites/tessera-left-0.png";
-import tesLeft1 from "./art/sprites/tessera-left-1.png";
-import tesLeft2 from "./art/sprites/tessera-left-2.png";
-import tesRight0 from "./art/sprites/tessera-right-0.png";
-import tesRight1 from "./art/sprites/tessera-right-1.png";
-import tesRight2 from "./art/sprites/tessera-right-2.png";
+import tesWalkUrl from "./art/sprites/tessera-walk.png";
 
 export const CRT_CELL = { w: 40, h: 56 };
 export const TES_CELL = { w: 36, h: 52 };
@@ -45,30 +34,20 @@ function makeCanvas(w, h) {
   return c;
 }
 
-/**
- * Tessera named files are backwards: *-left-* pixels face EAST,
- * *-right-* pixels face WEST. Map gameplay dir → files that face that way.
- * CRT walk sheets are visual-facing already (DOWN, LEFT, RIGHT, UP).
- */
-const TES_SRC = {
-  down: [tesDown0, tesDown1, tesDown2].map(load),
-  up: [tesUp0, tesUp1, tesUp2].map(load),
-  left: [tesRight0, tesRight1, tesRight2].map(load),
-  right: [tesLeft0, tesLeft1, tesLeft2].map(load),
-};
-
-const frames = { tes: null };
 const CRT_WALK_SRC = {
   base: load(crtBaseWalkUrl),
   armor: load(crtArmorWalkUrl),
   weapon: load(crtWeaponWalkUrl),
   full: load(crtFullWalkUrl),
 };
+const tesWalkSrc = load(tesWalkUrl);
 const walks = { base: null, armor: null, weapon: null, full: null };
+let tesWalk = null;
 /** Sheet rows: DOWN, LEFT, RIGHT, UP — already visual-facing on these sheets. */
 const WALK_DIRS = ["down", "left", "right", "up"];
 const WALK_SWAP_LR = false;
 const CRT_DRAW_H = 56;
+const TES_DRAW_H = 52;
 
 function isMagenta(r, g, b) {
   if (r > 200 && g < 90 && b > 200) return true;
@@ -215,11 +194,11 @@ function cookWalkSheet(img) {
 }
 
 function ensureCooked() {
-  if (!frames.tes) frames.tes = cookNamed(TES_SRC);
+  if (!tesWalk) tesWalk = cookWalkSheet(tesWalkSrc);
   for (const k of Object.keys(CRT_WALK_SRC)) {
     if (!walks[k]) walks[k] = cookWalkSheet(CRT_WALK_SRC[k]);
   }
-  return !!(walks.base && frames.tes);
+  return !!(walks.base && tesWalk);
 }
 
 export function spritesReady() {
@@ -386,14 +365,16 @@ export function drawCrtSprite(ctx, e, t) {
 
 export function drawTesseraSprite(ctx, e, t) {
   ensureCooked();
-  const bank = frames.tes;
+  const bank = tesWalk;
   if (!bank) return false;
   const kind = e.kind || "grunt";
   const scale = KIND_SCALE[kind] || SCALE;
   const stillPose = kind === "mannequin" && e.pose !== "lunge";
   const moving = !e.dead && !stillPose && (e.vx || 0) * (e.vx || 0) + (e.vy || 0) * (e.vy || 0) > 16;
   const face = dir4(e.facing || 0);
-  const frame = moving ? 1 + (Math.floor(t * (kind === "rusher" ? 12 : kind === "mannequin" ? 10 : 8)) % 2) : 0;
+  const seq = bank[face] || bank.down;
+  const rate = kind === "rusher" ? 12 : kind === "mannequin" ? 10 : 8;
+  const frame = moving ? Math.floor(t * rate) % seq.length : 0;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -405,9 +386,15 @@ export function drawTesseraSprite(ctx, e, t) {
     ctx.restore();
     return true;
   }
+  const cell = seq[frame];
+  if (!cell) {
+    ctx.restore();
+    return false;
+  }
   if (e.elite) ctx.filter = "brightness(0.55) contrast(1.2) saturate(0.25)";
   else if (kind === "security") ctx.filter = "sepia(0.25) contrast(1.05)";
-  blitFrame(ctx, bank, face, frame, e.x, e.y, scale, { tint: e.elite ? null : KIND_TINT[kind] || null });
+  const match = (TES_DRAW_H / cell.height) * scale;
+  blitCooked(ctx, cell, e.x, e.y, match, { tint: e.elite ? null : KIND_TINT[kind] || null });
   ctx.filter = "none";
   if (kind === "boss" && !e.dead) {
     ctx.imageSmoothingEnabled = false;

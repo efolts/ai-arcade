@@ -114,26 +114,40 @@ def face_hint(cell: Image.Image):
     return left, right
 
 
+def cook_named(src_name, out_name, target_h, min_w=36):
+    src = HI / src_name
+    if not src.exists():
+        src = SPR / src_name
+    print("cook", out_name, "from", src, "h", target_h)
+    frames = slice_sheet(src)
+    # re-pixelize if target differs from module default
+    if target_h != TARGET_H:
+        im = Image.open(src).convert("RGB")
+        w, h = im.size
+        fw, fh = w // 4, h // 4
+        frames = {d: [] for d in DIRS}
+        for r, d in enumerate(DIRS):
+            for c in range(4):
+                cell = im.crop((c * fw, r * fh, (c + 1) * fw, (r + 1) * fh))
+                frames[d].append(pixelize(cell, target_h))
+    max_w = max(fr.size[0] for d in DIRS for fr in frames[d])
+    cell_w = max(min_w, max_w + 2)
+    # Generated Tessera sheet was DOWN, RIGHT, LEFT, UP — store visual L/R.
+    if "tessera" in out_name and frames["left"] and frames["right"]:
+        frames["left"], frames["right"] = frames["right"], frames["left"]
+    sheet, packed = pack(frames, cell_w, target_h)
+    out = SPR / out_name
+    sheet.save(out)
+    print(" wrote", out, sheet.size, "cell", cell_w, target_h)
+    for d in ("left", "right"):
+        lo, hi = face_hint(packed[d][0])
+        print(f"  {d} idle mass L/R {lo}/{hi}")
+    return packed
+
+
 def main():
     SPR.mkdir(parents=True, exist_ok=True)
-    for kit, name in SHEETS.items():
-        src = HI / name
-        if not src.exists():
-            src = SPR / name
-        print("cook", kit, "from", src)
-        frames = slice_sheet(src)
-        max_w = max(fr.size[0] for d in DIRS for fr in frames[d])
-        cell_w = max(48, max_w + 2)
-        sheet, packed = pack(frames, cell_w)
-        out = SPR / name
-        sheet.save(out)
-        print(" wrote", out, sheet.size, "cell", cell_w, TARGET_H)
-        for d in ("left", "right"):
-            lo, hi = face_hint(packed[d][0])
-            print(f"  {d} idle mass L/R {lo}/{hi}")
-        if kit in STILLS:
-            packed["down"][0].save(SPR / STILLS[kit])
-            print(" wrote still", STILLS[kit], packed["down"][0].size)
+    cook_named("tessera-walk.png", "tessera-walk.png", 52, min_w=36)
 
 
 if __name__ == "__main__":
