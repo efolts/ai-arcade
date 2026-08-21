@@ -154,12 +154,12 @@ function botStats(kind, wave, level, weaponTier = 0, pass = 1) {
   const f = 1 + (wave - 1) * 0.06;
   const rank = rankMult(level || 1, weaponTier, pass);
   const table = {
-    grunt: { hp: 1, speed: 58, r: 20, score: 100, scale: 1 },
-    rusher: { hp: 1, speed: 128, r: 18, score: 150, scale: 0.94 },
-    shotgun: { hp: 5, speed: 46, r: 22, score: 250, scale: 1.08 },
-    security: { hp: 18, speed: 32, r: 28, score: 500, scale: 1.4 },
-    mannequin: { hp: 5, speed: 12, r: 19, score: 220, scale: 1.02 },
-    boss: { hp: 280 + wave * 8, speed: 48, r: 34, score: 5000, scale: 1.9 },
+    grunt: { hp: 1, speed: 58, r: 22, score: 100, scale: 1 },
+    rusher: { hp: 1, speed: 128, r: 20, score: 150, scale: 0.94 },
+    shotgun: { hp: 5, speed: 46, r: 24, score: 250, scale: 1.08 },
+    security: { hp: 18, speed: 32, r: 30, score: 500, scale: 1.4 },
+    mannequin: { hp: 5, speed: 12, r: 21, score: 220, scale: 1.02 },
+    boss: { hp: 280 + wave * 8, speed: 48, r: 38, score: 5000, scale: 1.9 },
   };
   const s = table[kind] || table.grunt;
   let hpMul = rank.hp;

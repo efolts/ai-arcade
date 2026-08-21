@@ -8,7 +8,7 @@ export const CRT_CELL = { w: 40, h: 56 };
 export const TES_CELL = { w: 36, h: 52 };
 export const SCALE = 1;
 
-const KIND_SCALE = { rusher: 1, grunt: 1, shotgun: 1, mannequin: 1, security: 2, boss: 3 };
+const KIND_SCALE = { rusher: 1, grunt: 1, shotgun: 1, mannequin: 1, security: 1.45, boss: 3 };
 const KIND_TINT = {
   mannequin: "rgba(214,148,138,0.48)",
   shotgun: "rgba(118,148,178,0.42)",
@@ -47,7 +47,7 @@ let tesWalk = null;
 const WALK_DIRS = ["down", "left", "right", "up"];
 const WALK_SWAP_LR = false;
 const CRT_DRAW_H = 56;
-const TES_DRAW_H = 52;
+const TES_DRAW_H = 56;
 
 function isMagenta(r, g, b) {
   if (r > 200 && g < 90 && b > 200) return true;
@@ -175,28 +175,121 @@ function keyMagentaOnly(src, sx, sy, w, h) {
   return out;
 }
 
-function cookWalkSheet(img) {
+/** Opaque body box. Trims 1–2px fringe rows so a magenta foot-gap is not part of the sprite. */
+function contentBBox(frame) {
+  const w = frame.width;
+  const h = frame.height;
+  const tctx = frame.getContext("2d", { willReadFrequently: true });
+  const p = tctx.getImageData(0, 0, w, h).data;
+  const row = new Int16Array(h);
+  const col = new Int16Array(w);
+  let x0 = w;
+  let y0 = h;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      if (p[o + 3] < 32 || isMagenta(p[o], p[o + 1], p[o + 2])) continue;
+      row[y]++;
+      col[x]++;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) return null;
+  while (y0 < y1 && row[y0] < 3) y0++;
+  while (y1 > y0 && row[y1] < 3) y1--;
+  while (x0 < x1 && col[x0] < 2) x0++;
+  while (x1 > x0 && col[x1] < 2) x1--;
+  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+function normalizeFrame(frame, targetH) {
+  const box = contentBBox(frame);
+  if (!box || box.h < 4) return frame;
+  const nw = Math.max(8, Math.round(box.w * (targetH / box.h)));
+  const out = makeCanvas(nw, targetH);
+  const octx = out.getContext("2d");
+  octx.imageSmoothingEnabled = false;
+  octx.clearRect(0, 0, nw, targetH);
+  octx.drawImage(frame, box.x, box.y, box.w, box.h, 0, 0, nw, targetH);
+  return out;
+}
+
+/** +1 = profile faces east (right), -1 = west. 0 = unknown. */
+function profileFaceSign(frame) {
+  const w = frame.width;
+  const h = frame.height;
+  const tctx = frame.getContext("2d", { willReadFrequently: true });
+  const p = tctx.getImageData(0, 0, w, Math.max(1, Math.floor(h * 0.42))).data;
+  let sx = 0;
+  let n = 0;
+  const hh = Math.floor(h * 0.42);
+  for (let y = 0; y < hh; y++) {
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      const r = p[o];
+      const g = p[o + 1];
+      const b = p[o + 2];
+      const a = p[o + 3];
+      if (a < 32 || isMagenta(r, g, b)) continue;
+      const cyan = g > 140 && b > 140 && g >= r - 16;
+      if (!cyan) continue;
+      sx += x;
+      n++;
+    }
+  }
+  if (n < 3) return 0;
+  return sx / n >= w * 0.5 ? 1 : -1;
+}
+
+function cookWalkSheet(img, targetCap) {
   if (!img.complete || !img.naturalWidth) return null;
   const cols = 4;
   const rows = 4;
   const fw = Math.floor(img.naturalWidth / cols);
   const fh = Math.floor(img.naturalHeight / rows);
   if (fw < 8 || fh < 8) return null;
-  const bank = { down: [], left: [], right: [], up: [] };
+  const raw = { down: [], left: [], right: [], up: [] };
   for (let r = 0; r < rows; r++) {
-    let dir = WALK_DIRS[r];
-    if (WALK_SWAP_LR && (dir === "left" || dir === "right")) dir = dir === "left" ? "right" : "left";
+    const dir = WALK_DIRS[r];
     for (let c = 0; c < cols; c++) {
-      bank[dir].push(keyMagentaOnly(img, c * fw, r * fh, fw, fh));
+      raw[dir].push(keyMagentaOnly(img, c * fw, r * fh, fw, fh));
     }
+  }
+  const leftSign = profileFaceSign(raw.left[0]);
+  const rightSign = profileFaceSign(raw.right[0]);
+  let swap = WALK_SWAP_LR;
+  if (leftSign > 0 && rightSign < 0) swap = true;
+  if (leftSign < 0 && rightSign > 0) swap = false;
+  if (swap) {
+    const tmp = raw.left;
+    raw.left = raw.right;
+    raw.right = tmp;
+  }
+  let bestH = 0;
+  for (const dir of WALK_DIRS) {
+    for (const fr of raw[dir]) {
+      const box = contentBBox(fr);
+      if (box) bestH = Math.max(bestH, box.h);
+    }
+  }
+  const cap = targetCap || CRT_DRAW_H;
+  const targetH = Math.max(24, Math.min(cap, bestH || cap));
+  const bank = { down: [], left: [], right: [], up: [] };
+  for (const dir of WALK_DIRS) {
+    bank[dir] = raw[dir].map((fr) => normalizeFrame(fr, targetH));
   }
   return bank;
 }
 
 function ensureCooked() {
-  if (!tesWalk) tesWalk = cookWalkSheet(tesWalkSrc);
+  if (!tesWalk) tesWalk = cookWalkSheet(tesWalkSrc, TES_DRAW_H);
   for (const k of Object.keys(CRT_WALK_SRC)) {
-    if (!walks[k]) walks[k] = cookWalkSheet(CRT_WALK_SRC[k]);
+    if (!walks[k]) walks[k] = cookWalkSheet(CRT_WALK_SRC[k], CRT_DRAW_H);
   }
   return !!(walks.base && tesWalk);
 }
@@ -227,7 +320,8 @@ function blitCooked(ctx, frame, x, y, scale, opt = {}) {
   const dw = frame.width * scale;
   const dh = frame.height * scale;
   const dx = Math.round(x - dw / 2);
-  const dy = Math.round(y - dh + scale * 2);
+  const foot = opt.footPad == null ? 0 : opt.footPad;
+  const dy = Math.round(y - dh + foot);
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   if (opt.alpha != null) ctx.globalAlpha = opt.alpha;
@@ -351,7 +445,10 @@ export function drawCrtSprite(ctx, e, t) {
     return false;
   }
   const match = CRT_DRAW_H / cell.height;
-  blitCooked(ctx, cell, e.x, e.y, match, e.skinTint === "mesh" ? { tint: "rgba(94,246,255,0.22)" } : {});
+  blitCooked(ctx, cell, e.x, e.y, match, {
+    tint: e.skinTint === "mesh" ? "rgba(94,246,255,0.22)" : null,
+    footPad: 0,
+  });
   if (e.muzzle > 0) {
     const g = gunOrigin(e);
     ctx.fillStyle = "#b8fff8";
@@ -394,7 +491,7 @@ export function drawTesseraSprite(ctx, e, t) {
   if (e.elite) ctx.filter = "brightness(0.55) contrast(1.2) saturate(0.25)";
   else if (kind === "security") ctx.filter = "sepia(0.25) contrast(1.05)";
   const match = (TES_DRAW_H / cell.height) * scale;
-  blitCooked(ctx, cell, e.x, e.y, match, { tint: e.elite ? null : KIND_TINT[kind] || null });
+  blitCooked(ctx, cell, e.x, e.y, match, { tint: e.elite ? null : KIND_TINT[kind] || null, footPad: 0 });
   ctx.filter = "none";
   if (kind === "boss" && !e.dead) {
     ctx.imageSmoothingEnabled = false;
