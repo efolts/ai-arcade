@@ -1,4 +1,4 @@
-import titlePosterUrl from "./art/title-poster.jpg";
+import titlePosterUrl from "./art/title-crt-vs-tessera.png";
 import playerRefUrl from "./art/player-ref.jpg";
 import tesseraRefUrl from "./art/tessera-ref.jpg";
 import crtCanonUrl from "./art/crt-canon.jpg";
@@ -1566,22 +1566,19 @@ export function createGame(canvas, input) {
   function drawTitle() {
     ctx.fillStyle = "#050608";
     ctx.fillRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = true;
     coverImage(art.title, 0, 0, W, H);
-    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
     ctx.fillRect(0, 0, W, H);
 
-    if (art.crt.complete && art.crt.naturalWidth) {
-      ctx.save();
-      ctx.globalAlpha = 0.92;
-      ctx.drawImage(art.crt, 14, H - 268, 128, 192);
-      ctx.restore();
-    }
-    if (art.botStill.complete && art.botStill.naturalWidth) {
-      ctx.save();
-      ctx.globalAlpha = 0.92;
-      ctx.drawImage(art.botStill, W - 142, H - 268, 128, 192);
-      ctx.restore();
-    }
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.fillRect(0, 64, W, 78);
+    ctx.fillStyle = "#f2f2f0";
+    ctx.font = "bold 54px Trebuchet MS, Arial Black, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("THE ATRIUM", W / 2, 104);
 
     ctx.fillStyle = "rgba(0,0,0,0.55)";
     ctx.fillRect(0, H - 132, W, 132);
@@ -1589,13 +1586,13 @@ export function createGame(canvas, input) {
     ctx.font = "bold 16px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
     const blink = Math.sin(t * 4) > -0.2;
-    if (blink) ctx.fillText("PRESS ENTER  /  CLICK  /  TAP   TO BROADCAST", W / 2, H - 96);
+    if (blink) ctx.fillText("PRESS ENTER  /  CLICK  /  TAP   TO START", W / 2, H - 96);
     ctx.fillStyle = "#c8c8c4";
     ctx.font = "12px Trebuchet MS, sans-serif";
     ctx.fillText("WASD or LEFT STICK move   •   MOUSE or RIGHT STICK aim / fire   •   ARROWS auto-aim", W / 2, H - 70);
     ctx.fillStyle = "#889";
     ctx.font = "11px Courier New, monospace";
-    ctx.fillText(`HI-SCORE  ${String(hi).padStart(7, "0")}     A KRCD 7 LIVE SMASH PRODUCTION`, W / 2, H - 46);
+    ctx.fillText(`HI-SCORE  ${String(hi).padStart(7, "0")}`, W / 2, H - 46);
     ctx.fillText("NO UNITY  •  NO UNREAL  •  NO PHASER  •  RAW CANVAS PHOSPHOR", W / 2, H - 28);
   }
 
@@ -1649,13 +1646,7 @@ export function createGame(canvas, input) {
     else if (state === "gameover") drawGameOver();
     else if (state === "win") drawWin();
     else drawPlay();
-    drawChyron();
-    if (state === "title") {
-      ctx.fillStyle = "#5ef6ff";
-      ctx.font = "bold 11px Courier New, monospace";
-      ctx.textAlign = "left";
-      ctx.fillText("KRCD 7 LIVE", 16, H - HUD_BOT / 2);
-    }
+    if (state !== "title") drawChyron();
     if (world.shopOpen && state === "play") drawShop();
   }
 
