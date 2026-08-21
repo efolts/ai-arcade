@@ -1148,7 +1148,10 @@ export function createGame(canvas, input) {
       b.vy = sl.y * moveSpd;
       b.x += b.vx * dt;
       b.y += b.vy * dt;
-      b.facing = b.kind === "shotgun" || b.kind === "mannequin" ? ang : angOf(sl.x || Math.cos(ang), sl.y || Math.sin(ang));
+      b.facing =
+        b.kind === "shotgun" || b.kind === "mannequin" || Math.hypot(sl.x, sl.y) < 0.01
+          ? ang
+          : angOf(sl.x, sl.y);
       resolveWorld(b, obs);
       if (hits(b, p)) {
         if (b.kind === "security") {

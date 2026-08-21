@@ -43,7 +43,7 @@ const CRT_WALK_SRC = {
 const tesWalkSrc = load(tesWalkUrl);
 const walks = { base: null, armor: null, weapon: null, full: null };
 let tesWalk = null;
-/** Sheet rows: DOWN, LEFT, RIGHT, UP — already visual-facing on these sheets. */
+/** Intended sheet rows: DOWN, LEFT, RIGHT, UP. Tessera cook re-checks pixels. */
 const WALK_DIRS = ["down", "left", "right", "up"];
 const WALK_SWAP_LR = false;
 const CRT_DRAW_H = 56;
@@ -246,7 +246,70 @@ function profileFaceSign(frame) {
   return sx / n >= w * 0.5 ? 1 : -1;
 }
 
-function cookWalkSheet(img, targetCap) {
+/** Tessera visor vs pearl in the helmet band. +1 east, -1 west, 0 unknown. */
+function visorFaceSign(frame) {
+  const w = frame.width;
+  const h = frame.height;
+  const tctx = frame.getContext("2d", { willReadFrequently: true });
+  const p = tctx.getImageData(0, 0, w, h).data;
+  const y0 = Math.floor(h * 0.08);
+  const y1 = Math.floor(h * 0.38);
+  let visX = 0;
+  let visN = 0;
+  let pearlX = 0;
+  let pearlN = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      const r = p[o];
+      const g = p[o + 1];
+      const b = p[o + 2];
+      const a = p[o + 3];
+      if (a < 32 || isMagenta(r, g, b)) continue;
+      const lum = r + g + b;
+      if (lum < 160 && Math.abs(r - g) < 40 && Math.abs(g - b) < 40) {
+        visX += x;
+        visN++;
+      } else if (lum > 480) {
+        pearlX += x;
+        pearlN++;
+      }
+    }
+  }
+  if (visN < 6 || pearlN < 8) return 0;
+  const dv = visX / visN - pearlX / pearlN;
+  if (dv > 0.45) return 1;
+  if (dv < -0.45) return -1;
+  return 0;
+}
+
+/** Higher = more visor on the helmet (front). Back is a pearl dome. */
+function visorFrontness(frame) {
+  const w = frame.width;
+  const h = frame.height;
+  const tctx = frame.getContext("2d", { willReadFrequently: true });
+  const p = tctx.getImageData(0, 0, w, h).data;
+  const y1 = Math.floor(h * 0.42);
+  let vis = 0;
+  let pearl = 0;
+  for (let y = 0; y < y1; y++) {
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4;
+      const r = p[o];
+      const g = p[o + 1];
+      const b = p[o + 2];
+      const a = p[o + 3];
+      if (a < 32 || isMagenta(r, g, b)) continue;
+      const lum = r + g + b;
+      if (lum < 160) vis++;
+      else if (lum > 480) pearl++;
+    }
+  }
+  const n = vis + pearl;
+  return n < 8 ? 0 : vis / n;
+}
+
+function cookWalkSheet(img, targetCap, kind) {
   if (!img.complete || !img.naturalWidth) return null;
   const cols = 4;
   const rows = 4;
@@ -260,15 +323,30 @@ function cookWalkSheet(img, targetCap) {
       raw[dir].push(keyMagentaOnly(img, c * fw, r * fh, fw, fh));
     }
   }
-  const leftSign = profileFaceSign(raw.left[0]);
-  const rightSign = profileFaceSign(raw.right[0]);
-  let swap = WALK_SWAP_LR;
-  if (leftSign > 0 && rightSign < 0) swap = true;
-  if (leftSign < 0 && rightSign > 0) swap = false;
-  if (swap) {
-    const tmp = raw.left;
-    raw.left = raw.right;
-    raw.right = tmp;
+  if (kind === "tessera") {
+    const leftSign = visorFaceSign(raw.left[0]);
+    const rightSign = visorFaceSign(raw.right[0]);
+    if (leftSign > 0 && rightSign < 0) {
+      const tmp = raw.left;
+      raw.left = raw.right;
+      raw.right = tmp;
+    }
+    if (visorFrontness(raw.down[0]) + 0.08 < visorFrontness(raw.up[0])) {
+      const tmp = raw.down;
+      raw.down = raw.up;
+      raw.up = tmp;
+    }
+  } else {
+    const leftSign = profileFaceSign(raw.left[0]);
+    const rightSign = profileFaceSign(raw.right[0]);
+    let swap = WALK_SWAP_LR;
+    if (leftSign > 0 && rightSign < 0) swap = true;
+    if (leftSign < 0 && rightSign > 0) swap = false;
+    if (swap) {
+      const tmp = raw.left;
+      raw.left = raw.right;
+      raw.right = tmp;
+    }
   }
   let bestH = 0;
   for (const dir of WALK_DIRS) {
@@ -287,9 +365,9 @@ function cookWalkSheet(img, targetCap) {
 }
 
 function ensureCooked() {
-  if (!tesWalk) tesWalk = cookWalkSheet(tesWalkSrc, TES_DRAW_H);
+  if (!tesWalk) tesWalk = cookWalkSheet(tesWalkSrc, TES_DRAW_H, "tessera");
   for (const k of Object.keys(CRT_WALK_SRC)) {
-    if (!walks[k]) walks[k] = cookWalkSheet(CRT_WALK_SRC[k], CRT_DRAW_H);
+    if (!walks[k]) walks[k] = cookWalkSheet(CRT_WALK_SRC[k], CRT_DRAW_H, "crt");
   }
   return !!(walks.base && tesWalk);
 }
@@ -304,6 +382,17 @@ export function dir4(ang) {
   if (deg >= 135 && deg < 225) return "left";
   if (deg >= 225 && deg < 315) return "up";
   return "right";
+}
+
+/** Movement dir, visor toward the player when that heading is a chase. */
+function tesseraFace(e) {
+  const moving = !e.dead && (e.vx || 0) * (e.vx || 0) + (e.vy || 0) * (e.vy || 0) > 16;
+  const ang = moving ? Math.atan2(e.vy, e.vx) : e.facing || 0;
+  let face = dir4(ang);
+  const chase = e.facing || 0;
+  const chasing = Math.cos(ang - chase) >= 0;
+  if (face === "up" && chasing) return "down";
+  return face;
 }
 
 /** Feet are at e.x,e.y. Hands/gun sit ~2/3 up the 1× CRT body, then along aim. */
@@ -468,7 +557,7 @@ export function drawTesseraSprite(ctx, e, t) {
   const scale = KIND_SCALE[kind] || SCALE;
   const stillPose = kind === "mannequin" && e.pose !== "lunge";
   const moving = !e.dead && !stillPose && (e.vx || 0) * (e.vx || 0) + (e.vy || 0) * (e.vy || 0) > 16;
-  const face = dir4(e.facing || 0);
+  const face = tesseraFace(e);
   const seq = bank[face] || bank.down;
   const rate = kind === "rusher" ? 12 : kind === "mannequin" ? 10 : 8;
   const frame = moving ? Math.floor(t * rate) % seq.length : 0;
