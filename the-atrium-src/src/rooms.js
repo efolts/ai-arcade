@@ -304,10 +304,11 @@ function radioDeskObstacles(arena) {
   const out = [];
   const r = 22;
   const step = 13;
-  // U-desk: north bar across the top, arms run south, OPEN on the south.
-  stampLine(out, X(328), Y(358), X(696), Y(358), r, step);
-  stampLine(out, X(348), Y(358), X(348), Y(640), r, step);
-  stampLine(out, X(676), Y(358), X(676), Y(640), r, step);
+  // Art: closed SOUTH bar, arms run NORTH, mouth OPEN on the north.
+  // Do not stamp a north lid — that was an invisible wall across the gap.
+  stampLine(out, X(328), Y(648), X(696), Y(648), r, step);
+  stampLine(out, X(348), Y(360), X(348), Y(648), r, step);
+  stampLine(out, X(676), Y(360), X(676), Y(648), r, step);
   return out;
 }
 
