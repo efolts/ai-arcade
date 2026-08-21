@@ -1635,7 +1635,7 @@ export function createGame(canvas, input) {
     if (blink) ctx.fillText("PRESS ENTER  /  CLICK  /  TAP   TO START", W / 2, H - 96);
     ctx.fillStyle = "#c8c8c4";
     ctx.font = "12px Trebuchet MS, sans-serif";
-    ctx.fillText("WASD or LEFT STICK move   •   MOUSE or RIGHT STICK aim / fire   •   ARROWS auto-aim", W / 2, H - 70);
+    ctx.fillText("WASD or LEFT STICK move   •   MOUSE or RIGHT STICK aim / fire   •   ARROWS auto-aim   •   M MUTE", W / 2, H - 70);
     ctx.fillStyle = "#889";
     ctx.font = "11px Courier New, monospace";
     ctx.fillText(`HI-SCORE  ${String(hi).padStart(7, "0")}`, W / 2, H - 46);

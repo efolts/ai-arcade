@@ -3,17 +3,11 @@ let master = null;
 let muted = false;
 let theme = null;
 let wantPlay = false;
-let muteBtn = null;
 
 const MUTE_KEY = "atrium-muted";
 const THEME_URL = "./atrium-theme.mp3";
 const MUSIC_VOL = 0.16;
 const SFX_VOL = 0.22;
-
-const ICON_ON =
-  '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 6h3l3-3v10L5 10H2V6zm8.2 1.2a2.2 2.2 0 0 1 0 1.6l-.8.4a3.2 3.2 0 0 0 0-2.4l.8.4zm1.6-2.2.7.5a5.2 5.2 0 0 1 0 6.2l-.7.5a6.2 6.2 0 0 0 0-7.2z"/></svg>';
-const ICON_OFF =
-  '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 6h3l3-3v10L5 10H2V6zm9.1 1.4 1.4-1.4.7.7-1.4 1.4 1.4 1.4-.7.7-1.4-1.4-1.4 1.4-.7-.7 1.4-1.4-1.4-1.4.7-.7 1.4 1.4z"/></svg>';
 
 try {
   muted = localStorage.getItem(MUTE_KEY) === "1";
@@ -60,13 +54,6 @@ function applyMute() {
   }
 }
 
-function syncMuteUi() {
-  if (!muteBtn) return;
-  muteBtn.dataset.muted = muted ? "1" : "0";
-  muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
-  muteBtn.innerHTML = muted ? ICON_OFF : ICON_ON;
-}
-
 export function unlockAudio() {
   const c = ctx();
   if (c && c.state === "suspended") c.resume();
@@ -95,25 +82,11 @@ export function toggleMute() {
   persistMute();
   applyMute();
   if (!muted && wantPlay) startMusic();
-  syncMuteUi();
   return muted;
 }
 
 export function isMuted() {
   return muted;
-}
-
-export function bindMuteButton(el) {
-  muteBtn = el;
-  if (!muteBtn) return;
-  syncMuteUi();
-  muteBtn.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    unlockAudio();
-    toggleMute();
-    muteBtn.blur();
-  });
 }
 
 export function armThemeUnlock() {

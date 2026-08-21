@@ -1,7 +1,7 @@
 import "./style.css";
 import { createInput } from "./input.js";
 import { createGame, W, H } from "./game.js";
-import { unlockAudio, startMusic, bindMuteButton, armThemeUnlock, pollThemeUnlock } from "./audio.js";
+import { unlockAudio, startMusic, armThemeUnlock, pollThemeUnlock } from "./audio.js";
 
 const canvas = document.getElementById("game");
 const stage = document.getElementById("stage");
@@ -24,7 +24,6 @@ fit();
 window.addEventListener("resize", fit);
 window.addEventListener("orientationchange", fit);
 
-bindMuteButton(document.getElementById("mute"));
 armThemeUnlock();
 startMusic();
 unlockAudio();
