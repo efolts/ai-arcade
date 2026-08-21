@@ -381,7 +381,7 @@ export function drawCrtSprite(ctx, e, t) {
   const skin = skinBank && (skinBank[face] || skinBank.down);
   if (skin) {
     const match = 56 / skin.height;
-    blitCooked(ctx, skin, e.x, e.y, match);
+    blitCooked(ctx, skin, e.x, e.y, match, e.skinTint === "mesh" ? { tint: "rgba(94,246,255,0.22)" } : {});
   } else {
     blitFrame(ctx, bank, face, frame, e.x, e.y, SCALE);
   }

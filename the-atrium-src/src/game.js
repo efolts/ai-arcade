@@ -19,19 +19,21 @@ import {
 import { sfx, startMusic, stopMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./audio.js";
 import { gunOrigin, shatterDuration } from "./pix.js";
 import {
-  ARMOR,
   BASE_MAX_HP,
-  CHARACTER,
-  WEAPONS,
   XP_FOR,
   addXp,
   armorBonus,
+  armorByTier,
   emptyGear,
+  gunSpec,
   kioskPos,
   playerSkin,
   rankMult,
   rollDrop,
   roomPrimary,
+  shopCols,
+  skinTint,
+  weaponByTier,
   xpToNext,
 } from "./progress.js";
 import {
@@ -148,21 +150,33 @@ function currentObs(world) {
   return roomObstacles(world.roomId, ARENA).concat(closedDoorBlocks(world.roomId, world.cleared, world.enterFrom));
 }
 
-function botStats(kind, wave, level) {
+function botStats(kind, wave, level, weaponTier = 0, pass = 1) {
   const f = 1 + (wave - 1) * 0.06;
-  const rank = rankMult(level || 1);
+  const rank = rankMult(level || 1, weaponTier, pass);
   const table = {
     grunt: { hp: 1, speed: 58, r: 20, score: 100, scale: 1 },
     rusher: { hp: 1, speed: 128, r: 18, score: 150, scale: 0.94 },
     shotgun: { hp: 5, speed: 46, r: 22, score: 250, scale: 1.08 },
     security: { hp: 18, speed: 32, r: 28, score: 500, scale: 1.4 },
     mannequin: { hp: 5, speed: 12, r: 19, score: 220, scale: 1.02 },
-    boss: { hp: 96 + wave * 6, speed: 38, r: 34, score: 5000, scale: 1.9 },
+    boss: { hp: 280 + wave * 8, speed: 48, r: 34, score: 5000, scale: 1.9 },
   };
   const s = table[kind] || table.grunt;
-  const hp = Math.max(1, Math.round(s.hp * rank.hp));
-  const speed = s.speed * (kind === "boss" ? 1 : f) * (kind === "boss" ? 1 : rank.speed);
-  return { ...s, hp, speed };
+  let hpMul = rank.hp;
+  if (kind === "rusher" && pass >= 2) hpMul *= 1.15;
+  const hp = Math.max(1, Math.round(s.hp * hpMul));
+  let speed = s.speed * (kind === "boss" ? Math.min(1.32, rank.speed) : f * rank.speed);
+  if (kind !== "boss") speed = Math.min(speed, 198);
+  const resist = rank.resist && (kind === "security" || kind === "boss");
+  return { ...s, hp, speed, resist };
+}
+
+function bossPhaseOf(b, pass) {
+  const u = b.max > 0 ? b.hp / b.max : 1;
+  if ((pass || 1) >= 2 && u <= 0.22) return 4;
+  if (u <= 1 / 3) return 3;
+  if (u <= 2 / 3) return 2;
+  return 1;
 }
 
 export function createGame(canvas, input) {
@@ -180,6 +194,7 @@ export function createGame(canvas, input) {
   let muted = false;
   let padSouthWas = false;
   let padEastWas = false;
+  let padLbWas = false;
 
   const world = {
     player: null,
@@ -211,6 +226,8 @@ export function createGame(canvas, input) {
     pendingDir: null,
     trashDone: {},
     won: false,
+    pass: 1,
+    passClearT: 0,
     level: 1,
     xp: 0,
     tokens: 0,
@@ -234,6 +251,10 @@ export function createGame(canvas, input) {
       fireT: 0,
       muzzle: 0,
       iframes: 2.85,
+      dashT: 0,
+      dashCd: 0,
+      dashX: 0,
+      dashY: 0,
       powers: { spread: 0, rapid: 0, speed: 0 },
       hp: BASE_MAX_HP,
       maxHp: BASE_MAX_HP,
@@ -262,6 +283,8 @@ export function createGame(canvas, input) {
     world.pendingDir = null;
     world.trashDone = {};
     world.won = false;
+    world.pass = 1;
+    world.passClearT = 0;
     world.level = 1;
     world.xp = 0;
     world.tokens = 0;
@@ -272,6 +295,46 @@ export function createGame(canvas, input) {
     world.levelFreeze = 0;
     syncPlayerBody();
     startRoomWaves(false);
+  }
+
+  function startNextPass() {
+    world.pass += 1;
+    world.won = false;
+    world.passClearT = 0;
+    world.cleared = { atrium: false, food: false, fashions: false, radio: false, service: false, boss: false };
+    world.visited = { atrium: true };
+    world.roomId = "atrium";
+    world.enterFrom = null;
+    world.roomWave = 0;
+    world.wave = 1;
+    world.trashDone = {};
+    world.boss = null;
+    world.bots = [];
+    world.bullets = [];
+    world.eShots = [];
+    world.pickups = [];
+    world.parts = [];
+    world.shopOpen = false;
+    world.gear.passLives = 0;
+    const cx = ARENA.x + ARENA.s / 2;
+    const cy = ARENA.y + ARENA.s / 2 + 48;
+    const p = world.player;
+    p.x = cx;
+    p.y = cy;
+    p.vx = 0;
+    p.vy = 0;
+    p.dead = false;
+    p.deadT = 0;
+    p.iframes = 2.85;
+    p.dashT = 0;
+    p.dashCd = 0;
+    syncPlayerBody();
+    p.hp = p.maxHp;
+    startRoomWaves(false);
+    announce = world.pass === 2 ? "LOOP 2 — SIGNAL STRONGER" : `LOOP ${world.pass} — SIGNAL STRONGER`;
+    announceT = 2.8;
+    flash = 0.28;
+    sfx.level();
   }
 
   function startRoomWaves(revisit) {
@@ -305,18 +368,23 @@ export function createGame(canvas, input) {
     world.readyT = def.ready || (firstAtrium ? 2.4 : 0.85);
     world.spawnGates = def.queue[0] && def.queue[0].gates ? def.queue[0].gates : null;
     if (world.roomWave >= 0 && !def.boss) {
-      const rank = rankMult(world.level);
+      const rank = rankMult(world.level, world.gear.weapon, world.pass);
       const primary = roomPrimary(world.roomId);
       const last = def.queue[def.queue.length - 1];
       const lateWait = last ? (last.n - 1) * last.gap + 0.35 : 0.4;
-      for (let i = 0; i < rank.extra; i++) {
+      const extra = rank.extra + (world.roomId === "food" && world.pass >= 2 ? 2 : 0);
+      for (let i = 0; i < extra; i++) {
         world.spawn.push({ kind: primary, wait: lateWait + i * 0.22, gates: last && last.gates });
       }
-      if (rank.elite) {
-        world.spawn.push({ kind: primary, wait: lateWait + 0.1, gates: last && last.gates, elite: true });
+      for (let i = 0; i < rank.elites; i++) {
+        world.spawn.push({ kind: primary, wait: lateWait + 0.08 + i * 0.18, gates: last && last.gates, elite: true });
       }
-      if (rank.extraShot && world.roomId !== "food" && world.roomWave >= ROOMS[world.roomId].waves.length - 1) {
-        world.spawn.push({ kind: "shotgun", wait: lateWait + 0.2, gates: last && last.gates });
+      if (world.roomId !== "food") {
+        const late = world.roomWave >= ROOMS[world.roomId].waves.length - 1;
+        const nShot = world.pass >= 2 ? rank.shots : late && rank.extraShot ? 1 : 0;
+        for (let i = 0; i < nShot; i++) {
+          world.spawn.push({ kind: "shotgun", wait: lateWait + 0.2 + i * 0.16, gates: last && last.gates });
+        }
       }
     }
     world.spawn.sort((a, b) => a.wait - b.wait);
@@ -331,12 +399,12 @@ export function createGame(canvas, input) {
     const firstClear = !world.cleared[world.roomId];
     world.cleared[world.roomId] = true;
     if (world.roomId === "boss") {
-      world.won = true;
-      state = "win";
-      stopMusic();
+      world.won = false;
+      world.passClearT = 2.35;
       sfx.boss();
-      announce = "DIRECTORY UNIT DOWN  —  KRCD 7";
-      announceT = 99;
+      announce = "WE'LL BE RIGHT BACK";
+      announceT = 2.4;
+      flash = 0.22;
       return;
     }
     if (!firstClear) return;
@@ -395,7 +463,7 @@ export function createGame(canvas, input) {
       : GATES;
     const g = (pool.length ? pool : GATES)[(Math.random() * (pool.length || GATES.length)) | 0];
     const p = gateWorld(g);
-    const st = botStats(kind, world.wave, world.level);
+    const st = botStats(kind, world.wave, world.level, world.gear.weapon, world.pass);
     const elite = !!extra.elite;
     const bot = {
       kind,
@@ -413,13 +481,18 @@ export function createGame(canvas, input) {
       pose: kind === "mannequin" ? "still" : "",
       stillT: kind === "mannequin" ? 0.95 + Math.random() * 0.55 : 0,
       lungeT: 0,
-      addT: kind === "boss" ? 3.8 : 0,
+      addT: kind === "boss" ? 2.8 : 0,
       addI: 0,
-      fireT: kind === "shotgun" ? 0.35 + Math.random() * 0.3 : 0.4 + Math.random() * 0.55,
+      fireT: kind === "shotgun" ? 0.35 + Math.random() * 0.3 : kind === "boss" ? 0.9 : 0.4 + Math.random() * 0.55,
       stun: world.roomId === "atrium" && world.wave === 1 ? 0.32 : 0.18,
       deadT: 0,
       dead: false,
       elite,
+      resist: !!st.resist,
+      orbitT: Math.random() * Math.PI * 2,
+      dashT: -0.4,
+      tele: 0,
+      tankDropped: false,
     };
     if (elite) {
       bot.hp = Math.max(2, Math.round(bot.hp * 2.2));
@@ -469,7 +542,7 @@ export function createGame(canvas, input) {
   }
 
   function dropPickup(x, y, forced) {
-    const roll = forced || rollDrop();
+    const roll = forced || rollDrop(world.pass);
     if (!roll) return;
     world.pickups.push({
       x,
@@ -513,6 +586,7 @@ export function createGame(canvas, input) {
     p.maxHp = next;
     p.hp = clamp((p.hp || next) + Math.max(0, dh), 1, next);
     p.skin = playerSkin(world.gear);
+    p.skinTint = skinTint(world.gear);
   }
 
   function cameraPunch(mag, dur = 0.08) {
@@ -610,29 +684,22 @@ export function createGame(canvas, input) {
 
   function firePlayer() {
     const p = world.player;
-    const wpn = world.gear.weapon;
-    let rate = 0.09 * Math.pow(0.97, world.level - 1);
-    if (wpn >= 1) rate *= 0.7;
+    const spec = gunSpec(world.gear.weapon, world.level);
     if (p.fireT > 0) return;
-    p.fireT = rate;
+    p.fireT = spec.rate;
     p.muzzle = 0.07;
     const hand = gunOrigin(p);
-    const spread = wpn >= 2;
-    const dmg = wpn >= 3 ? 2 : 1;
-    const spd = wpn >= 3 ? 640 : 560;
-    const life = wpn >= 3 ? 0.9 : 0.7;
-    const angles = spread ? [-0.22, 0, 0.22] : [0];
-    for (const off of angles) {
+    for (const off of spec.angles) {
       const a = p.aim + off;
       world.bullets.push({
         x: hand.x + Math.cos(a) * 6,
         y: hand.y + Math.sin(a) * 6,
-        vx: Math.cos(a) * spd,
-        vy: Math.sin(a) * spd,
+        vx: Math.cos(a) * spec.spd,
+        vy: Math.sin(a) * spec.spd,
         ang: a,
         r: 4,
-        life,
-        dmg,
+        life: spec.life,
+        dmg: spec.dmg,
         streak: 0.033,
       });
     }
@@ -672,20 +739,20 @@ export function createGame(canvas, input) {
   }
 
   function shopItem(col, row) {
-    const cols = [ARMOR, WEAPONS, CHARACTER];
+    const cols = shopCols(world.pass, world.gear);
     return cols[col] && cols[col][row];
   }
 
   function itemState(col, item) {
     if (!item) return { label: "", can: false };
     if (col === 0) {
-      const owned = world.gear.armor >= ARMOR.indexOf(item) + 1;
-      const eq = world.gear.armor === ARMOR.indexOf(item) + 1;
+      const owned = world.gear.armor >= item.tier;
+      const eq = world.gear.armor === item.tier;
       return { owned, eq, can: !eq && world.tokens >= item.price };
     }
     if (col === 1) {
-      const owned = world.gear.weapon >= WEAPONS.indexOf(item) + 1;
-      const eq = world.gear.weapon === WEAPONS.indexOf(item) + 1;
+      const owned = world.gear.weapon >= item.tier;
+      const eq = world.gear.weapon === item.tier;
       return { owned, eq, can: !eq && world.tokens >= item.price };
     }
     if (item.id === "sneakers") {
@@ -693,6 +760,13 @@ export function createGame(canvas, input) {
     }
     if (item.id === "signal") {
       return { owned: world.gear.signal, eq: world.gear.signal, can: !world.gear.signal && world.tokens >= item.price };
+    }
+    if (item.id === "dash") {
+      return { owned: world.gear.dash, eq: world.gear.dash, can: !world.gear.dash && world.tokens >= item.price };
+    }
+    if (item.id === "1up2") {
+      const n = world.gear.passLives;
+      return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price };
     }
     const n = world.gear.extraLives;
     return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price };
@@ -721,12 +795,14 @@ export function createGame(canvas, input) {
       return;
     }
     world.tokens -= item.price;
-    if (world.shopCol === 0) world.gear.armor = ARMOR.indexOf(item) + 1;
-    else if (world.shopCol === 1) world.gear.weapon = WEAPONS.indexOf(item) + 1;
+    if (world.shopCol === 0) world.gear.armor = item.tier;
+    else if (world.shopCol === 1) world.gear.weapon = item.tier;
     else if (item.id === "sneakers") world.gear.sneakers = true;
     else if (item.id === "signal") world.gear.signal = true;
-    else if (item.id === "1up") {
-      world.gear.extraLives += 1;
+    else if (item.id === "dash") world.gear.dash = true;
+    else if (item.id === "1up" || item.id === "1up2") {
+      if (item.id === "1up2") world.gear.passLives += 1;
+      else world.gear.extraLives += 1;
       world.lives = clamp(world.lives + 1, 0, 9);
     }
     syncPlayerBody();
@@ -782,8 +858,10 @@ export function createGame(canvas, input) {
     input.pollGamepad();
     const southTap = input.pad.south && !padSouthWas;
     const eastTap = input.pad.east && !padEastWas;
+    const lbTap = input.pad.lb && !padLbWas;
     padSouthWas = input.pad.south;
     padEastWas = input.pad.east;
+    padLbWas = input.pad.lb;
     if (world.shopOpen) {
       if (input.consume("esc") || eastTap) closeShop();
       if (input.consume("start") || input.consume("shop")) buySelected();
@@ -814,6 +892,19 @@ export function createGame(canvas, input) {
     const p = world.player;
     const obs = currentObs(world);
     p.skin = playerSkin(world.gear);
+    p.skinTint = skinTint(world.gear);
+    if (world.passClearT > 0) {
+      world.passClearT = Math.max(0, world.passClearT - dt);
+      announceT = Math.max(announceT, world.passClearT);
+      for (const b of world.bots) {
+        if (b.dead) b.deadT += dt;
+      }
+      world.bots = world.bots.filter((b) => !b.dead || b.deadT < shatterDuration(b.kind) + 0.02);
+      punchT = Math.max(0, punchT - dt);
+      flash = Math.max(0, flash - dt);
+      if (world.passClearT <= 0) startNextPass();
+      return;
+    }
     if (world.levelFreeze > 0) {
       world.levelFreeze = Math.max(0, world.levelFreeze - dt);
       announceT = Math.max(0, announceT - dt);
@@ -834,9 +925,25 @@ export function createGame(canvas, input) {
       p.vy = 0;
       if (p.deadT > 0.78 && state === "play") state = "gameover";
     } else {
+      p.dashCd = Math.max(0, (p.dashCd || 0) - dt);
+      p.dashT = Math.max(0, (p.dashT || 0) - dt);
+      if (world.gear.dash && p.dashCd <= 0 && (input.consume("dash") || lbTap)) {
+        const d = ml > 0.2 ? norm(mx, my) : { x: Math.cos(p.aim), y: Math.sin(p.aim) };
+        p.dashT = 0.14;
+        p.dashCd = 0.82;
+        p.dashX = d.x;
+        p.dashY = d.y;
+        p.iframes = Math.max(p.iframes, 0.2);
+        burst(p.x, p.y, 6, "#5ef6ff", 0.18);
+      }
       const spd = 210 * (world.gear.sneakers ? 1.28 : 1);
-      p.vx = mx * spd;
-      p.vy = my * spd;
+      if (p.dashT > 0) {
+        p.vx = p.dashX * 520;
+        p.vy = p.dashY * 520;
+      } else {
+        p.vx = mx * spd;
+        p.vy = my * spd;
+      }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       resolveWorld(p, obs);
@@ -937,6 +1044,33 @@ export function createGame(canvas, input) {
           sy = Math.cos(ang);
           moveSpd = b.speed * 0.88;
         }
+      } else if (b.kind === "boss") {
+        const phase = bossPhaseOf(b, world.pass);
+        b.orbitT = (b.orbitT || 0) + dt * (1.15 + phase * 0.22);
+        const want = 148;
+        const side = Math.cos(b.orbitT);
+        if (dist < want - 24) {
+          sx = -Math.cos(ang);
+          sy = -Math.sin(ang);
+        } else if (dist > want + 46) {
+          sx = Math.cos(ang);
+          sy = Math.sin(ang);
+        } else {
+          sx = -Math.sin(ang) * side;
+          sy = Math.cos(ang) * side;
+        }
+        b.dashT = (b.dashT || 0) - dt;
+        if (b.dashT <= -1.25) {
+          b.dashT = 0.2;
+          b.tele = 0.16;
+        }
+        if (b.dashT > 0) {
+          const cut = ang + (side >= 0 ? 0.7 : -0.7);
+          sx = Math.cos(cut);
+          sy = Math.sin(cut);
+          moveSpd = b.speed * (2.1 + phase * 0.15);
+        }
+        b.tele = Math.max(0, (b.tele || 0) - dt);
       }
 
       for (const o of obs) {
@@ -996,41 +1130,82 @@ export function createGame(canvas, input) {
         }
       }
       if (b.kind === "boss" && b.fireT <= 0) {
-        b.fireT = 1.35;
-        const n = 10;
-        for (let i = 0; i < n; i++) {
-          const a = (i / n) * Math.PI * 2 + t;
-          world.eShots.push({
-            x: b.x + Math.cos(a) * 24,
-            y: b.y + Math.sin(a) * 24,
-            vx: Math.cos(a) * 160,
-            vy: Math.sin(a) * 160,
-            r: 4.5,
-            life: 2.2,
-          });
+        const phase = bossPhaseOf(b, world.pass);
+        let gap = phase >= 4 ? 0.52 : phase >= 3 ? 0.64 : phase >= 2 ? 0.88 : 1.12;
+        if (world.pass >= 2) gap *= 0.86;
+        b.fireT = gap;
+        b.tele = 0.12;
+        const aim = ang;
+        const ring = (n, spd, life, rad) => {
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * Math.PI * 2 + t;
+            world.eShots.push({
+              x: b.x + Math.cos(a) * rad,
+              y: b.y + Math.sin(a) * rad,
+              vx: Math.cos(a) * spd,
+              vy: Math.sin(a) * spd,
+              r: 4.5,
+              life,
+            });
+          }
+        };
+        const aimed = (offs, spd) => {
+          for (const off of offs) {
+            const a = aim + off;
+            world.eShots.push({
+              x: b.x + Math.cos(a) * 22,
+              y: b.y + Math.sin(a) * 22,
+              vx: Math.cos(a) * spd,
+              vy: Math.sin(a) * spd,
+              r: 4.2,
+              life: 1.4,
+            });
+          }
+        };
+        if (phase === 1) {
+          ring(8, 150, 2.1, 24);
+          if ((b.addI || 0) % 2 === 1) aimed([-0.16, 0, 0.16], 240);
+        } else if (phase === 2) {
+          if ((b.addI || 0) % 2 === 0) ring(10, 168, 2.0, 24);
+          else aimed([-0.28, -0.12, 0, 0.12, 0.28], 250);
+        } else if (phase === 3) {
+          ring(12, 190, 1.9, 22);
+          aimed([-0.2, 0, 0.2], 270);
+        } else {
+          ring(16, 88, 2.6, 20);
+          ring(10, 210, 1.6, 28);
+          aimed([-0.14, 0, 0.14], 280);
         }
       }
       if (b.kind === "boss") {
-        b.addT = (b.addT ?? 3.8) - dt;
+        const phase = bossPhaseOf(b, world.pass);
+        b.addT = (b.addT ?? 2.8) - dt;
         const liveAdds = world.bots.filter((x) => x !== b && !x.dead).length;
-        if (b.addT <= 0 && liveAdds < 5) {
-          b.addT = 4.0;
-          const cycle = ["rushers", "mannequin", "shotgun"];
-          const pick = cycle[(b.addI || 0) % 3];
+        const cap = phase >= 4 ? 7 : phase >= 3 ? 6 : 5;
+        const wait = (phase >= 3 ? 3.1 : 3.6) * (world.pass >= 2 ? 0.85 : 1);
+        if (b.addT <= 0 && liveAdds < cap) {
+          b.addT = wait;
           b.addI = (b.addI || 0) + 1;
-          if (pick === "rushers") {
+          if (phase === 1) {
             spawnBot("rusher", ["N", "E"]);
-            spawnBot("rusher", ["S", "W"]);
-            spawnBot("rusher", ["N", "S"]);
             announce = "THE MALL COMES WITH YOU — RUSHERS";
-          } else if (pick === "mannequin") {
-            spawnBot("mannequin", ["W", "E"]);
-            announce = "THE MALL COMES WITH YOU — MANNEQUIN";
-          } else {
+          } else if (phase === 2) {
+            spawnBot("rusher", ["N", "S"]);
+            spawnBot("rusher", ["E", "W"]);
             spawnBot("shotgun", ["N", "S"]);
             announce = "THE MALL COMES WITH YOU — STATIC";
+          } else {
+            spawnBot("rusher", ["N", "E"]);
+            spawnBot("shotgun", ["S"]);
+            if (!b.tankDropped || phase >= 4) {
+              spawnBot("security", ["W", "E"]);
+              b.tankDropped = true;
+              announce = "THE MALL COMES WITH YOU — SECURITY";
+            } else {
+              announce = "THE MALL COMES WITH YOU — RUSHERS";
+            }
           }
-          announceT = 1.6;
+          announceT = 1.4;
         }
       }
     }
@@ -1048,7 +1223,9 @@ export function createGame(canvas, input) {
       }
       for (const e of world.bots) {
         if (e.dead || !hits(b, e)) continue;
-        e.hp -= b.dmg || 1;
+        let dmg = b.dmg || 1;
+        if (e.resist) dmg *= 0.55;
+        e.hp -= dmg;
         b.life = 0;
         sfx.hit();
         burst(b.x, b.y, 6, "#7ffff8", 0.25);
@@ -1178,6 +1355,11 @@ export function createGame(canvas, input) {
     ctx.font = "11px Courier New, monospace";
     const feed = state === "title" ? "THE ATRIUM  //  ABANDONED MALL FEED" : ROOMS[world.roomId].chyron;
     ctx.fillText(feed, 150, 14);
+    if (state !== "title") {
+      ctx.fillStyle = "#e8b44a";
+      ctx.font = "bold 11px Courier New, monospace";
+      ctx.fillText(`PASS ${world.pass}`, 620, 14);
+    }
 
     if (state !== "title") {
       ctx.fillStyle = "#5ef6ff";
@@ -1218,17 +1400,19 @@ export function createGame(canvas, input) {
         ctx.font = "bold 11px Courier New, monospace";
         ctx.fillText(`HP ${p.hp}/${p.maxHp}`, 250, H - HUD_BOT / 2 + 1);
         const gear = [];
-        if (world.gear.armor) gear.push(ARMOR[world.gear.armor - 1].name);
-        if (world.gear.weapon) gear.push(WEAPONS[world.gear.weapon - 1].name);
+        if (world.gear.armor) gear.push((armorByTier(world.gear.armor) || {}).name);
+        if (world.gear.weapon) gear.push((weaponByTier(world.gear.weapon) || {}).name);
         if (world.gear.sneakers) gear.push("SNEAK");
+        if (world.gear.dash) gear.push("DASH");
         ctx.fillStyle = "#8ff";
         ctx.font = "10px Courier New, monospace";
-        ctx.fillText(gear.join("  "), 340, H - HUD_BOT / 2 + 1);
+        ctx.fillText(gear.filter(Boolean).join("  "), 340, H - HUD_BOT / 2 + 1);
       }
       ctx.textAlign = "right";
       ctx.fillStyle = "#667";
       ctx.font = "10px Trebuchet MS, sans-serif";
-      ctx.fillText(muted || isMuted() ? "MUTED  M" : "WASD MOVE  E SHOP  M MUTE", W - 16, H - HUD_BOT / 2);
+      const help = muted || isMuted() ? "MUTED  M" : world.gear.dash ? "WASD MOVE  SHIFT DASH  E SHOP  M MUTE" : "WASD MOVE  E SHOP  M MUTE";
+      ctx.fillText(help, W - 16, H - HUD_BOT / 2);
     }
   }
 
@@ -1325,12 +1509,23 @@ export function createGame(canvas, input) {
       ctx.fillRect(bx, by, bw, 10);
       ctx.fillStyle = "#c44";
       ctx.fillRect(bx, by, bw * clamp(world.boss.hp / world.boss.max, 0, 1), 10);
-      ctx.strokeStyle = "#fff";
+      ctx.strokeStyle = "rgba(232,180,74,0.7)";
       ctx.strokeRect(bx, by, bw, 10);
+      ctx.fillStyle = "rgba(232,180,74,0.85)";
+      ctx.fillRect(bx + bw / 3, by, 1, 10);
+      ctx.fillRect(bx + (bw * 2) / 3, by, 1, 10);
       ctx.fillStyle = "#fff";
       ctx.font = "bold 10px Trebuchet MS, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("DIRECTORY UNIT", cx, by + 8);
+      const ph = bossPhaseOf(world.boss, world.pass);
+      ctx.fillText(`DIRECTORY UNIT  •  P${ph}`, cx, by + 8);
+      if ((world.boss.tele || 0) > 0) {
+        ctx.strokeStyle = `rgba(196,120,32,${0.35 + world.boss.tele})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(world.boss.x, world.boss.y, 36 + (0.16 - world.boss.tele) * 40, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
@@ -1476,12 +1671,12 @@ export function createGame(canvas, input) {
     ctx.fillStyle = "#e8b44a";
     ctx.font = "bold 22px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("PRIZE BOOTH", W / 2, 108);
+    ctx.fillText(world.pass >= 2 ? "PRIZE BOOTH  —  LOOP GEAR" : "PRIZE BOOTH", W / 2, 108);
     ctx.fillStyle = "#5ef6ff";
     ctx.font = "11px Courier New, monospace";
-    ctx.fillText(`TKN ${world.tokens}    LV ${world.level}    ESC / B CLOSES`, W / 2, 130);
-    const heads = ["ARMOR", "WEAPONS", "CHARACTER"];
-    const cols = [ARMOR, WEAPONS, CHARACTER];
+    ctx.fillText(`TKN ${world.tokens}    LV ${world.level}    PASS ${world.pass}    ESC / B CLOSES`, W / 2, 130);
+    const heads = world.pass >= 2 ? ["SIGNAL+ ARMOR", "SIGNAL+ GUNS", "LOOP STOCK"] : ["ARMOR", "WEAPONS", "CHARACTER"];
+    const cols = shopCols(world.pass, world.gear);
     const ox = 168;
     const oy = 168;
     const cw = 210;
@@ -1492,6 +1687,7 @@ export function createGame(canvas, input) {
       ctx.fillText(heads[c], ox + c * cw + 100, 154);
       for (let r = 0; r < 3; r++) {
         const item = cols[c][r];
+        if (!item) continue;
         const x = ox + c * cw;
         const y = oy + r * rh;
         const sel = world.shopCol === c && world.shopRow === r;
@@ -1509,7 +1705,8 @@ export function createGame(canvas, input) {
         ctx.fillText(item.blurb, x + 10, y + 42);
         ctx.fillStyle = st.can ? "#e8b44a" : st.eq || st.owned ? "#667" : "#844";
         ctx.font = "bold 12px Courier New, monospace";
-        const tag = st.eq ? "EQUIPPED" : st.owned && c === 2 && item.id === "1up" ? "SOLD OUT" : st.owned ? "OWNED" : `${item.price} TKN`;
+        const sold = st.owned && c === 2 && (item.id === "1up" || item.id === "1up2");
+        const tag = st.eq ? "EQUIPPED" : sold ? "SOLD OUT" : st.owned ? "OWNED" : `${item.price} TKN`;
         ctx.fillText(tag, x + 10, y + 78);
       }
     }
