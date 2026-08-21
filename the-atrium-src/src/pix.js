@@ -1,15 +1,7 @@
-import crtDown0 from "./art/sprites/crt-down-0.png";
-import crtDown1 from "./art/sprites/crt-down-1.png";
-import crtDown2 from "./art/sprites/crt-down-2.png";
-import crtUp0 from "./art/sprites/crt-up-0.png";
-import crtUp1 from "./art/sprites/crt-up-1.png";
-import crtUp2 from "./art/sprites/crt-up-2.png";
-import crtLeft0 from "./art/sprites/crt-left-0.png";
-import crtLeft1 from "./art/sprites/crt-left-1.png";
-import crtLeft2 from "./art/sprites/crt-left-2.png";
-import crtRight0 from "./art/sprites/crt-right-0.png";
-import crtRight1 from "./art/sprites/crt-right-1.png";
-import crtRight2 from "./art/sprites/crt-right-2.png";
+import crtBaseWalkUrl from "./art/sprites/crt-base-walk.png";
+import crtArmorWalkUrl from "./art/sprites/crt-armor-walk.png";
+import crtWeaponWalkUrl from "./art/sprites/crt-weapon-walk.png";
+import crtFullWalkUrl from "./art/sprites/crt-full-walk.png";
 import tesDown0 from "./art/sprites/tessera-down-0.png";
 import tesDown1 from "./art/sprites/tessera-down-1.png";
 import tesDown2 from "./art/sprites/tessera-down-2.png";
@@ -22,9 +14,6 @@ import tesLeft2 from "./art/sprites/tessera-left-2.png";
 import tesRight0 from "./art/sprites/tessera-right-0.png";
 import tesRight1 from "./art/sprites/tessera-right-1.png";
 import tesRight2 from "./art/sprites/tessera-right-2.png";
-import crtArmorUrl from "./art/sprites/skin-armor-4dir.png";
-import crtWeaponUrl from "./art/sprites/skin-weapon-4dir.png";
-import crtFullUrl from "./art/sprites/skin-full-4dir.png";
 
 export const CRT_CELL = { w: 40, h: 56 };
 export const TES_CELL = { w: 36, h: 52 };
@@ -57,16 +46,10 @@ function makeCanvas(w, h) {
 }
 
 /**
- * Filenames are backwards: crt-left-* / tessera-left-* pixels face EAST,
- * *-right-* pixels face WEST (TV screen / visor is the face).
- * Map gameplay dir → the files whose pixels actually face that way.
+ * Tessera named files are backwards: *-left-* pixels face EAST,
+ * *-right-* pixels face WEST. Map gameplay dir → files that face that way.
+ * CRT walk sheets are visual-facing already (DOWN, LEFT, RIGHT, UP).
  */
-const CRT_SRC = {
-  down: [crtDown0, crtDown1, crtDown2].map(load),
-  up: [crtUp0, crtUp1, crtUp2].map(load),
-  left: [crtRight0, crtRight1, crtRight2].map(load),
-  right: [crtLeft0, crtLeft1, crtLeft2].map(load),
-};
 const TES_SRC = {
   down: [tesDown0, tesDown1, tesDown2].map(load),
   up: [tesUp0, tesUp1, tesUp2].map(load),
@@ -74,16 +57,18 @@ const TES_SRC = {
   right: [tesLeft0, tesLeft1, tesLeft2].map(load),
 };
 
-const frames = { crt: null, tes: null };
-const skins = { armor: null, weapon: null, full: null };
-const SKIN_SRC = {
-  armor: load(crtArmorUrl),
-  weapon: load(crtWeaponUrl),
-  full: load(crtFullUrl),
+const frames = { tes: null };
+const CRT_WALK_SRC = {
+  base: load(crtBaseWalkUrl),
+  armor: load(crtArmorWalkUrl),
+  weapon: load(crtWeaponWalkUrl),
+  full: load(crtFullWalkUrl),
 };
-/** Sheet row is DOWN, LEFT, RIGHT, UP (visual facing). Flip if a frame is swapped. */
-const SKIN_DIRS = ["down", "left", "right", "up"];
-const SKIN_SWAP_LR = false;
+const walks = { base: null, armor: null, weapon: null, full: null };
+/** Sheet rows: DOWN, LEFT, RIGHT, UP — already visual-facing on these sheets. */
+const WALK_DIRS = ["down", "left", "right", "up"];
+const WALK_SWAP_LR = false;
+const CRT_DRAW_H = 56;
 
 function isMagenta(r, g, b) {
   if (r > 200 && g < 90 && b > 200) return true;
@@ -211,28 +196,30 @@ function keyMagentaOnly(src, sx, sy, w, h) {
   return out;
 }
 
-function cookSkinSheet(img) {
+function cookWalkSheet(img) {
   if (!img.complete || !img.naturalWidth) return null;
   const cols = 4;
+  const rows = 4;
   const fw = Math.floor(img.naturalWidth / cols);
-  const fh = img.naturalHeight;
+  const fh = Math.floor(img.naturalHeight / rows);
   if (fw < 8 || fh < 8) return null;
-  const bank = { down: null, left: null, right: null, up: null };
-  for (let i = 0; i < cols; i++) {
-    let dir = SKIN_DIRS[i];
-    if (SKIN_SWAP_LR && (dir === "left" || dir === "right")) dir = dir === "left" ? "right" : "left";
-    bank[dir] = keyMagentaOnly(img, i * fw, 0, fw, fh);
+  const bank = { down: [], left: [], right: [], up: [] };
+  for (let r = 0; r < rows; r++) {
+    let dir = WALK_DIRS[r];
+    if (WALK_SWAP_LR && (dir === "left" || dir === "right")) dir = dir === "left" ? "right" : "left";
+    for (let c = 0; c < cols; c++) {
+      bank[dir].push(keyMagentaOnly(img, c * fw, r * fh, fw, fh));
+    }
   }
   return bank;
 }
 
 function ensureCooked() {
-  if (!frames.crt) frames.crt = cookNamed(CRT_SRC);
   if (!frames.tes) frames.tes = cookNamed(TES_SRC);
-  for (const k of Object.keys(SKIN_SRC)) {
-    if (!skins[k]) skins[k] = cookSkinSheet(SKIN_SRC[k]);
+  for (const k of Object.keys(CRT_WALK_SRC)) {
+    if (!walks[k]) walks[k] = cookWalkSheet(CRT_WALK_SRC[k]);
   }
-  return !!(frames.crt && frames.tes);
+  return !!(walks.base && frames.tes);
 }
 
 export function spritesReady() {
@@ -359,11 +346,13 @@ export function blitFrame(ctx, bank, dir, frame, x, y, scale, opt = {}) {
 
 export function drawCrtSprite(ctx, e, t) {
   ensureCooked();
-  const bank = frames.crt;
+  const kit = e.skin && walks[e.skin] ? e.skin : "base";
+  const bank = walks[kit];
   if (!bank) return false;
   const moving = !e.dead && e.vx * e.vx + e.vy * e.vy > 16;
   const face = moving ? dir4(Math.atan2(e.vy, e.vx)) : dir4(e.aim);
-  const frame = moving ? 1 + (Math.floor(t * 8) % 2) : 0;
+  const seq = bank[face] || bank.down;
+  const frame = moving ? Math.floor(t * 8) % seq.length : 0;
   const ghost = e.iframes > 0 && Math.floor(t * 14) % 2 === 0;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
@@ -377,14 +366,13 @@ export function drawCrtSprite(ctx, e, t) {
     ctx.restore();
     return true;
   }
-  const skinBank = e.skin && e.skin !== "base" ? skins[e.skin] : null;
-  const skin = skinBank && (skinBank[face] || skinBank.down);
-  if (skin) {
-    const match = 56 / skin.height;
-    blitCooked(ctx, skin, e.x, e.y, match, e.skinTint === "mesh" ? { tint: "rgba(94,246,255,0.22)" } : {});
-  } else {
-    blitFrame(ctx, bank, face, frame, e.x, e.y, SCALE);
+  const cell = seq[frame];
+  if (!cell) {
+    ctx.restore();
+    return false;
   }
+  const match = CRT_DRAW_H / cell.height;
+  blitCooked(ctx, cell, e.x, e.y, match, e.skinTint === "mesh" ? { tint: "rgba(94,246,255,0.22)" } : {});
   if (e.muzzle > 0) {
     const g = gunOrigin(e);
     ctx.fillStyle = "#b8fff8";
