@@ -22,9 +22,9 @@ import tesLeft2 from "./art/sprites/tessera-left-2.png";
 import tesRight0 from "./art/sprites/tessera-right-0.png";
 import tesRight1 from "./art/sprites/tessera-right-1.png";
 import tesRight2 from "./art/sprites/tessera-right-2.png";
-import crtArmorUrl from "./art/sprites/crt-armor-snes.png";
-import crtWeaponUrl from "./art/sprites/crt-weapon-snes.png";
-import crtFullUrl from "./art/sprites/crt-upgraded-snes.png";
+import crtArmorUrl from "./art/sprites/skin-armor-4dir.png";
+import crtWeaponUrl from "./art/sprites/skin-weapon-4dir.png";
+import crtFullUrl from "./art/sprites/skin-full-4dir.png";
 
 export const CRT_CELL = { w: 40, h: 56 };
 export const TES_CELL = { w: 36, h: 52 };
@@ -81,6 +81,9 @@ const SKIN_SRC = {
   weapon: load(crtWeaponUrl),
   full: load(crtFullUrl),
 };
+/** Sheet row is DOWN, LEFT, RIGHT, UP (visual facing). Flip if a frame is swapped. */
+const SKIN_DIRS = ["down", "left", "right", "up"];
+const SKIN_SWAP_LR = false;
 
 function isMagenta(r, g, b) {
   if (r > 200 && g < 90 && b > 200) return true;
@@ -184,16 +187,50 @@ function cookNamed(srcMap) {
   return out;
 }
 
-function cookSkin(img) {
+function keyMagentaOnly(src, sx, sy, w, h) {
+  const tmp = makeCanvas(w, h);
+  const tctx = tmp.getContext("2d", { willReadFrequently: true });
+  tctx.imageSmoothingEnabled = false;
+  tctx.clearRect(0, 0, w, h);
+  tctx.drawImage(src, sx, sy, w, h, 0, 0, w, h);
+  const img = tctx.getImageData(0, 0, w, h);
+  const p = img.data;
+  for (let i = 0; i < p.length; i += 4) {
+    if (p[i + 3] < 8 || isMagenta(p[i], p[i + 1], p[i + 2])) {
+      p[i] = 0;
+      p[i + 1] = 0;
+      p[i + 2] = 0;
+      p[i + 3] = 0;
+    }
+  }
+  const out = makeCanvas(w, h);
+  const octx = out.getContext("2d");
+  octx.imageSmoothingEnabled = false;
+  octx.clearRect(0, 0, w, h);
+  octx.putImageData(img, 0, 0);
+  return out;
+}
+
+function cookSkinSheet(img) {
   if (!img.complete || !img.naturalWidth) return null;
-  return keyFrame(img, 0, 0, img.naturalWidth, img.naturalHeight);
+  const cols = 4;
+  const fw = Math.floor(img.naturalWidth / cols);
+  const fh = img.naturalHeight;
+  if (fw < 8 || fh < 8) return null;
+  const bank = { down: null, left: null, right: null, up: null };
+  for (let i = 0; i < cols; i++) {
+    let dir = SKIN_DIRS[i];
+    if (SKIN_SWAP_LR && (dir === "left" || dir === "right")) dir = dir === "left" ? "right" : "left";
+    bank[dir] = keyMagentaOnly(img, i * fw, 0, fw, fh);
+  }
+  return bank;
 }
 
 function ensureCooked() {
   if (!frames.crt) frames.crt = cookNamed(CRT_SRC);
   if (!frames.tes) frames.tes = cookNamed(TES_SRC);
   for (const k of Object.keys(SKIN_SRC)) {
-    if (!skins[k]) skins[k] = cookSkin(SKIN_SRC[k]);
+    if (!skins[k]) skins[k] = cookSkinSheet(SKIN_SRC[k]);
   }
   return !!(frames.crt && frames.tes);
 }
@@ -340,18 +377,11 @@ export function drawCrtSprite(ctx, e, t) {
     ctx.restore();
     return true;
   }
-  const skin = e.skin && e.skin !== "base" ? skins[e.skin] : null;
+  const skinBank = e.skin && e.skin !== "base" ? skins[e.skin] : null;
+  const skin = skinBank && (skinBank[face] || skinBank.down);
   if (skin) {
     const match = 56 / skin.height;
-    ctx.save();
-    if (face === "left") {
-      ctx.translate(e.x, 0);
-      ctx.scale(-1, 1);
-      blitCooked(ctx, skin, 0, e.y, match);
-    } else {
-      blitCooked(ctx, skin, e.x, e.y, match);
-    }
-    ctx.restore();
+    blitCooked(ctx, skin, e.x, e.y, match);
   } else {
     blitFrame(ctx, bank, face, frame, e.x, e.y, SCALE);
   }

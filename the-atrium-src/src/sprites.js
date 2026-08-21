@@ -450,6 +450,15 @@ export function drawBolt(ctx, b) {
   ctx.save();
   ctx.translate(b.x, b.y);
   ctx.rotate(b.ang);
+  ctx.imageSmoothingEnabled = false;
+  if ((b.streak || 0) > 0) {
+    ctx.globalAlpha = 0.4 * (b.streak / 0.033);
+    ctx.fillStyle = "#5ef6ff";
+    ctx.fillRect(-12, -1, 10, 2);
+    ctx.fillStyle = "rgba(180,255,255,0.55)";
+    ctx.fillRect(-8, 0, 7, 1);
+    ctx.globalAlpha = 1;
+  }
   ctx.shadowColor = "#7ffff8";
   ctx.shadowBlur = 4;
   const g = ctx.createLinearGradient(-8, 0, 8, 0);

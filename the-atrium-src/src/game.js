@@ -523,6 +523,15 @@ export function createGame(canvas, input) {
     punchMax = dur;
   }
 
+  /** Light planted punch along the aim vector (recoil = opposite shot). Does not clobber bomb / life-loss. */
+  function cameraPunchAim(ang, mag, dur) {
+    if (punchT > 0.045) return;
+    punchX = -Math.cos(ang) * mag;
+    punchY = -Math.sin(ang) * mag;
+    punchT = dur;
+    punchMax = dur;
+  }
+
   function smartBomb() {
     sfx.bomb();
     flash = 0.35;
@@ -624,10 +633,12 @@ export function createGame(canvas, input) {
         r: 4,
         life,
         dmg,
+        streak: 0.033,
       });
     }
     p.x -= Math.cos(p.aim) * 1.4;
     p.y -= Math.sin(p.aim) * 1.4;
+    cameraPunchAim(p.aim, 1.7, 0.065);
     sfx.shoot();
   }
 
@@ -1029,6 +1040,7 @@ export function createGame(canvas, input) {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
+      if (b.streak) b.streak = Math.max(0, b.streak - dt);
       if (hitsObs(b, obs)) {
         b.life = 0;
         burst(b.x, b.y, 4, "#7ffff8", 0.18);
