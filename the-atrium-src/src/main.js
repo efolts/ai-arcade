@@ -1,7 +1,7 @@
 import "./style.css";
 import { createInput } from "./input.js";
 import { createGame, W, H } from "./game.js";
-import { unlockAudio } from "./audio.js";
+import { unlockAudio, startMusic, bindMuteButton, armThemeUnlock, pollThemeUnlock } from "./audio.js";
 
 const canvas = document.getElementById("game");
 const stage = document.getElementById("stage");
@@ -24,17 +24,17 @@ fit();
 window.addEventListener("resize", fit);
 window.addEventListener("orientationchange", fit);
 
-const boot = () => {
-  unlockAudio();
-};
-window.addEventListener("pointerdown", boot, { once: true });
-window.addEventListener("keydown", boot, { once: true });
+bindMuteButton(document.getElementById("mute"));
+armThemeUnlock();
+startMusic();
+unlockAudio();
 
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (!document.hidden) {
+    pollThemeUnlock();
     game.update(dt);
     game.draw();
   }

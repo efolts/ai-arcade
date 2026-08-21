@@ -16,7 +16,7 @@ import {
   drawPlanter,
   drawPlayer,
 } from "./sprites.js";
-import { sfx, startMusic, stopMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./audio.js";
+import { sfx, startMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./audio.js";
 import { gunOrigin, shatterDuration } from "./pix.js";
 import {
   BASE_MAX_HP,
@@ -675,7 +675,6 @@ export function createGame(canvas, input) {
       p.iframes = 99;
       p.vx = 0;
       p.vy = 0;
-      stopMusic();
       sfx.roar();
       announce = "SIGNAL LOST";
       announceT = 99;

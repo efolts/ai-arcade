@@ -51,6 +51,41 @@ body {
   background: #050608;
 }
 
+#mute {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  border: 1px solid rgba(200, 200, 196, 0.28);
+  border-radius: 3px;
+  background: rgba(5, 6, 8, 0.42);
+  color: #c8c8c4;
+  cursor: pointer;
+  line-height: 0;
+}
+
+#mute svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+#mute:hover {
+  border-color: rgba(94, 246, 255, 0.7);
+  color: #5ef6ff;
+}
+
+#mute:active {
+  background: rgba(94, 246, 255, 0.12);
+}
+
+#mute[data-muted="1"] {
+  color: #889;
+}
+
 #crt {
   position: absolute;
   inset: 0;

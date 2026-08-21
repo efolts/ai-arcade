@@ -1,8 +1,33 @@
 let ac = null;
 let master = null;
-let musicTimer = 0;
-let musicOn = false;
 let muted = false;
+let theme = null;
+let wantPlay = false;
+let muteBtn = null;
+
+const MUTE_KEY = "atrium-muted";
+const THEME_URL = "./atrium-theme.mp3";
+const MUSIC_VOL = 0.16;
+const SFX_VOL = 0.22;
+
+const ICON_ON =
+  '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 6h3l3-3v10L5 10H2V6zm8.2 1.2a2.2 2.2 0 0 1 0 1.6l-.8.4a3.2 3.2 0 0 0 0-2.4l.8.4zm1.6-2.2.7.5a5.2 5.2 0 0 1 0 6.2l-.7.5a6.2 6.2 0 0 0 0-7.2z"/></svg>';
+const ICON_OFF =
+  '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 6h3l3-3v10L5 10H2V6zm9.1 1.4 1.4-1.4.7.7-1.4 1.4 1.4 1.4-.7.7-1.4-1.4-1.4 1.4-.7-.7 1.4-1.4-1.4-1.4.7-.7 1.4 1.4z"/></svg>';
+
+try {
+  muted = localStorage.getItem(MUTE_KEY) === "1";
+} catch {
+  muted = false;
+}
+
+function persistMute() {
+  try {
+    localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
 
 function ctx() {
   if (!ac) {
@@ -10,25 +35,110 @@ function ctx() {
     if (!AC) return null;
     ac = new AC();
     master = ac.createGain();
-    master.gain.value = 0.22;
+    master.gain.value = muted ? 0 : SFX_VOL;
     master.connect(ac.destination);
   }
   return ac;
 }
 
+function ensureTheme() {
+  if (theme) return theme;
+  theme = new Audio(THEME_URL);
+  theme.loop = true;
+  theme.preload = "auto";
+  theme.volume = muted ? 0 : MUSIC_VOL;
+  return theme;
+}
+
+function applyMute() {
+  if (master) master.gain.value = muted ? 0 : SFX_VOL;
+  if (!theme) return;
+  if (muted) {
+    theme.pause();
+  } else {
+    theme.volume = MUSIC_VOL;
+  }
+}
+
+function syncMuteUi() {
+  if (!muteBtn) return;
+  muteBtn.dataset.muted = muted ? "1" : "0";
+  muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
+  muteBtn.innerHTML = muted ? ICON_OFF : ICON_ON;
+}
+
 export function unlockAudio() {
   const c = ctx();
   if (c && c.state === "suspended") c.resume();
+  if (wantPlay && !muted) startMusic();
+}
+
+export function startMusic() {
+  wantPlay = true;
+  const a = ensureTheme();
+  applyMute();
+  if (muted) return;
+  const p = a.play();
+  if (p && p.catch) p.catch(() => {});
+}
+
+export function stopMusic() {
+  /* Theme keeps looping through game over / shop / pass. Mute is the only stop. */
+}
+
+export function tickMusic() {
+  /* MP3 loop; old synth bed retired so it cannot substitute for the theme. */
 }
 
 export function toggleMute() {
   muted = !muted;
-  if (master) master.gain.value = muted ? 0 : 0.22;
+  persistMute();
+  applyMute();
+  if (!muted && wantPlay) startMusic();
+  syncMuteUi();
   return muted;
 }
 
 export function isMuted() {
   return muted;
+}
+
+export function bindMuteButton(el) {
+  muteBtn = el;
+  if (!muteBtn) return;
+  syncMuteUi();
+  muteBtn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    unlockAudio();
+    toggleMute();
+    muteBtn.blur();
+  });
+}
+
+export function armThemeUnlock() {
+  const kick = () => {
+    unlockAudio();
+    startMusic();
+  };
+  window.addEventListener("pointerdown", kick);
+  window.addEventListener("keydown", kick);
+  window.addEventListener("gamepadconnected", kick);
+}
+
+export function pollThemeUnlock() {
+  if (!wantPlay || muted || (theme && !theme.paused)) return;
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const pad of pads) {
+    if (!pad) continue;
+    for (const b of pad.buttons) {
+      if (b && b.pressed) {
+        unlockAudio();
+        startMusic();
+        return;
+      }
+    }
+  }
 }
 
 function envGain(duration, peak = 0.2, attack = 0.005) {
@@ -132,25 +242,3 @@ export const sfx = {
     setTimeout(() => tone(262, 0.1, "triangle", 0.08), 60);
   },
 };
-
-const BASS = [110, 110, 82.4, 98, 110, 146.8, 82.4, 98];
-let step = 0;
-
-export function startMusic() {
-  musicOn = true;
-}
-
-export function stopMusic() {
-  musicOn = false;
-}
-
-export function tickMusic(dt) {
-  if (!musicOn || muted || !ctx()) return;
-  musicTimer += dt;
-  if (musicTimer < 0.22) return;
-  musicTimer = 0;
-  const freq = BASS[step % BASS.length];
-  step++;
-  tone(freq, 0.18, "square", 0.035);
-  if (step % 4 === 0) noise(0.06, 0.04, 80, 0.8);
-}
