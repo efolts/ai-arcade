@@ -20,12 +20,20 @@ html, body {
   margin: 0;
   width: 100%;
   height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   background: #050608;
   color: var(--ink);
   overflow: hidden;
+  overscroll-behavior: none;
+  scrollbar-width: none;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
 }
 
 #frame {
@@ -80,7 +88,7 @@ html, body {
 .title-copy { position: relative; z-index: 1; text-align: center; }
 .title-copy h1 {
   margin: 0;
-  font-size: clamp(42px, 8vw, 86px);
+  font-size: 86px;
   letter-spacing: 0.22em;
   color: var(--cyan);
   text-shadow: 0 0 18px rgba(61, 230, 255, 0.55), 0 4px 0 #041016;
@@ -210,7 +218,7 @@ html, body {
 .faction-copy h1 {
   margin: 8px 0 6px;
   letter-spacing: 0.16em;
-  font-size: clamp(22px, 4vw, 36px);
+  font-size: 36px;
   color: #e8eef5;
 }
 .faction-copy > p {
@@ -226,7 +234,7 @@ html, body {
 }
 .faction-pick {
   appearance: none;
-  width: min(240px, 42vw);
+  width: 240px;
   padding: 0 0 14px;
   border: 1px solid #3a3e46;
   background: rgba(8, 10, 14, 0.78);
@@ -490,12 +498,6 @@ html, body {
   background: transparent;
   z-index: 1;
 }
-@media (max-width: 1100px) {
-  .slot { margin: 0 -8px; }
-  .slot:first-child { margin-left: 0; }
-  .slot:last-child { margin-right: 0; }
-}
-
 .minion {
   appearance: none;
   border: 2px solid #0a0b0e;
@@ -524,7 +526,7 @@ html, body {
   background: #0b0d12;
   color: #fff;
   font-weight: 800;
-  font-size: clamp(10px, 1.5vw, 15px);
+  font-size: 15px;
   border: 1px solid var(--accent);
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
   z-index: 2;
@@ -538,7 +540,7 @@ html, body {
   height: 11%;
   background: #2a2d33;
   color: #fff;
-  font-size: clamp(8px, 0.95vw, 12px);
+  font-size: 12px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   display: flex;
@@ -556,7 +558,7 @@ html, body {
   width: 10%;
   height: 28%;
   color: var(--accent);
-  font-size: clamp(6px, 0.7vw, 8px);
+  font-size: 8px;
   letter-spacing: 0.12em;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
@@ -591,7 +593,7 @@ html, body {
   bottom: 16%;
   background: #0d0f14;
   color: #f2f5f8;
-  font-size: clamp(8px, 0.95vw, 12px);
+  font-size: 12px;
   line-height: 1.28;
   text-align: center;
   padding: 5px 4px;
@@ -607,7 +609,7 @@ html, body {
   max-height: 24px;
   display: grid;
   place-items: center;
-  font-size: clamp(10px, 1.2vw, 14px);
+  font-size: 14px;
   font-weight: 800;
   border: 1px solid #000;
 }

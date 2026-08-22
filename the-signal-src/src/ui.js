@@ -1323,6 +1323,8 @@ export function paint() {
 function fitStage() {
   const frame = document.getElementById("frame");
   if (!frame) return;
+  // Cabinet iframe is 960×780 (and smaller at the 960/780 aspect). Contain-fit
+  // both axes so the 1500×975 stage letterboxes, never crops, never scrolls.
   const scale = Math.min(frame.clientWidth / STAGE_W, frame.clientHeight / STAGE_H, 1);
   document.documentElement.style.setProperty("--stage-scale", String(Math.max(0.05, scale)));
 }
