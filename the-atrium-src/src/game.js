@@ -1375,6 +1375,25 @@ export function createGame(canvas, input) {
     return true;
   }
 
+  function containImage(img, x, y, w, h) {
+    if (!img.complete || !img.naturalWidth) return false;
+    const ir = img.naturalWidth / img.naturalHeight;
+    const r = w / h;
+    let dw = w;
+    let dh = h;
+    let dx = x;
+    let dy = y;
+    if (ir > r) {
+      dh = w / ir;
+      dy = y + (h - dh) / 2;
+    } else {
+      dw = h * ir;
+      dx = x + (w - dw) / 2;
+    }
+    ctx.drawImage(img, dx, dy, dw, dh);
+    return true;
+  }
+
   function drawChyron() {
     ctx.fillStyle = "#050608";
     ctx.fillRect(0, 0, W, HUD_TOP);
@@ -1613,7 +1632,7 @@ export function createGame(canvas, input) {
     ctx.fillStyle = "#050608";
     ctx.fillRect(0, 0, W, H);
     ctx.imageSmoothingEnabled = true;
-    coverImage(art.title, 0, 0, W, H);
+    containImage(art.title, 0, 0, W, H);
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = "rgba(0,0,0,0.18)";
     ctx.fillRect(0, 0, W, H);
