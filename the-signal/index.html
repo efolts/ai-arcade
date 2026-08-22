@@ -10,12 +10,22 @@
     <meta name="theme-color" content="#07080c" />
     <title>THE SIGNAL</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <script type="module" crossorigin src="./assets/index-CE86_H6w.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-cSmwi8Qk.css">
+    <script type="module" crossorigin src="./assets/index-DTmOjGIc.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Ddu55u3V.css">
   </head>
   <body>
     <div id="frame">
-      <div id="stage"></div>
+      <div id="stage-fit">
+        <div id="stage"></div>
+      </div>
     </div>
+    <script>
+      (function () {
+        var frame = document.getElementById("frame");
+        if (!frame) return;
+        var scale = Math.min(frame.clientWidth / 1500, frame.clientHeight / 975, 1);
+        document.documentElement.style.setProperty("--stage-scale", String(Math.max(0.05, scale)));
+      })();
+    </script>
   </body>
 </html>
