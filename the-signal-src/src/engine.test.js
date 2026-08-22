@@ -22,7 +22,7 @@ import {
   instantiate,
   resetIds,
 } from "./engine.js";
-import { runAiTurn } from "./ai.js";
+import { pickAiAction, runAiTurn } from "./ai.js";
 
 describe("card art keys", () => {
   it("gives every catalog card an art key", () => {
@@ -75,7 +75,29 @@ describe("hero labels", () => {
   it("names the player CRT Head and the AI Tessera Bot", () => {
     const s = createMatch({ seed: 1 });
     assert.equal(s.player.hero.name, "CRT Head");
+    assert.equal(s.player.hero.powerName, "Remote");
+    assert.equal(s.player.hero.faction, "crt");
     assert.equal(s.ai.hero.name, "Tessera Bot");
+    assert.equal(s.ai.hero.powerName, "Deploy");
+    assert.equal(s.ai.hero.faction, "tessera");
+    assert.equal(s.playerFaction, "crt");
+    assert.ok(s.player.deck.some((c) => c.defId === "mall_rat"));
+    assert.ok(s.ai.deck.some((c) => c.defId === "elite"));
+  });
+
+  it("lets the player pick Tessera Bot and gives CRT Head to the AI", () => {
+    const s = createMatch({ seed: 1, playerFaction: "tessera" });
+    assert.equal(s.playerFaction, "tessera");
+    assert.equal(s.player.hero.name, "Tessera Bot");
+    assert.equal(s.player.hero.powerName, "Deploy");
+    assert.equal(s.player.hero.faction, "tessera");
+    assert.equal(s.ai.hero.name, "CRT Head");
+    assert.equal(s.ai.hero.powerName, "Remote");
+    assert.equal(s.ai.hero.faction, "crt");
+    assert.ok(s.player.deck.some((c) => c.defId === "elite"));
+    assert.ok(s.ai.deck.some((c) => c.defId === "mall_rat"));
+    assert.equal(s.player.deck.length, 30);
+    assert.equal(s.ai.deck.length, 30);
   });
 });
 
@@ -284,6 +306,37 @@ describe("relics and hero powers", () => {
     assert.equal(s.ai.board.at(-1).atk, 1);
     assert.equal(s.ai.board.at(-1).hp, 1);
   });
+
+  it("Deploy works for the player and Remote works for the AI when sides swap", () => {
+    const s = createMatch({ seed: 5, playerFaction: "tessera" });
+    startMatch(s);
+    s.player.mana = 2;
+    const before = s.player.board.length;
+    const d = useHeroPower(s, PLAYER);
+    assert.equal(d.ok, true);
+    assert.equal(s.player.board.length, before + 1);
+    assert.equal(s.player.board.at(-1).defId, "tessera_grunt");
+    endTurn(s, PLAYER);
+    s.ai.mana = 2;
+    const hp = s.player.hero.hp;
+    const r = useHeroPower(s, AI, HERO_IDS[PLAYER]);
+    assert.equal(r.ok, true);
+    assert.equal(s.player.hero.hp, hp - 2);
+  });
+});
+
+describe("faction opening", () => {
+  it("keeps first-player Coin rules when the player is Tessera Bot", () => {
+    const s = createMatch({ seed: 7, playerFaction: "tessera" });
+    startMatch(s);
+    assert.equal(s.player.hand.length, 4);
+    assert.equal(s.ai.hand.length, 5);
+    assert.ok(s.ai.hand.some((c) => c.defId === "coin"));
+    assert.equal(s.player.mana, 1);
+    assert.equal(s.turn, PLAYER);
+    assert.equal(s.player.hero.name, "Tessera Bot");
+    assert.equal(s.ai.hero.name, "CRT Head");
+  });
 });
 
 describe("fx events", () => {
@@ -330,6 +383,22 @@ describe("signals", () => {
     assert.equal(node.shatter, null);
     dealDamage(s, { kind: "unit", unit: node }, 20, "x");
     assert.equal(s.ai.board.some((u) => u.defId === "tessera_grunt"), false);
+  });
+});
+
+describe("AI Remote", () => {
+  it("picks a Remote target when the AI is CRT Head", () => {
+    const s = createMatch({ seed: 21, playerFaction: "tessera" });
+    startMatch(s);
+    endTurn(s, PLAYER);
+    s.ai.hand = [];
+    s.ai.mana = 2;
+    s.ai.maxMana = 2;
+    s.ai.hero.powerUsed = false;
+    s.ai.board = [];
+    const action = pickAiAction(s);
+    assert.equal(action.type, "power");
+    assert.equal(action.targetId, HERO_IDS[PLAYER]);
   });
 });
 

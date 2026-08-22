@@ -72,11 +72,25 @@ const ui = {
   selectedAttacker: null,
   mulliganPicks: [],
   busy: false,
+  rulesOpen: false,
   pointer: { x: 0, y: 0 },
 };
 
 function inMulligan() {
   return ui.mode === "mulligan";
+}
+
+function factionOf(who) {
+  const side = who === PLAYER ? ui.state?.player : ui.state?.ai;
+  return side?.hero?.faction === "tessera" ? "tessera" : "crt";
+}
+
+function heroArtFor(faction) {
+  return faction === "tessera" ? tessArt : crtArt;
+}
+
+function isFactionPick() {
+  return ui.mode === "faction" || ui.state?.screen === "faction";
 }
 
 let busyTimer = null;
@@ -205,8 +219,12 @@ function renderMinion(unit, opts = {}) {
   const artStyle = url ? `style="background-image:url('${url}')"` : "";
   const artInner = url ? "" : `<div class="plate plate-${unit.plate || "unit"}"><i class="glyph"></i></div>`;
   el.innerHTML = `
-    <div class="mini-art plate-${unit.plate || "unit"}" ${artStyle}>${artInner}<div class="badges">${badgeHtml(unit)}</div></div>
-    <div class="mini-name">${shortName(unit.name)}</div>
+    <div class="cost">${unit.cost ?? 0}</div>
+    <div class="namebar">${unit.name}</div>
+    <div class="stripe">${typeLabel(unit.type || TYPE.UNIT)}</div>
+    <div class="art" ${artStyle}>${artInner}<div class="badges">${badgeHtml(unit)}</div></div>
+    <div class="diamond"></div>
+    <div class="rules">${emphasize(unit.text || "")}</div>
     <div class="pip atk">${unit.atk}</div>
     <div class="pip hp ${unit.hp < unit.maxHp ? "hurt" : ""}">${unit.hp}</div>
   `;
@@ -222,10 +240,11 @@ function cardBack(faction, extra = "") {
 }
 
 function crystalsHtml(side, who, pulse) {
+  const faction = side.hero?.faction || (who === PLAYER ? "crt" : "tessera");
   const bits = [];
   for (let i = 0; i < 10; i++) {
     let cls = "crystal locked";
-    if (i < side.maxMana && i < side.mana) cls = `crystal full ${who}${pulse ? " pulse" : ""}`;
+    if (i < side.maxMana && i < side.mana) cls = `crystal full ${who} ${faction}${pulse ? " pulse" : ""}`;
     else if (i < side.maxMana) cls = "crystal empty";
     bits.push(`<i class="${cls}"></i>`);
   }
@@ -278,10 +297,10 @@ function updateAim(clientX, clientY) {
   const hit = under?.closest("[data-id]");
   if (hit && legal.has(hit.dataset.id)) {
     const r = rectOf(hit);
-    drawAim(src, r.left + r.width / 2, r.top + r.height / 2, "crt");
+    drawAim(src, r.left + r.width / 2, r.top + r.height / 2, factionOf(PLAYER));
     return;
   }
-  drawAim(src, clientX, clientY, "crt");
+  drawAim(src, clientX, clientY, factionOf(PLAYER));
 }
 
 function tableCenterRect() {
@@ -399,12 +418,12 @@ async function animateDraw(who, events) {
   const deck = $id(who === PLAYER ? "deck-player" : "deck-ai");
   const dest = who === PLAYER ? document.querySelector(".hand") : document.querySelector(".enemy-hand");
   for (const _d of draws) {
-    const ghost = cardBack(who === PLAYER ? "crt" : "tessera", "large fx-clone");
+    const ghost = cardBack(factionOf(who), "large fx-clone");
     placeFixed(ghost, rectOf(deck) || fallbackRect(who));
     await flyArc(ghost, rectOf(dest) || tableCenterRect(), {
       duration: 320,
       arc: 28,
-      faction: who === PLAYER ? "crt" : "tessera",
+      faction: factionOf(who),
     });
     ghost.remove();
     sfx("draw");
@@ -441,12 +460,12 @@ async function resolveAnimated(who, kind, apply, meta = {}) {
     }
 
     if (kind === "unit" || kind === "signal" || kind === "relic") {
-      const faction = who === PLAYER ? "crt" : "tessera";
+      const faction = factionOf(who);
       const ghost =
         who === PLAYER
           ? makeGhostFromHand(meta.card || result.card, fromEl, fromR)
           : (() => {
-              const g = cardBack("tessera", "large fx-clone");
+              const g = cardBack(faction, "large fx-clone");
               placeFixed(g, fromR || fallbackRect(AI));
               return g;
             })();
@@ -460,7 +479,7 @@ async function resolveAnimated(who, kind, apply, meta = {}) {
       sfx(kind === "relic" ? "equip" : "play");
     } else if (kind === "attack") {
       await lurchToward(fromEl, toR);
-      impactFlash(meta.targetEl, who === PLAYER ? "crt" : "tessera");
+      impactFlash(meta.targetEl, factionOf(who));
       sfx("attack");
     } else if (kind === "power") {
       pulseEl(meta.powerEl, "press");
@@ -592,6 +611,14 @@ function clickHero(who) {
 function clickPower() {
   if (inMulligan() || ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
   if (!canUseHeroPower(ui.state, PLAYER)) return;
+  if (ui.state.player.hero.powerName === "Deploy") {
+    resolveAnimated(PLAYER, "power", () => useHeroPower(ui.state, PLAYER), {
+      powerEl: $id("power-player"),
+      heroEl: findEl(HERO_IDS[PLAYER]),
+      toR: nextSlotRect(PLAYER),
+    });
+    return;
+  }
   ui.mode = "power-target";
   ui.selectedCard = null;
   ui.selectedAttacker = null;
@@ -608,7 +635,7 @@ async function playerEndTurn() {
   try {
     endTurn(ui.state, PLAYER);
     const ev = drainFx(ui.state);
-    await flashBanner("TESSERA BOT TURN", "tessera");
+    await flashBanner(`${ui.state.ai.hero.name.toUpperCase()} TURN`, factionOf(AI));
     await animateDraw(AI, ev);
     sync();
     await runAi();
@@ -639,7 +666,7 @@ async function runAi() {
     if (!ui.state.winner && ui.state.turn === AI) {
       endTurn(ui.state, AI);
       const ev = drainFx(ui.state);
-      await flashBanner("YOUR TURN", "crt");
+      await flashBanner("YOUR TURN", factionOf(PLAYER));
       await animateDraw(PLAYER, ev);
       pulseMana(PLAYER);
     }
@@ -691,7 +718,8 @@ async function performAi(action) {
     await resolveAnimated(AI, "power", () => applyAiAction(ui.state, action), {
       powerEl: $id("power-ai"),
       heroEl: findEl(HERO_IDS[AI]),
-      toR: nextSlotRect(AI),
+      targetEl: findEl(action.targetId),
+      toR: rectOf(findEl(action.targetId)) || nextSlotRect(AI),
       keepBusy: true,
     });
   }
@@ -713,7 +741,82 @@ function fanfare() {
 }
 
 function playAgain() {
-  beginOpening();
+  closeRules();
+  paintFaction();
+}
+
+function attachRules(host) {
+  if (!host) return;
+  if (!host.querySelector(":scope > .rules-btn")) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "rules-btn";
+    btn.textContent = "Rules";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openRules();
+    });
+    host.appendChild(btn);
+  }
+  let overlay = host.querySelector(":scope > #rules-screen");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "rules-screen";
+    overlay.className = "screen";
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        e.stopPropagation();
+        closeRules();
+      }
+    });
+    host.appendChild(overlay);
+  }
+  if (ui.rulesOpen) openRules();
+  else closeRules(true);
+}
+
+function openRules() {
+  const overlay = $id("rules-screen");
+  if (!overlay) return;
+  ui.rulesOpen = true;
+  overlay.hidden = false;
+  overlay.classList.add("is-open");
+  overlay.setAttribute("aria-hidden", "false");
+  overlay.innerHTML = `
+    <div class="rules-card" role="dialog" aria-labelledby="rules-title">
+      <button class="rules-close" type="button" aria-label="Close rules">×</button>
+      <h2 id="rules-title">RULES</h2>
+      <ul>
+        <li><b>Goal</b> — Reduce the enemy hero to 0 HP.</li>
+        <li><b>Mana</b> — 1 → 10. Spend it to play Units, Signals, and Relics.</li>
+        <li><b>Units</b> — Attack once after summon-sick, unless they have <b>Rush</b>.</li>
+        <li><b>Static</b> — Must be attacked before the enemy hero. That's the halo.</li>
+        <li><b>Mesh</b> — Blocks one hit.</li>
+        <li><b>Boot</b> — Fires on play. <b>Shatter</b> — fires on death.</li>
+        <li><b>Hero powers</b> — CRT Head <b>Remote</b> (2 mana, deal 2). Tessera Bot <b>Deploy</b> (2 mana, 1/1 Grunt).</li>
+        <li><b>Mulligan</b> — Swap up to 2 opening cards.</li>
+        <li><b>Controls</b> — Click to play or attack. E end turn. Esc cancel. M mute.</li>
+      </ul>
+    </div>
+  `;
+  overlay.querySelector(".rules-close").addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeRules();
+  });
+  overlay.querySelector(".rules-card").addEventListener("click", (e) => e.stopPropagation());
+}
+
+function closeRules(quiet = false) {
+  if (!quiet) ui.rulesOpen = false;
+  const overlay = $id("rules-screen");
+  if (!overlay) return;
+  overlay.hidden = true;
+  overlay.classList.remove("is-open");
+  overlay.setAttribute("aria-hidden", "true");
+  if (!quiet) overlay.innerHTML = "";
 }
 
 function paintTitle() {
@@ -728,24 +831,74 @@ function paintTitle() {
       <h1>THE SIGNAL</h1>
       <div class="tag">Arcade card battler</div>
       <button class="play-btn" type="button">Play — press Enter</button>
-      <div class="controls-line">Click cards · click a target if needed · E end turn · Esc cancel · M mute later</div>
+      <div class="controls-line">Click cards · click a target if needed · E end turn · Esc cancel · M mute</div>
     </div>
   `;
-  screen.querySelector(".play-btn").addEventListener("click", beginPlay);
+  screen.querySelector(".play-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    beginPlay();
+  });
   screen.addEventListener("click", (e) => {
-    if (e.target.closest(".play-btn")) return;
+    if (e.target.closest(".play-btn, .rules-btn, #rules-screen")) return;
     beginPlay();
   });
   root.appendChild(screen);
+  attachRules(screen);
+}
+
+function paintFaction() {
+  ui.mode = "faction";
+  if (!ui.state) ui.state = createMatch({ seed: seedFromUrl() });
+  ui.state.screen = "faction";
+  const root = stage();
+  root.innerHTML = "";
+  const screen = document.createElement("div");
+  screen.id = "faction-screen";
+  screen.className = "screen";
+  screen.style.backgroundImage = `url('${titleArt}')`;
+  screen.innerHTML = `
+    <div class="faction-copy">
+      <div class="faction-kicker">THE SIGNAL</div>
+      <h1>CHOOSE YOUR SIGNAL</h1>
+      <p>Pick a hero. The other side is the Directory.</p>
+      <div class="faction-picks">
+        <button class="faction-pick crt" type="button" data-faction="crt">
+          <img alt="CRT Head" src="${crtArt}" />
+          <div class="faction-name">CRT Head</div>
+          <div class="faction-power">Hero power — Remote</div>
+          <div class="faction-deck">Cyan CRT deck</div>
+        </button>
+        <button class="faction-pick tessera" type="button" data-faction="tessera">
+          <img alt="Tessera Bot" src="${tessArt}" />
+          <div class="faction-name">Tessera Bot</div>
+          <div class="faction-power">Hero power — Deploy</div>
+          <div class="faction-deck">Pearl Tessera deck</div>
+        </button>
+      </div>
+    </div>
+  `;
+  screen.querySelectorAll(".faction-pick").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      chooseFaction(btn.dataset.faction);
+    });
+  });
+  root.appendChild(screen);
+  attachRules(screen);
 }
 
 function beginPlay() {
   sfx("click");
-  beginOpening();
+  paintFaction();
 }
 
-function beginOpening() {
-  ui.state = createMatch({ seed: seedFromUrl() });
+function chooseFaction(faction) {
+  sfx("click");
+  beginOpening(faction);
+}
+
+function beginOpening(faction) {
+  ui.state = createMatch({ seed: seedFromUrl(), playerFaction: faction });
   ui.state.screen = "play";
   dealOpening(ui.state);
   drainFx(ui.state);
@@ -801,7 +954,7 @@ async function finishMulligan() {
   sync();
   try {
     await animateDraw(PLAYER, ev);
-    await flashBanner("YOUR TURN", "crt");
+    await flashBanner("YOUR TURN", factionOf(PLAYER));
     pulseMana(PLAYER);
   } finally {
     setBusy(false);
@@ -824,13 +977,13 @@ function syncMulligan() {
   play?.classList.add("is-mulligan");
   overlay.hidden = false;
   overlay.setAttribute("aria-hidden", "false");
-  overlay.className = "screen is-open";
+  overlay.className = `screen is-open ${factionOf(PLAYER)}`;
   const picks = new Set(ui.mulliganPicks);
   const n = picks.size;
   const action = n ? "CONFIRM" : "KEEP";
   overlay.innerHTML = `
     <div class="mulligan-card">
-      <div class="mulligan-kicker">CRT Head</div>
+      <div class="mulligan-kicker">${ui.state.player.hero.name}</div>
       <h2>OPENING SIGNAL</h2>
       <p>Pick up to 2 to replace with the next cards on top of the deck.</p>
       <div class="mulligan-row" id="mulligan-row"></div>
@@ -860,7 +1013,7 @@ function buildPlay() {
   root.innerHTML = "";
   const screen = document.createElement("div");
   screen.id = "play-screen";
-  screen.className = `screen${inMulligan() ? " is-mulligan" : ""}`;
+  screen.className = `screen fac-${factionOf(PLAYER)}${inMulligan() ? " is-mulligan" : ""}`;
   screen.style.setProperty("--table", `url('${titleArt}')`);
   screen.style.setProperty("--matrix", `url('${matrixArt}')`);
   screen.style.setProperty("--back-crt", `url('${crtBack}')`);
@@ -901,6 +1054,7 @@ function buildPlay() {
   }
   screen.querySelector("#end-turn").addEventListener("click", playerEndTurn);
   root.appendChild(screen);
+  attachRules(screen);
   renderHeroStrip("enemy-strip", AI);
   renderHeroStrip("player-strip", PLAYER);
 }
@@ -913,9 +1067,10 @@ function renderHeroStrip(id, who) {
   const wrap = document.createElement("div");
   wrap.style.display = "contents";
 
+  const faction = side.hero.faction || (who === PLAYER ? "crt" : "tessera");
   const card = document.createElement("div");
-  card.className = `hero-card ${who}`;
-  const art = who === PLAYER ? crtArt : tessArt;
+  card.className = `hero-card ${who} ${faction}`;
+  const art = heroArtFor(faction);
   const portrait = `
     <div class="portrait" data-id="${side.hero.id}" data-who="${who}" style="background-image:url('${art}')">
       <div class="hp-pip" id="hp-${who}">${side.hero.hp}</div>
@@ -927,17 +1082,17 @@ function renderHeroStrip(id, who) {
   const power = document.createElement("button");
   power.type = "button";
   power.id = who === PLAYER ? "power-player" : "power-ai";
-  power.className = `power-btn ${who}`;
+  power.className = `power-btn ${who} ${faction}`;
   power.innerHTML = `${side.hero.powerName}<br><span class="hint">${side.hero.powerCost} mana</span>`;
   if (who === PLAYER) power.addEventListener("click", clickPower);
 
   const deck = document.createElement("div");
   deck.className = "deck-chip";
   deck.id = who === PLAYER ? "deck-player" : "deck-ai";
-  deck.innerHTML = `<div class="mini-back card-back ${who === PLAYER ? "crt" : "tessera"}"></div>Deck <span class="deck-n">${side.deck.length}</span>`;
+  deck.innerHTML = `<div class="mini-back card-back ${faction}"></div>Deck <span class="deck-n">${side.deck.length}</span>`;
 
   const relic = document.createElement("div");
-  relic.className = `relic-slot ${who}`;
+  relic.className = `relic-slot ${who} ${faction}`;
   relic.id = who === PLAYER ? "relic-player" : "relic-ai";
   relic.textContent = "No relic";
 
@@ -975,7 +1130,14 @@ function fillLane(laneId, units, who) {
       const hp = existing.querySelector(".pip.hp");
       hp.textContent = unit.hp;
       hp.classList.toggle("hurt", unit.hp < unit.maxHp);
-      existing.querySelector(".badges").innerHTML = badgeHtml(unit);
+      const badges = existing.querySelector(".badges");
+      if (badges) badges.innerHTML = badgeHtml(unit);
+      const rules = existing.querySelector(".rules");
+      if (rules) rules.innerHTML = emphasize(unit.text || "");
+      const cost = existing.querySelector(".cost");
+      if (cost) cost.textContent = String(unit.cost ?? 0);
+      const namebar = existing.querySelector(".namebar");
+      if (namebar) namebar.textContent = unit.name;
       existing.onclick = opts.onClick;
     } else {
       slot.innerHTML = "";
@@ -991,6 +1153,8 @@ function fillLane(laneId, units, who) {
 function syncChrome() {
   const s = ui.state;
   if (!s || !$id("play-screen")) return;
+  $id("play-screen")?.classList.toggle("fac-crt", factionOf(PLAYER) === "crt");
+  $id("play-screen")?.classList.toggle("fac-tessera", factionOf(PLAYER) === "tessera");
   const tset = new Set(targetsForCurrent());
   const playerReady = s.turn === PLAYER && !ui.busy && !s.winner && !inMulligan();
 
@@ -1039,7 +1203,7 @@ function syncChrome() {
   const eh = $id("enemy-hand");
   if (eh) {
     eh.innerHTML = "";
-    for (let i = 0; i < s.ai.hand.length; i++) eh.appendChild(cardBack("tessera"));
+    for (let i = 0; i < s.ai.hand.length; i++) eh.appendChild(cardBack(factionOf(AI)));
   }
 
   const tick = $id("ticker");
@@ -1049,6 +1213,8 @@ function syncChrome() {
 function updateRelic(id, hero, who) {
   const el = $id(id);
   if (!el) return;
+  el.classList.toggle("crt", (hero.faction || hero.relic?.faction) === "crt");
+  el.classList.toggle("tessera", (hero.faction || hero.relic?.faction) === "tessera");
   if (!hero.relic) {
     el.classList.remove("has");
     el.textContent = "No relic";
@@ -1102,15 +1268,17 @@ function syncResult() {
   const s = ui.state;
   overlay.hidden = false;
   overlay.setAttribute("aria-hidden", "false");
-  overlay.className = `screen is-open ${s.winner === PLAYER ? "win" : s.winner === AI ? "lose" : "draw"}`;
+  const playerFac = factionOf(PLAYER);
+  const winnerFac = s.winner === PLAYER ? playerFac : s.winner === AI ? factionOf(AI) : "draw";
+  overlay.className = `screen is-open ${s.winner === PLAYER ? "win" : s.winner === AI ? "lose" : "draw"} ${winnerFac}`;
   const title = s.winner === PLAYER ? "SIGNAL LOCKED" : s.winner === AI ? "SIGNAL LOST" : "DEAD AIR";
   const blurb =
     s.winner === PLAYER
-      ? "CRT Head holds the food court. Tessera Bot goes dark."
+      ? `${s.player.hero.name} holds the food court. ${s.ai.hero.name} goes dark.`
       : s.winner === AI
-        ? "The Directory writes over the broadcast."
+        ? `${s.ai.hero.name} writes over the broadcast.`
         : "Both heroes drop. The fountain keeps running.";
-  const img = s.winner === AI ? tessArt : crtArt;
+  const img = s.winner === AI ? heroArtFor(factionOf(AI)) : heroArtFor(playerFac);
   overlay.innerHTML = `
     <div class="result-card">
       <img alt="" src="${img}" />
@@ -1125,6 +1293,10 @@ function syncResult() {
 function sync() {
   if (!ui.state || ui.state.screen === "title") {
     paintTitle();
+    return;
+  }
+  if (ui.state.screen === "faction") {
+    if (!$id("faction-screen")) paintFaction();
     return;
   }
   if (!$id("play-screen")) buildPlay();
@@ -1166,6 +1338,18 @@ export function mount() {
       return;
     }
     if (k === "Escape") {
+      if (ui.rulesOpen) {
+        e.preventDefault();
+        closeRules();
+        return;
+      }
+      if (isFactionPick()) {
+        e.preventDefault();
+        ui.state.screen = "title";
+        ui.mode = "idle";
+        paintTitle();
+        return;
+      }
       if (inMulligan()) {
         e.preventDefault();
         clearMulliganPicks();
@@ -1175,6 +1359,7 @@ export function mount() {
       sync();
       return;
     }
+    if (ui.rulesOpen) return;
     if (inMulligan() && (k === "Enter" || k === " ")) {
       e.preventDefault();
       finishMulligan();
@@ -1185,6 +1370,7 @@ export function mount() {
       beginPlay();
       return;
     }
+    if (isFactionPick()) return;
     if (ui.state.winner && (k === "Enter" || k === " ")) {
       e.preventDefault();
       playAgain();

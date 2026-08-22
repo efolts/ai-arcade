@@ -81,30 +81,44 @@ export function instantiate(defId, extra = {}) {
   };
 }
 
-function makeHero(who) {
-  if (who === PLAYER) {
-    return {
-      id: HERO_IDS[PLAYER],
-      who,
-      name: "CRT Head",
-      hp: START_HP,
-      maxHp: START_HP,
-      powerName: "Remote",
-      powerCost: 2,
-      powerUsed: false,
-      relic: null,
-      canAttack: false,
-      fatigue: 0,
-    };
-  }
-  return {
-    id: HERO_IDS[AI],
-    who,
+const HERO_SPEC = {
+  [FACTION.CRT]: {
+    name: "CRT Head",
+    powerName: "Remote",
+    powerCost: 2,
+    faction: FACTION.CRT,
+  },
+  [FACTION.TESSERA]: {
     name: "Tessera Bot",
-    hp: START_HP,
-    maxHp: START_HP,
     powerName: "Deploy",
     powerCost: 2,
+    faction: FACTION.TESSERA,
+  },
+};
+
+export function normalizeFaction(faction) {
+  return faction === FACTION.TESSERA ? FACTION.TESSERA : FACTION.CRT;
+}
+
+export function otherFaction(faction) {
+  return normalizeFaction(faction) === FACTION.CRT ? FACTION.TESSERA : FACTION.CRT;
+}
+
+export function deckIdsFor(faction) {
+  return normalizeFaction(faction) === FACTION.TESSERA ? TESSERA_DECK_IDS : CRT_DECK_IDS;
+}
+
+function makeHero(who, faction) {
+  const spec = HERO_SPEC[normalizeFaction(faction)];
+  return {
+    id: HERO_IDS[who],
+    who,
+    name: spec.name,
+    faction: spec.faction,
+    hp: START_HP,
+    maxHp: START_HP,
+    powerName: spec.powerName,
+    powerCost: spec.powerCost,
     powerUsed: false,
     relic: null,
     canAttack: false,
@@ -112,10 +126,10 @@ function makeHero(who) {
   };
 }
 
-function makeSide(who, deckIds, rng) {
+function makeSide(who, faction, deckIds, rng) {
   return {
     who,
-    hero: makeHero(who),
+    hero: makeHero(who, faction),
     mana: 0,
     maxMana: 0,
     deck: shuffle(deckIds, rng).map((id) => instantiate(id)),
@@ -128,6 +142,8 @@ function makeSide(who, deckIds, rng) {
 export function createMatch(opts = {}) {
   const seed = opts.seed ?? (Math.floor(Math.random() * 1e9) || 1);
   const rng = opts.rng || makeRng(seed);
+  const playerFaction = normalizeFaction(opts.playerFaction);
+  const aiFaction = otherFaction(playerFaction);
   resetIds(1);
   const state = {
     seed,
@@ -135,8 +151,9 @@ export function createMatch(opts = {}) {
     winner: null,
     turn: PLAYER,
     turnNumber: 0,
-    player: makeSide(PLAYER, opts.playerDeck || CRT_DECK_IDS, rng),
-    ai: makeSide(AI, opts.aiDeck || TESSERA_DECK_IDS, rng),
+    playerFaction,
+    player: makeSide(PLAYER, playerFaction, opts.playerDeck || deckIdsFor(playerFaction), rng),
+    ai: makeSide(AI, aiFaction, opts.aiDeck || deckIdsFor(aiFaction), rng),
     log: [],
     fx: [],
     rng,
@@ -209,13 +226,13 @@ function checkWinner(state) {
   if (state.ai.hero.hp <= 0) {
     state.winner = PLAYER;
     state.screen = "result";
-    pushLog(state, "Tessera Bot collapses. THE SIGNAL holds.");
+    pushLog(state, `${state.ai.hero.name} collapses. THE SIGNAL holds.`);
     return;
   }
   if (state.player.hero.hp <= 0) {
     state.winner = AI;
     state.screen = "result";
-    pushLog(state, "CRT Head goes dark. Directory wins.");
+    pushLog(state, `${state.player.hero.name} goes dark. Directory wins.`);
   }
 }
 
@@ -230,7 +247,7 @@ export function dealDamage(state, targetRef, amount, src = "") {
       id: hero.id,
       kind: "hero",
       who: hero.who,
-      faction: hero.who === PLAYER ? FACTION.CRT : FACTION.TESSERA,
+      faction: hero.faction || (hero.who === PLAYER ? FACTION.CRT : FACTION.TESSERA),
       amount,
       absorbed: false,
       dead,
@@ -423,11 +440,11 @@ export function confirmMulligan(state, uids = []) {
     const drawn = state.player.deck.shift();
     state.player.hand.splice(i, 0, drawn);
     emit(state, { type: "draw", who: PLAYER, card: drawn, burned: false, reason: "mulligan" });
-    pushLog(state, `CRT Head replaces ${card.name} with ${drawn.name}.`);
+    pushLog(state, `${state.player.hero.name} replaces ${card.name} with ${drawn.name}.`);
   }
   if (state.playerGoesSecond) {
     burnOrAdd(state, state.player, instantiate("coin"), "coin");
-    pushLog(state, "CRT Head takes the Coin.");
+    pushLog(state, `${state.player.hero.name} takes the Coin.`);
   }
   state.mulliganDone = true;
   return { ok: true, replaced: picks.map((c) => c.uid) };
@@ -690,27 +707,29 @@ export function canUseHeroPower(state, who, targetId = null) {
   const side = sideOf(state, who);
   if (side.hero.powerUsed) return false;
   if (side.mana < side.hero.powerCost) return false;
-  if (who === AI) {
+  if (side.hero.powerName === "Deploy") {
     return side.board.length < BOARD_CAP;
   }
-  if (!targetId) return true;
-  return !!targetRef(state, targetId);
+  if (side.hero.powerName === "Remote") {
+    if (!targetId) return true;
+    return !!targetRef(state, targetId);
+  }
+  return false;
 }
 
 export function useHeroPower(state, who, targetId = null) {
+  const side = sideOf(state, who);
+  if (side.hero.powerName === "Remote" && !targetId) {
+    return { ok: false, reason: "need-target" };
+  }
   if (!canUseHeroPower(state, who, targetId)) {
-    if (who === PLAYER && !targetId && canUseHeroPower(state, who, HERO_IDS[AI])) {
-      return { ok: false, reason: "need-target" };
-    }
     return { ok: false, reason: "illegal" };
   }
-  const side = sideOf(state, who);
-  if (who === PLAYER && !targetId) return { ok: false, reason: "need-target" };
 
   side.mana -= side.hero.powerCost;
   side.hero.powerUsed = true;
 
-  if (who === PLAYER) {
+  if (side.hero.powerName === "Remote") {
     const ref = targetRef(state, targetId);
     if (!ref) return { ok: false, reason: "bad-target" };
     dealDamage(state, ref, 2, "Remote");
@@ -719,8 +738,8 @@ export function useHeroPower(state, who, targetId = null) {
     return { ok: true, type: "power" };
   }
 
-  const grunt = summonToken(state, AI, "tessera_grunt");
-  pushLog(state, grunt ? "Tessera Bot Deploys a 1/1 Grunt." : "Deploy fizzles — board full.");
+  const grunt = summonToken(state, who, "tessera_grunt");
+  pushLog(state, grunt ? `${side.hero.name} Deploys a 1/1 Grunt.` : "Deploy fizzles — board full.");
   return { ok: true, type: "power" };
 }
 

@@ -246,13 +246,14 @@ export function pickAiAction(state) {
   if (play && play.score >= 2) return play;
 
   const side = state.ai;
-  if (
-    canUseHeroPower(state, AI) &&
-    side.mana >= 2 &&
-    side.board.length < BOARD_CAP &&
-    (!play || play.score < 10)
-  ) {
-    return { type: "power", targetId: null, score: 9 };
+  if (canUseHeroPower(state, AI) && side.mana >= side.hero.powerCost && (!play || play.score < 10)) {
+    if (side.hero.powerName === "Deploy" && side.board.length < BOARD_CAP) {
+      return { type: "power", targetId: null, score: 9 };
+    }
+    if (side.hero.powerName === "Remote") {
+      const targetId = pickTarget(state, AI, { kind: FX.DAMAGE, n: 2, target: "choose" });
+      if (targetId) return { type: "power", targetId, score: 9 };
+    }
   }
 
   const atk = bestAttack(state, AI);
