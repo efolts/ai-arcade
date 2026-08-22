@@ -1,6 +1,6 @@
 import titleArt from "./art/title.jpg";
 import crtArt from "./art/hero-crt.jpg";
-import tessArt from "./art/hero-tessera.jpg";
+import tessArt from "./art/hero-tessera.png";
 import remoteArt from "./art/card-remote-hand.jpg";
 import {
   AI,
