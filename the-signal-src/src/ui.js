@@ -196,6 +196,8 @@ function renderMinion(unit, opts = {}) {
     opts.ready ? "ready" : "",
     opts.selected ? "selected" : "",
     opts.targetable ? "targetable" : "",
+    opts.staticHalo ? "static-halo" : "",
+    opts.dimmed ? "aim-dim" : "",
   ].filter(Boolean).join(" ");
   el.dataset.uid = unit.uid;
   el.dataset.id = unit.uid;
@@ -949,6 +951,7 @@ function fillLane(laneId, units, who) {
   const slots = [...lane.querySelectorAll(".slot")];
   const tset = new Set(targetsForCurrent());
   const playerReady = ui.state.turn === PLAYER && !ui.busy && !ui.state.winner && !inMulligan();
+  const aiming = ui.mode === "attack-target";
   units.forEach((unit, i) => {
     const slot = slots[i];
     if (!slot) return;
@@ -957,6 +960,8 @@ function fillLane(laneId, units, who) {
       ready: who === PLAYER && playerReady && canUnitAttack(unit),
       selected: ui.selectedAttacker === unit.uid,
       targetable: tset.has(unit.uid),
+      staticHalo: aiming && who === AI && !!unit.keywords?.static,
+      dimmed: aiming && who === AI && !tset.has(unit.uid),
       onClick: () => {
         if (who === PLAYER) clickFriendlyUnit(unit);
         else if (tset.has(unit.uid)) clickTarget(unit.uid);
@@ -1002,7 +1007,11 @@ function syncChrome() {
     pp.classList.toggle("targetable", tset.has(HERO_IDS[PLAYER]));
     pp.classList.toggle("ready", playerReady && canHeroAttack(s.player.hero));
   }
-  if (ap) ap.classList.toggle("targetable", tset.has(HERO_IDS[AI]));
+  if (ap) {
+    ap.classList.toggle("targetable", tset.has(HERO_IDS[AI]));
+    ap.classList.toggle("aim-dim", ui.mode === "attack-target" && !tset.has(HERO_IDS[AI]));
+  }
+  $id("play-screen")?.classList.toggle("is-attack-aim", ui.mode === "attack-target");
 
   const pwr = $id("power-player");
   if (pwr) {
