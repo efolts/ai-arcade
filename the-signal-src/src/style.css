@@ -72,8 +72,8 @@ html, body {
 }
 .title-copy .tag {
   margin: 6px 0 18px;
-  letter-spacing: 0.38em;
-  font-size: 12px;
+  letter-spacing: 0.16em;
+  font-size: 13px;
   color: #c9d6e0;
   text-transform: uppercase;
 }
@@ -147,6 +147,13 @@ html, body {
   letter-spacing: 0.22em;
   font-size: 22px;
   color: var(--cyan);
+}
+.rules-lead {
+  margin: 0 0 12px;
+  color: #c5cdd8;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  line-height: 1.4;
 }
 .rules-card ul {
   margin: 0;
@@ -396,7 +403,7 @@ html, body {
 .crystal.empty { background: #1a2228; }
 .crystal.locked { background: #0d1014; opacity: 0.45; }
 .crystal.full.pulse { animation: crystalPulse 520ms ease; }
-.mana-count { font-size: 12px; color: var(--muted); margin-left: 6px; }
+.mana-count { font-size: 11px; color: var(--muted); margin-left: 6px; letter-spacing: 0.08em; white-space: nowrap; }
 
 .enemy-hand {
   position: relative;

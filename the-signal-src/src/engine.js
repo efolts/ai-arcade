@@ -226,13 +226,13 @@ function checkWinner(state) {
   if (state.ai.hero.hp <= 0) {
     state.winner = PLAYER;
     state.screen = "result";
-    pushLog(state, `${state.ai.hero.name} collapses. THE SIGNAL holds.`);
+    pushLog(state, `${state.ai.hero.name} collapses. Signal secured.`);
     return;
   }
   if (state.player.hero.hp <= 0) {
     state.winner = AI;
     state.screen = "result";
-    pushLog(state, `${state.player.hero.name} goes dark. Directory wins.`);
+    pushLog(state, `${state.player.hero.name} goes dark. Signal lost.`);
   }
 }
 
@@ -407,7 +407,7 @@ export function beginTurn(state, who) {
   side.mana = side.maxMana;
   readyBoard(side);
   drawCard(state, who, "turn");
-  pushLog(state, `${side.hero.name}'s turn — ${side.mana} mana.`);
+  pushLog(state, `${side.hero.name}'s turn — ${side.mana} Signal.`);
 }
 
 export function dealOpening(state) {
@@ -568,7 +568,7 @@ function applyEffect(state, who, fx, targetId, sourceName) {
     case FX.MANA: {
       const side = sideOf(state, who);
       side.mana += fx.n || 1;
-      pushLog(state, `${sourceName}: +${fx.n} mana this turn.`);
+      pushLog(state, `${sourceName}: +${fx.n} Signal this turn.`);
       break;
     }
     case FX.GIVE_KEYWORD: {
