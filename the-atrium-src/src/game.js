@@ -700,6 +700,7 @@ export function createGame(canvas, input) {
       if (b.dead) continue;
       if (b.kind === "boss" || b.kind === "security") b.hp -= 22;
       else b.hp = 0;
+      b.hitFlash = 0.12;
       if (b.hp <= 0) killBot(b);
     }
     world.eShots.length = 0;
@@ -796,6 +797,7 @@ export function createGame(canvas, input) {
       if (d > R + b.r) continue;
       const dmg = b.kind === "boss" ? 6 : b.kind === "security" ? 5 : 4;
       b.hp -= dmg;
+      b.hitFlash = 0.12;
       const n = d > 0.001 ? { x: (b.x - p.x) / d, y: (b.y - p.y) / d } : { x: 0, y: -1 };
       b.x += n.x * 38;
       b.y += n.y * 38;
@@ -1185,6 +1187,7 @@ export function createGame(canvas, input) {
     }
 
     for (const b of world.bots) {
+      b.hitFlash = Math.max(0, (b.hitFlash || 0) - dt);
       if (b.dead) {
         b.deadT += dt;
         continue;
@@ -1473,6 +1476,7 @@ export function createGame(canvas, input) {
         let dmg = b.dmg || 1;
         if (e.resist) dmg *= 0.55;
         e.hp -= dmg;
+        e.hitFlash = 0.12;
         b.life = 0;
         sfx.hit();
         burst(b.x, b.y, 6, "#7ffff8", 0.25);

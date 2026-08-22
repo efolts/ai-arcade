@@ -586,6 +586,16 @@ export function drawTesseraSprite(ctx, e, t) {
   const match = (TES_DRAW_H / cell.height) * scale;
   blitCooked(ctx, cell, e.x, e.y, match, { tint: e.elite ? null : KIND_TINT[kind] || null, footPad: 0 });
   ctx.filter = "none";
+  const flash = !e.dead && (e.hitFlash || 0) > 0;
+  if (flash) {
+    const k = Math.min(1, e.hitFlash / 0.12);
+    blitCooked(ctx, cell, e.x, e.y, match, {
+      tint: `rgba(220,255,255,${0.55 + k * 0.4})`,
+      flash: true,
+      alpha: 0.5 + k * 0.4,
+      footPad: 0,
+    });
+  }
   if (kind === "boss" && !e.dead) {
     ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = "#1c1c20";

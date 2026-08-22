@@ -430,6 +430,18 @@ export function drawBotFallback(ctx, e, t) {
   ctx.ellipse(-1.6, -1.6, 1.8, 0.8, -0.5, 0, Math.PI * 2);
   ctx.fill();
 
+  if (!e.dead && (e.hitFlash || 0) > 0) {
+    const k = Math.min(1, e.hitFlash / 0.12);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.35 + k * 0.45;
+    ctx.fillStyle = "#d8ffff";
+    ctx.beginPath();
+    ctx.arc(0, -4, (e.r || 16) * 1.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   ctx.restore();
 
   if (dying > 0 && dying < 0.45) {
