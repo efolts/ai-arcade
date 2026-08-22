@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#07080c" />
+    <title>THE SIGNAL</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script type="module" crossorigin src="./assets/index-BqJqhH6Q.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B9djZBsG.css">
+  </head>
+  <body>
+    <div id="frame">
+      <div id="stage-fit">
+        <div id="stage"></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var frame = document.getElementById("frame");
+        if (!frame) return;
+        /* 1500×975 design → contain-fit 100vw×100vh (cabinet 960×780). */
+        var scale = Math.min(frame.clientWidth / 1500, frame.clientHeight / 975, 1);
+        document.documentElement.style.setProperty("--stage-scale", String(Math.max(0.05, scale)));
+      })();
+    </script>
+  </body>
+</html>

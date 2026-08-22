@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d2428"/>
+      <stop offset="1" stop-color="#071014"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="42%" r="48%">
+      <stop offset="0" stop-color="#3de6ff" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#071014" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="scan" width="640" height="4" patternUnits="userSpaceOnUse">
+      <rect width="640" height="1" fill="#000" opacity="0.28"/>
+    </pattern>
+  </defs>
+  <rect width="640" height="480" fill="url(#sky)"/>
+  <rect width="640" height="480" fill="url(#glow)"/>
+  <path d="M40 400 Q180 280 320 360 T620 390 L620 480 L0 480Z" fill="#0a1814"/>
+     <rect x="250" y="168" width="92" height="72" rx="4" fill="#1a2224" stroke="#3de6ff"/>
+     <rect x="262" y="180" width="22" height="36" fill="#3de6ff"/>
+     <rect x="308" y="180" width="22" height="36" fill="#3de6ff"/>
+     <path d="M270 240 L370 250 L390 390 L240 390Z" fill="#2a2a28"/>
+     <circle cx="120" cy="90" r="3" fill="#3de6ff" opacity="0.4"/>
+  <rect width="640" height="480" fill="url(#scan)" opacity="0.55"/>
+  <rect x="10" y="10" width="620" height="460" fill="none" stroke="#3de6ff" stroke-opacity="0.28"/>
+</svg>
