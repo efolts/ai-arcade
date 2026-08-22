@@ -20,16 +20,23 @@ import { sfx, startMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./
 import { gunOrigin, shatterDuration } from "./pix.js";
 import {
   BASE_MAX_HP,
+  HEALTH_HEAL,
+  HEAVY_HIT,
   LEVEL_CAP,
+  LIFE_PRICE,
+  LIVES_START,
   XP_FOR,
   addXp,
   armorBonus,
   armorByTier,
+  clampLives,
   emptyGear,
   gunSpec,
   isStat,
   kioskPos,
   levelHpBonus,
+  lifeBlurb,
+  livesCap,
   playerSkin,
   rankMult,
   rollDrop,
@@ -215,7 +222,7 @@ export function createGame(canvas, input) {
     floats: [],
     score: 0,
     wave: 1,
-    lives: 3,
+    lives: LIVES_START,
     mult: 1,
     multT: 0,
     spawn: [],
@@ -282,7 +289,7 @@ export function createGame(canvas, input) {
     world.floats = [];
     world.score = 0;
     world.wave = 1;
-    world.lives = 3;
+    world.lives = LIVES_START;
     world.mult = 1;
     world.multT = 0;
     world.boss = null;
@@ -329,7 +336,7 @@ export function createGame(canvas, input) {
     world.pickups = [];
     world.parts = [];
     world.shopOpen = false;
-    world.gear.passLives = 0;
+    world.lives = clampLives(world.lives, world.gear);
     const cx = ARENA.x + ARENA.s / 2;
     const cy = ARENA.y + ARENA.s / 2 + 48;
     const p = world.player;
@@ -527,7 +534,13 @@ export function createGame(canvas, input) {
     return gap;
   }
 
-  function fireAmber(x, y, ang, spd, r = 4) {
+  function botHitDmg(b) {
+    if (!b) return 1;
+    if (b.elite || b.kind === "boss" || b.kind === "security" || b.kind === "shotgun") return HEAVY_HIT;
+    return 1;
+  }
+
+  function fireAmber(x, y, ang, spd, r = 4, dmg = 1) {
     world.eShots.push({
       x,
       y,
@@ -535,6 +548,7 @@ export function createGame(canvas, input) {
       vy: Math.sin(ang) * spd,
       r,
       life: 1,
+      dmg,
     });
   }
 
@@ -628,8 +642,11 @@ export function createGame(canvas, input) {
   }
 
   function dropPickup(x, y, forced) {
-    const roll = forced || rollDrop(world.pass, world.gear.luckUp || 0);
+    let roll = forced || rollDrop(world.pass, world.gear.luckUp || 0);
     if (!roll) return;
+    if (roll.kind === "life" && world.lives >= livesCap(world.gear)) {
+      roll = { kind: "token", n: 4 };
+    }
     world.pickups.push({
       x,
       y,
@@ -650,13 +667,20 @@ export function createGame(canvas, input) {
       return;
     }
     if (u.kind === "health") {
-      p.hp = clamp(p.hp + (u.n || 1), 0, p.maxHp);
+      const heal = u.n || HEALTH_HEAL;
+      p.hp = clamp(p.hp + heal, 0, p.maxHp);
       sfx.pickup();
-      floater(u.x, u.y - 16, "+HP", "#7cff9a");
+      floater(u.x, u.y - 16, `+${heal} HP`, "#7cff9a");
       return;
     }
     if (u.kind === "life") {
-      world.lives = clamp(world.lives + 1, 0, 9);
+      if (world.lives >= livesCap(world.gear)) {
+        world.tokens += 4;
+        sfx.coin();
+        floater(u.x, u.y - 16, "+4 TKN", "#e8b44a");
+        return;
+      }
+      world.lives = clampLives(world.lives + 1, world.gear);
       sfx.life();
       announce = "EXTRA LIFE";
       announceT = 1.2;
@@ -743,7 +767,8 @@ export function createGame(canvas, input) {
       floater(p.x, p.y - 16, "GRAZE", "#c8c8c4");
       return;
     }
-    p.hp -= 1;
+    const dmg = Math.max(1, opts.dmg || 1);
+    p.hp -= dmg;
     p.iframes = world.pass >= 2 ? 0.86 : 1.15;
     flash = 0.1;
     sfx.playerHit();
@@ -760,7 +785,7 @@ export function createGame(canvas, input) {
       return;
     }
     if (p.hp > 0) return;
-    world.lives -= 1;
+    world.lives = clampLives(world.lives - 1, world.gear);
     p.hp = p.maxHp;
     p.windUsed = false;
     world.mult = 1;
@@ -916,16 +941,19 @@ export function createGame(canvas, input) {
     if (item.id === "wind") {
       return { owned: world.gear.wind, eq: world.gear.wind, can: !world.gear.wind && world.tokens >= item.price, price: item.price };
     }
-    if (item.id === "1up2") {
-      const n = world.gear.passLives;
-      return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price, price: item.price };
+    if (item.id === "locker") {
+      return { owned: !!world.gear.locker, eq: !!world.gear.locker, can: !world.gear.locker && world.tokens >= item.price, price: item.price };
     }
-    const n = world.gear.extraLives;
-    return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price, price: item.price };
+    if (item.id === "1up" || item.id === "1up2") {
+      const cap = livesCap(world.gear);
+      const full = world.lives >= cap;
+      return { owned: full, eq: false, can: !full && world.tokens >= LIFE_PRICE, price: LIFE_PRICE, maxed: full };
+    }
+    return { label: "", can: false };
   }
 
   function shopLayout() {
-    return { ox: 146, oy: 148, cw: 164, rh: 86, cardW: 154, cardH: 78 };
+    return { ox: 146, oy: 140, cw: 164, rh: 74, cardW: 154, cardH: 68 };
   }
 
   function shopHit(mx, my) {
@@ -965,10 +993,9 @@ export function createGame(canvas, input) {
     else if (item.id === "static") world.gear.static = true;
     else if (item.id === "recall") world.gear.recall = true;
     else if (item.id === "wind") world.gear.wind = true;
+    else if (item.id === "locker") world.gear.locker = true;
     else if (item.id === "1up" || item.id === "1up2") {
-      if (item.id === "1up2") world.gear.passLives += 1;
-      else world.gear.extraLives += 1;
-      world.lives = clamp(world.lives + 1, 0, 9);
+      world.lives = clampLives(world.lives + 1, world.gear);
     }
     syncPlayerBody();
     sfx.pickup();
@@ -1263,7 +1290,7 @@ export function createGame(canvas, input) {
             const n = phase >= 4 ? 14 : 10;
             for (let i = 0; i < n; i++) {
               const a = (i / n) * Math.PI * 2;
-              fireAmber(b.x + Math.cos(a) * 22, b.y + Math.sin(a) * 22, a, 220, 4.5);
+              fireAmber(b.x + Math.cos(a) * 22, b.y + Math.sin(a) * 22, a, 220, 4.5, HEAVY_HIT);
             }
             b.tele = 0.18;
           }
@@ -1332,7 +1359,7 @@ export function createGame(canvas, input) {
           b.x = p.x + (dx / d) * min;
           b.y = p.y + (dy / d) * min;
         } else {
-          hurtPlayer({ contact: true });
+          hurtPlayer({ contact: true, dmg: botHitDmg(b) });
         }
       }
 
@@ -1342,12 +1369,12 @@ export function createGame(canvas, input) {
         if (b.kind === "shotgun") {
           for (const off of [-0.2, 0, 0.2]) {
             const a = ang + off;
-            fireAmber(b.x + Math.cos(a) * 16, b.y + Math.sin(a) * 16, a, 270, 4);
+            fireAmber(b.x + Math.cos(a) * 16, b.y + Math.sin(a) * 16, a, 270, 4, HEAVY_HIT);
           }
         } else if (b.kind === "security") {
-          fireAmber(b.x + Math.cos(ang) * 20, b.y + Math.sin(ang) * 20, ang, 190, 5.5);
+          fireAmber(b.x + Math.cos(ang) * 20, b.y + Math.sin(ang) * 20, ang, 190, 5.5, HEAVY_HIT);
         } else {
-          fireAmber(b.x + Math.cos(ang) * 14, b.y + Math.sin(ang) * 14, ang, 240, 4);
+          fireAmber(b.x + Math.cos(ang) * 14, b.y + Math.sin(ang) * 14, ang, 240, 4, botHitDmg(b));
         }
       }
       if (b.kind === "boss" && b.fireT <= 0) {
@@ -1361,20 +1388,20 @@ export function createGame(canvas, input) {
         const ring = (n, spd, rad) => {
           for (let i = 0; i < n; i++) {
             const a = (i / n) * Math.PI * 2 + t;
-            fireAmber(b.x + Math.cos(a) * rad, b.y + Math.sin(a) * rad, a, spd, 4.5);
+            fireAmber(b.x + Math.cos(a) * rad, b.y + Math.sin(a) * rad, a, spd, 4.5, HEAVY_HIT);
           }
         };
         const aimed = (offs, spd) => {
           for (const off of offs) {
             const a = aim + off;
-            fireAmber(b.x + Math.cos(a) * 22, b.y + Math.sin(a) * 22, a, spd, 4.2);
+            fireAmber(b.x + Math.cos(a) * 22, b.y + Math.sin(a) * 22, a, spd, 4.2, HEAVY_HIT);
           }
         };
         const cross = () => {
           for (let q = 0; q < 4; q++) {
             const a = q * (Math.PI / 2) + ((b.atk || 0) % 2 === 0 ? 0 : Math.PI / 4);
             for (let k = 0; k < 3; k++) {
-              fireAmber(b.x + Math.cos(a) * 18, b.y + Math.sin(a) * 18, a, 150 + k * 42, 4.2);
+              fireAmber(b.x + Math.cos(a) * 18, b.y + Math.sin(a) * 18, a, 150 + k * 42, 4.2, HEAVY_HIT);
             }
           }
         };
@@ -1382,7 +1409,7 @@ export function createGame(canvas, input) {
           const dir = b.spinDir || 1;
           for (let i = 0; i < 14; i++) {
             const a = t * 1.4 + i * 0.45 * dir;
-            fireAmber(b.x + Math.cos(a) * 20, b.y + Math.sin(a) * 20, a, 158 + (i % 3) * 14, 4);
+            fireAmber(b.x + Math.cos(a) * 20, b.y + Math.sin(a) * 20, a, 158 + (i % 3) * 14, 4, HEAVY_HIT);
           }
           b.spinDir = -dir;
         };
@@ -1496,7 +1523,7 @@ export function createGame(canvas, input) {
       if (hits(s, p)) {
         s.life = 0;
         if (p.iframes > 0 || (world.readyT || 0) > 0) continue;
-        hurtPlayer();
+        hurtPlayer({ dmg: s.dmg || 1 });
       }
     }
     world.eShots = world.eShots.filter((s) => s.life > 0 && inArena(s, 16));
@@ -1745,6 +1772,7 @@ export function createGame(canvas, input) {
         if (world.gear.static) gear.push("FIELD");
         if (world.gear.recall) gear.push("RECALL");
         if (world.gear.wind) gear.push("WIND");
+        if (world.gear.locker) gear.push("LOCKER");
         if (world.gear.hpUp) gear.push(`HP+${world.gear.hpUp}`);
         ctx.save();
         ctx.beginPath();
@@ -2057,14 +2085,14 @@ export function createGame(canvas, input) {
         ctx.fillText(title, x + 8, y + 16);
         ctx.fillStyle = "#9aa";
         ctx.font = "9px Courier New, monospace";
-        ctx.fillText(item.blurb, x + 8, y + 34);
+        ctx.fillText(item.id === "1up" ? lifeBlurb(world.gear) : item.blurb, x + 8, y + 34);
         ctx.fillStyle = st.can ? "#e8b44a" : st.eq || st.owned || st.maxed ? "#667" : "#844";
         ctx.font = "bold 11px Courier New, monospace";
-        const sold = st.owned && c === 2 && (item.id === "1up" || item.id === "1up2");
+        const sold = item.id === "1up" && st.maxed;
         let tag = `${st.price != null ? st.price : item.price} TKN`;
         if (st.eq) tag = "EQUIPPED";
-        else if (st.maxed) tag = "MAXED";
         else if (sold) tag = "SOLD OUT";
+        else if (st.maxed) tag = "MAXED";
         else if (st.owned && !isStat(item)) tag = "OWNED";
         ctx.fillText(tag, x + 8, y + 62);
       }

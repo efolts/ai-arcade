@@ -43,9 +43,10 @@ const CRT_WALK_SRC = {
 const tesWalkSrc = load(tesWalkUrl);
 const walks = { base: null, armor: null, weapon: null, full: null };
 let tesWalk = null;
-/** Intended sheet rows: DOWN, LEFT, RIGHT, UP. Tessera cook re-checks pixels. */
+/** Tessera sheet rows: DOWN, LEFT, RIGHT, UP (visor cook may still swap). */
 const WALK_DIRS = ["down", "left", "right", "up"];
-const WALK_SWAP_LR = false;
+/** CRT walk sheets on disk: DOWN, RIGHT, LEFT, UP. Do not cyan-guess L/R. */
+const CRT_WALK_DIRS = ["down", "right", "left", "up"];
 const CRT_DRAW_H = 56;
 const TES_DRAW_H = 56;
 
@@ -321,8 +322,9 @@ function cookWalkSheet(img, targetCap, kind) {
   const fh = Math.floor(img.naturalHeight / rows);
   if (fw < 8 || fh < 8) return null;
   const raw = { down: [], left: [], right: [], up: [] };
+  const rowDirs = kind === "tessera" ? WALK_DIRS : CRT_WALK_DIRS;
   for (let r = 0; r < rows; r++) {
-    const dir = WALK_DIRS[r];
+    const dir = rowDirs[r];
     for (let c = 0; c < cols; c++) {
       raw[dir].push(keyMagentaOnly(img, c * fw, r * fh, fw, fh));
     }
@@ -339,17 +341,6 @@ function cookWalkSheet(img, targetCap, kind) {
       const tmp = raw.down;
       raw.down = raw.up;
       raw.up = tmp;
-    }
-  } else {
-    const leftSign = profileFaceSign(raw.left[0]);
-    const rightSign = profileFaceSign(raw.right[0]);
-    let swap = WALK_SWAP_LR;
-    if (leftSign > 0 && rightSign < 0) swap = true;
-    if (leftSign < 0 && rightSign > 0) swap = false;
-    if (swap) {
-      const tmp = raw.left;
-      raw.left = raw.right;
-      raw.right = tmp;
     }
   }
   let bestH = 0;

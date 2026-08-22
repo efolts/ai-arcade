@@ -1,5 +1,11 @@
 export const LEVEL_CAP = 30;
-export const BASE_MAX_HP = 3;
+export const BASE_MAX_HP = 12;
+export const LIVES_START = 2;
+export const LIVES_CAP = 4;
+export const LIVES_CAP_LOCKER = 5;
+export const HEALTH_HEAL = 4;
+export const LIFE_PRICE = 50;
+export const HEAVY_HIT = 3;
 
 /** 29 steps (LV1→30). 1–10 stay close to the old curve; 11–30 ramp so they stay earned. */
 const XP_STEPS = [
@@ -19,10 +25,10 @@ export const XP_FOR = {
 
 export const ARMOR = [
   { tier: 1, id: "vest", name: "VEST", blurb: "+2 MAX HP", price: 15, hp: 2, red: 0, pass: 1 },
-  { tier: 2, id: "riot", name: "RIOT COAT", blurb: "+4 MAX HP  •  15% CONTACT RED", price: 35, hp: 4, red: 0.15, pass: 1 },
-  { tier: 3, id: "plating", name: "SIGNAL PLATING", blurb: "+6 MAX HP  •  25% CONTACT RED", price: 60, hp: 6, red: 0.25, pass: 1 },
-  { tier: 4, id: "carbon", name: "CARBON TRENCH", blurb: "+8 MAX HP  •  30% CONTACT RED", price: 80, hp: 8, red: 0.3, pass: 2 },
-  { tier: 5, id: "mesh", name: "DIRECTORY MESH", blurb: "+10 MAX HP  •  40% CONTACT RED", price: 130, hp: 10, red: 0.4, pass: 2 },
+  { tier: 2, id: "riot", name: "RIOT COAT", blurb: "+3 MAX HP  •  15% CONTACT RED", price: 35, hp: 3, red: 0.15, pass: 1 },
+  { tier: 3, id: "plating", name: "SIGNAL PLATING", blurb: "+4 MAX HP  •  25% CONTACT RED", price: 60, hp: 4, red: 0.25, pass: 1 },
+  { tier: 4, id: "carbon", name: "CARBON TRENCH", blurb: "+4 MAX HP  •  30% CONTACT RED", price: 80, hp: 4, red: 0.3, pass: 2 },
+  { tier: 5, id: "mesh", name: "DIRECTORY MESH", blurb: "+6 MAX HP  •  40% CONTACT RED", price: 130, hp: 6, red: 0.4, pass: 2 },
 ];
 
 export const WEAPONS = [
@@ -33,14 +39,23 @@ export const WEAPONS = [
   { tier: 5, id: "loop", name: "LOOP CANNON", blurb: "DAMAGE + RANGE", price: 130, pass: 2 },
 ];
 
+export const EXTRA_LIFE = {
+  id: "1up",
+  name: "EXTRA LIFE",
+  blurb: "+1 LIFE  •  50 TKN  •  CAP 4",
+  price: LIFE_PRICE,
+  pass: 1,
+};
+
 export const CHARACTER = [
   { id: "sneakers", name: "COURT SNEAKERS", blurb: "MOVE SPEED UP", price: 12, pass: 1 },
-  { id: "1up", name: "EXTRA LIFE", blurb: "+1 LIFE  (MAX +2)", price: 25, pass: 1 },
+  EXTRA_LIFE,
   { id: "signal", name: "BRIGHTER SIGNAL", blurb: "XP +20%", price: 40, pass: 1 },
 ];
 
 export const CHARACTER2 = [
-  { id: "1up2", name: "EXTRA LIFE", blurb: "+1 LIFE  (MAX +2 THIS PASS)", price: 40, pass: 2 },
+  EXTRA_LIFE,
+  { id: "locker", name: "LIFE LOCKER", blurb: "SPARE CRATE  •  LIVES CAP 5", price: 140, pass: 2 },
   { id: "dash", name: "SIGNAL DASH", blurb: "I-FRAME DASH  •  SHIFT / LB", price: 70, pass: 2 },
   { id: "static", name: "STATIC FIELD", blurb: "PULSE NEARBY BOTS  •  Q / RB", price: 85, pass: 2 },
   { id: "recall", name: "REMOTE RECALL", blurb: "MAGNET TOKENS  •  F / X", price: 65, pass: 2 },
@@ -49,7 +64,7 @@ export const CHARACTER2 = [
 
 /** Repeatable token sinks. Rank costs rise; soft-capped. */
 export const STATS = [
-  { id: "hp+", rankKey: "hpUp", name: "MAX HP", blurb: "+1 MAX HP / RANK", prices: [22, 38, 58, 85, 120], max: 5 },
+  { id: "hp+", rankKey: "hpUp", name: "MAX HP", blurb: "+1 MAX HP / RANK", prices: [22, 38, 58, 85], max: 4 },
   { id: "move+", rankKey: "moveUp", name: "COURT GREASE", blurb: "MOVE +6% / RANK", prices: [18, 32, 50, 75], max: 4 },
   { id: "rate+", rankKey: "rateUp", name: "SYNC RATE", blurb: "FIRE RATE +6% / RANK", prices: [24, 40, 62, 90], max: 4 },
   { id: "luck+", rankKey: "luckUp", name: "TOKEN FIND", blurb: "RICHER TKN DROPS", prices: [16, 28, 44, 70], max: 4 },
@@ -62,6 +77,7 @@ export function emptyGear() {
     sneakers: false,
     extraLives: 0,
     passLives: 0,
+    locker: false,
     signal: false,
     dash: false,
     static: false,
@@ -103,9 +119,21 @@ export function shopCols(pass, gear) {
   const weapons = WEAPONS.filter((w) => w.pass === (p >= 2 ? 2 : 1));
   let character = p >= 2 ? CHARACTER2.slice() : CHARACTER.slice();
   if (p >= 2 && !g.sneakers) {
-    character = [CHARACTER2[0], CHARACTER2[1], CHARACTER[0], CHARACTER2[2], CHARACTER2[3]];
+    character = [CHARACTER2[0], CHARACTER2[1], CHARACTER[0], CHARACTER2[2], CHARACTER2[3], CHARACTER2[4]];
   }
   return [armor, weapons, character, STATS.slice()];
+}
+
+export function livesCap(gear) {
+  return gear && gear.locker ? LIVES_CAP_LOCKER : LIVES_CAP;
+}
+
+export function clampLives(n, gear) {
+  return Math.max(0, Math.min(livesCap(gear), n | 0));
+}
+
+export function lifeBlurb(gear) {
+  return `+1 LIFE  •  ${LIFE_PRICE} TKN  •  CAP ${livesCap(gear)}`;
 }
 
 export function xpToNext(level) {
@@ -126,11 +154,11 @@ export function addXp(prog, raw) {
   return { gained, ups };
 }
 
-/** HP from levels: +1 through LV10 (loop 1 unchanged), then +1 every 2 levels so LV30 is not 32 base HP. */
+/** Modest HP from levels on the 12-point scale so LV30 + mesh is not a 40 sponge. */
 export function levelHpBonus(level) {
   const lv = Math.max(1, level || 1);
-  if (lv <= 10) return lv - 1;
-  return 9 + Math.floor((lv - 10) / 2);
+  if (lv <= 10) return Math.floor((lv - 1) / 4);
+  return 2 + Math.floor((lv - 10) / 5);
 }
 
 /** Soften post-10 so LV30 is not 3× LV10; pass still adds a hard step. */
@@ -190,13 +218,14 @@ export function roomPrimary(roomId) {
   return "grunt";
 }
 
-/** 70% 1–3 tokens (pass 2+ +1), 15% nothing, 10% health, 5% 1UP. Luck ranks fatten tokens. */
+/** Tokens first, then HP. 1UP is rare (~1.2%). Luck ranks fatten tokens. */
 export function rollDrop(pass = 1, luck = 0) {
   const r = Math.random();
   const tokenP = Math.min(0.86, 0.7 + luck * 0.04);
+  const lifeP = 0.012;
   if (r < tokenP) return { kind: "token", n: 1 + ((Math.random() * 3) | 0) + (pass >= 2 ? 1 : 0) + (luck >= 3 ? 1 : 0) };
   if (r < tokenP + 0.15) return null;
-  if (r < tokenP + 0.25) return { kind: "health", n: 1 };
+  if (r < 1 - lifeP) return { kind: "health", n: HEALTH_HEAL };
   return { kind: "life", n: 1 };
 }
 
