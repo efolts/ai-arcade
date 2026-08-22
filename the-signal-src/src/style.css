@@ -593,6 +593,7 @@ html, body {
   height: 100%;
   overflow: visible;
   opacity: 0;
+  pointer-events: none;
 }
 #aim.on { opacity: 1; }
 #aim path {
@@ -642,7 +643,7 @@ html, body {
   opacity: 0;
 }
 .turn-banner.tess { border-color: var(--amber); color: var(--amber); }
-.turn-banner.show { animation: bannerIn 720ms ease; }
+.turn-banner.show { animation: bannerIn 900ms ease forwards; }
 
 .aim-hint {
   position: absolute;
@@ -658,13 +659,22 @@ html, body {
   opacity: 0.85;
 }
 
-/* Result */
+/* Result — never let [hidden] lose to display:flex (that dimmed + blocked the first turn). */
 #result-screen {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   background: rgba(5,6,8,0.78);
   z-index: 50;
+  pointer-events: none;
+}
+#result-screen.is-open {
+  display: flex;
+  pointer-events: auto;
+}
+#result-screen[hidden] {
+  display: none !important;
+  pointer-events: none !important;
 }
 .result-card {
   width: min(420px, 90%);
@@ -785,8 +795,8 @@ html, body {
 }
 @keyframes bannerIn {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-  18% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  78% { opacity: 1; }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  70% { opacity: 1; }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.02); }
 }
 

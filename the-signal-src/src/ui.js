@@ -59,6 +59,40 @@ const ui = {
   pointer: { x: 0, y: 0 },
 };
 
+let busyTimer = null;
+
+function setBusy(on) {
+  ui.busy = !!on;
+  if (busyTimer) {
+    clearTimeout(busyTimer);
+    busyTimer = null;
+  }
+  if (ui.busy) {
+    busyTimer = setTimeout(() => {
+      if (ui.busy) forceUnlock("busy > 8s");
+    }, 8000);
+  }
+}
+
+function forceUnlock(reason) {
+  console.warn("[THE SIGNAL] force-unlock:", reason || "busy timeout");
+  ui.busy = false;
+  if (busyTimer) {
+    clearTimeout(busyTimer);
+    busyTimer = null;
+  }
+  cancelSelect();
+  document.querySelectorAll(".card, .minion").forEach((n) => {
+    if (n.style.visibility === "hidden") n.style.visibility = "";
+  });
+  const banner = $id("turn-banner");
+  if (banner) banner.classList.remove("show");
+  const fx = $id("fx-layer");
+  if (fx) fx.querySelectorAll(".fx-clone").forEach((n) => n.remove());
+  hideAim();
+  if (ui.state && ui.state.screen === "play") sync();
+}
+
 function seedFromUrl() {
   const n = Number(new URLSearchParams(location.search).get("seed"));
   return Number.isFinite(n) && n > 0 ? n : undefined;
@@ -243,8 +277,11 @@ async function flashBanner(text, faction) {
   if (!b) return;
   b.textContent = text;
   b.className = `turn-banner show ${faction === "tessera" ? "tess" : ""}`;
-  await wait(dur(720));
-  b.classList.remove("show");
+  try {
+    await wait(dur(900));
+  } finally {
+    b.classList.remove("show");
+  }
 }
 
 function setHint(text) {
@@ -315,57 +352,65 @@ function makeGhostFromHand(card, fromEl, fromR) {
 }
 
 async function resolveAnimated(who, kind, apply, meta = {}) {
-  ui.busy = true;
   const keepBusy = !!meta.keepBusy;
+  setBusy(true);
   syncChrome();
   const fromEl = meta.fromEl;
   const fromR = rectOf(fromEl) || meta.fromR;
   const toR = meta.toR;
   if (fromEl && who === PLAYER) fromEl.style.visibility = "hidden";
+  let result = { ok: false };
+  try {
+    result = apply();
+    const events = drainFx(ui.state);
+    if (!result || !result.ok) {
+      if (fromEl) fromEl.style.visibility = "";
+      return result;
+    }
 
-  const result = apply();
-  const events = drainFx(ui.state);
-  if (!result || !result.ok) {
+    if (kind === "unit" || kind === "signal" || kind === "relic") {
+      const ghost =
+        who === PLAYER
+          ? makeGhostFromHand(meta.card || result.card, fromEl, fromR)
+          : (() => {
+              const g = cardBack("tessera", "large fx-clone");
+              placeFixed(g, fromR || fallbackRect(AI));
+              return g;
+            })();
+      await flyArc(ghost, toR || tableCenterRect(), { duration: kind === "signal" ? 380 : 440 });
+      if (kind === "signal" && meta.targetEl) impactFlash(meta.targetEl, who === PLAYER ? "crt" : "tessera");
+      ghost.remove();
+      sfx(kind === "relic" ? "equip" : "play");
+    } else if (kind === "attack") {
+      await lurchToward(fromEl, toR);
+      impactFlash(meta.targetEl, who === PLAYER ? "crt" : "tessera");
+      sfx("attack");
+    } else if (kind === "power") {
+      pulseEl(meta.powerEl, "press");
+      pulseEl(meta.heroEl, "power-pulse");
+      sfx("power");
+      await wait(dur(160));
+    }
+
+    await runEventAnims(events);
+    cancelSelect();
+    sync();
+    if (ui.state.winner) {
+      fanfare();
+      syncResult();
+    }
+    return result;
+  } catch (err) {
+    console.warn("[THE SIGNAL] animation error", err);
     if (fromEl) fromEl.style.visibility = "";
-    ui.busy = false;
+    cancelSelect();
     sync();
     return result;
+  } finally {
+    if (!keepBusy || ui.state?.winner) setBusy(false);
+    else setBusy(true);
+    syncChrome();
   }
-
-  if (kind === "unit" || kind === "signal" || kind === "relic") {
-    const ghost =
-      who === PLAYER
-        ? makeGhostFromHand(meta.card || result.card, fromEl, fromR)
-        : (() => {
-            const g = cardBack("tessera", "large fx-clone");
-            placeFixed(g, fromR || fallbackRect(AI));
-            return g;
-          })();
-    await flyArc(ghost, toR || tableCenterRect(), { duration: kind === "signal" ? 380 : 440 });
-    if (kind === "signal" && meta.targetEl) impactFlash(meta.targetEl, who === PLAYER ? "crt" : "tessera");
-    ghost.remove();
-    sfx(kind === "relic" ? "equip" : "play");
-  } else if (kind === "attack") {
-    await lurchToward(fromEl, toR);
-    impactFlash(meta.targetEl, who === PLAYER ? "crt" : "tessera");
-    sfx("attack");
-  } else if (kind === "power") {
-    pulseEl(meta.powerEl, "press");
-    pulseEl(meta.heroEl, "power-pulse");
-    sfx("power");
-    await wait(dur(160));
-  }
-
-  await runEventAnims(events);
-  cancelSelect();
-  sync();
-  if (!keepBusy) ui.busy = false;
-  syncChrome();
-  if (ui.state.winner) {
-    fanfare();
-    syncResult();
-  }
-  return result;
 }
 
 function clickCard(card) {
@@ -480,47 +525,58 @@ async function playerEndTurn() {
   if (ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
   cancelSelect();
   sfx("end");
-  ui.busy = true;
+  setBusy(true);
   syncChrome();
-  endTurn(ui.state, PLAYER);
-  const ev = drainFx(ui.state);
-  await flashBanner("TESSERA TURN", "tessera");
-  await animateDraw(AI, ev);
-  sync();
-  await runAi();
+  try {
+    endTurn(ui.state, PLAYER);
+    const ev = drainFx(ui.state);
+    await flashBanner("TESSERA TURN", "tessera");
+    await animateDraw(AI, ev);
+    sync();
+    await runAi();
+  } catch (err) {
+    console.warn("[THE SIGNAL] end-turn error", err);
+    forceUnlock("end-turn error");
+  }
 }
 
 async function runAi() {
-  if (ui.state.winner) {
-    ui.busy = false;
-    sync();
-    fanfare();
-    syncResult();
-    return;
-  }
-  ui.busy = true;
+  setBusy(true);
   syncChrome();
-  await wait(dur(220));
-  let steps = 0;
-  while (!ui.state.winner && ui.state.turn === AI && steps < 28) {
-    const action = pickAiAction(ui.state);
-    if (!action || action.type === "end") break;
-    await performAi(action);
-    steps += 1;
-    await wait(dur(160));
-  }
-  if (!ui.state.winner && ui.state.turn === AI) {
-    endTurn(ui.state, AI);
-    const ev = drainFx(ui.state);
-    await flashBanner("YOUR TURN", "crt");
-    await animateDraw(PLAYER, ev);
-    pulseMana(PLAYER);
-  }
-  ui.busy = false;
-  sync();
-  if (ui.state.winner) {
-    fanfare();
-    syncResult();
+  try {
+    if (ui.state.winner) {
+      fanfare();
+      syncResult();
+      return;
+    }
+    await wait(dur(220));
+    let steps = 0;
+    while (!ui.state.winner && ui.state.turn === AI && steps < 28) {
+      const action = pickAiAction(ui.state);
+      if (!action || action.type === "end") break;
+      await performAi(action);
+      steps += 1;
+      await wait(dur(160));
+    }
+    if (!ui.state.winner && ui.state.turn === AI) {
+      endTurn(ui.state, AI);
+      const ev = drainFx(ui.state);
+      await flashBanner("YOUR TURN", "crt");
+      await animateDraw(PLAYER, ev);
+      pulseMana(PLAYER);
+    }
+    sync();
+    if (ui.state.winner) {
+      fanfare();
+      syncResult();
+    }
+  } catch (err) {
+    console.warn("[THE SIGNAL] AI turn error", err);
+    forceUnlock("AI turn error");
+  } finally {
+    setBusy(false);
+    cancelSelect();
+    sync();
   }
 }
 
@@ -581,8 +637,9 @@ function fanfare() {
 function playAgain() {
   ui.state = createMatch({ seed: seedFromUrl() });
   startMatch(ui.state);
+  drainFx(ui.state);
   cancelSelect();
-  ui.busy = false;
+  setBusy(false);
   buildPlay();
   sync();
   flashBanner("YOUR TURN", "crt");
@@ -652,7 +709,7 @@ function buildPlay() {
     </div>
     <div class="turn-banner" id="turn-banner"></div>
     <div class="aim-hint" id="aim-hint" hidden></div>
-    <div id="result-screen" class="screen" hidden></div>
+    <div id="result-screen" class="screen" hidden aria-hidden="true"></div>
   `;
   const elane = screen.querySelector("#enemy-lane");
   const plane = screen.querySelector("#player-lane");
@@ -849,13 +906,18 @@ function syncHand() {
 
 function syncResult() {
   const overlay = $id("result-screen");
-  if (!overlay || !ui.state.winner) {
-    if (overlay) overlay.hidden = true;
+  if (!overlay) return;
+  if (!ui.state?.winner) {
+    overlay.hidden = true;
+    overlay.classList.remove("is-open", "win", "lose", "draw");
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.innerHTML = "";
     return;
   }
   const s = ui.state;
   overlay.hidden = false;
-  overlay.className = `screen ${s.winner === PLAYER ? "win" : s.winner === AI ? "lose" : "draw"}`;
+  overlay.setAttribute("aria-hidden", "false");
+  overlay.className = `screen is-open ${s.winner === PLAYER ? "win" : s.winner === AI ? "lose" : "draw"}`;
   const title = s.winner === PLAYER ? "SIGNAL LOCKED" : s.winner === AI ? "SIGNAL LOST" : "DEAD AIR";
   const blurb =
     s.winner === PLAYER
