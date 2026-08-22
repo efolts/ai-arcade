@@ -150,7 +150,7 @@ function cardArtUrl(card) {
 
 function emphasize(text) {
   return String(text || "")
-    .replace(/\b(Boot|Rush|Static|Mesh|Shatter|SIGNAL|Signal)\b/g, '<span class="kw-word">$1</span>')
+    .replace(/\b(Boot|Rush|Static|Mesh|Shatter|SIGNAL)\b/g, '<span class="kw-word">$1</span>')
     .replace(/\b(Boot:)/g, '<span class="kw-word">$1</span>');
 }
 
@@ -248,7 +248,7 @@ function crystalsHtml(side, who, pulse) {
     else if (i < side.maxMana) cls = "crystal empty";
     bits.push(`<i class="${cls}"></i>`);
   }
-  return `<div class="mana-row">${bits.join("")}<span class="mana-count">${side.mana}/${side.maxMana} SIGNAL</span></div>`;
+  return `<div class="mana-row">${bits.join("")}<span class="mana-count">${side.mana}/${side.maxMana}</span></div>`;
 }
 
 function cancelSelect() {
@@ -635,7 +635,7 @@ async function playerEndTurn() {
   try {
     endTurn(ui.state, PLAYER);
     const ev = drainFx(ui.state);
-    await flashBanner(`${ui.state.ai.hero.name.toUpperCase()} SIGNAL`, factionOf(AI));
+    await flashBanner(`${ui.state.ai.hero.name.toUpperCase()} TURN`, factionOf(AI));
     await animateDraw(AI, ev);
     sync();
     await runAi();
@@ -666,7 +666,7 @@ async function runAi() {
     if (!ui.state.winner && ui.state.turn === AI) {
       endTurn(ui.state, AI);
       const ev = drainFx(ui.state);
-      await flashBanner("YOUR SIGNAL", factionOf(PLAYER));
+      await flashBanner("YOUR TURN", factionOf(PLAYER));
       await animateDraw(PLAYER, ev);
       pulseMana(PLAYER);
     }
@@ -789,15 +789,14 @@ function openRules() {
     <div class="rules-card" role="dialog" aria-labelledby="rules-title">
       <button class="rules-close" type="button" aria-label="Close rules">×</button>
       <h2 id="rules-title">RULES</h2>
-      <p class="rules-lead">CRT Head and Tessera Bot fight for the mall's last broadcast.</p>
       <ul>
         <li><b>Goal</b> — Reduce the enemy hero to 0 HP.</li>
-        <li><b>Signal</b> — 1 → 10. Spend it to play Units, Signals, and Relics.</li>
+        <li><b>Mana</b> — 1 → 10. Spend it to play Units, Signals, and Relics.</li>
         <li><b>Units</b> — Attack once after summon-sick, unless they have <b>Rush</b>.</li>
         <li><b>Static</b> — Must be attacked before the enemy hero. That's the halo.</li>
         <li><b>Mesh</b> — Blocks one hit.</li>
         <li><b>Boot</b> — Fires on play. <b>Shatter</b> — fires on death.</li>
-        <li><b>Hero powers</b> — CRT Head <b>Remote</b> (2 Signal, deal 2). Tessera Bot <b>Deploy</b> (2 Signal, 1/1 Grunt).</li>
+        <li><b>Hero powers</b> — CRT Head <b>Remote</b> (2 mana, deal 2). Tessera Bot <b>Deploy</b> (2 mana, 1/1 Grunt).</li>
         <li><b>Mulligan</b> — Swap up to 2 opening cards.</li>
         <li><b>Controls</b> — Click to play or attack. E end turn. Esc cancel. M mute.</li>
       </ul>
@@ -830,7 +829,7 @@ function paintTitle() {
   screen.innerHTML = `
     <div class="title-copy">
       <h1>THE SIGNAL</h1>
-      <div class="tag">Fight for the mall's last broadcast.</div>
+      <div class="tag">Arcade card battler</div>
       <button class="play-btn" type="button">Play — press Enter</button>
       <div class="controls-line">Click cards · click a target if needed · E end turn · Esc cancel · M mute</div>
     </div>
@@ -860,8 +859,8 @@ function paintFaction() {
   screen.innerHTML = `
     <div class="faction-copy">
       <div class="faction-kicker">THE SIGNAL</div>
-      <h1>CHOOSE YOUR FREQUENCY</h1>
-      <p>CRT Head vs Tessera Bot — control the airwaves.</p>
+      <h1>CHOOSE YOUR SIGNAL</h1>
+      <p>Pick a hero. The other side is the Directory.</p>
       <div class="faction-picks">
         <button class="faction-pick crt" type="button" data-faction="crt">
           <img alt="CRT Head" src="${crtArt}" />
@@ -955,7 +954,7 @@ async function finishMulligan() {
   sync();
   try {
     await animateDraw(PLAYER, ev);
-    await flashBanner("YOUR SIGNAL", factionOf(PLAYER));
+    await flashBanner("YOUR TURN", factionOf(PLAYER));
     pulseMana(PLAYER);
   } finally {
     setBusy(false);
@@ -1084,7 +1083,7 @@ function renderHeroStrip(id, who) {
   power.type = "button";
   power.id = who === PLAYER ? "power-player" : "power-ai";
   power.className = `power-btn ${who} ${faction}`;
-  power.innerHTML = `${side.hero.powerName}<br><span class="hint">${side.hero.powerCost} SIGNAL</span>`;
+  power.innerHTML = `${side.hero.powerName}<br><span class="hint">${side.hero.powerCost} mana</span>`;
   if (who === PLAYER) power.addEventListener("click", clickPower);
 
   const deck = document.createElement("div");
@@ -1272,13 +1271,13 @@ function syncResult() {
   const playerFac = factionOf(PLAYER);
   const winnerFac = s.winner === PLAYER ? playerFac : s.winner === AI ? factionOf(AI) : "draw";
   overlay.className = `screen is-open ${s.winner === PLAYER ? "win" : s.winner === AI ? "lose" : "draw"} ${winnerFac}`;
-  const title = s.winner === PLAYER ? "SIGNAL SECURED" : s.winner === AI ? "SIGNAL LOST" : "DEAD AIR";
+  const title = s.winner === PLAYER ? "SIGNAL LOCKED" : s.winner === AI ? "SIGNAL LOST" : "DEAD AIR";
   const blurb =
     s.winner === PLAYER
-      ? `${s.player.hero.name} holds the last broadcast. ${s.ai.hero.name} goes dark.`
+      ? `${s.player.hero.name} holds the food court. ${s.ai.hero.name} goes dark.`
       : s.winner === AI
-        ? `${s.ai.hero.name} takes the airwaves.`
-        : "Both signals drop. The fountain keeps running.";
+        ? `${s.ai.hero.name} writes over the broadcast.`
+        : "Both heroes drop. The fountain keeps running.";
   const img = s.winner === AI ? heroArtFor(factionOf(AI)) : heroArtFor(playerFac);
   overlay.innerHTML = `
     <div class="result-card">

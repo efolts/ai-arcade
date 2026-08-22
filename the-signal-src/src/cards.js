@@ -138,7 +138,7 @@ export const CATALOG = {
     atk: 2,
     hp: 1,
     boot: { kind: FX.MANA, n: 1 },
-    text: "Boot: gain 1 Signal this turn.",
+    text: "Boot: gain 1 mana this turn.",
     plate: "clerk",
   }),
   antenna_kid: unit({
@@ -524,7 +524,7 @@ export const CATALOG = {
     cost: 0,
     faction: FACTION.TESSERA,
     effect: { kind: FX.MANA, n: 1 },
-    text: "SIGNAL: gain 1 Signal this turn.",
+    text: "SIGNAL: gain 1 mana this turn.",
     token: true,
     plate: "coin",
   }),
