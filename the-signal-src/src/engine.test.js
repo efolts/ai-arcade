@@ -16,6 +16,8 @@ import {
   endTurn,
   playCard,
   startMatch,
+  dealOpening,
+  confirmMulligan,
   useHeroPower,
   instantiate,
   resetIds,
@@ -142,6 +144,56 @@ describe("match setup", () => {
     assert.equal(s.player.mana, 1);
     assert.equal(s.player.maxMana, 1);
     assert.equal(s.turn, PLAYER);
+  });
+});
+
+describe("mulligan", () => {
+  it("replaces selected cards from the top and parks the old ones on the bottom", () => {
+    const s = createMatch({ seed: 7 });
+    dealOpening(s);
+    assert.equal(s.player.hand.length, 3);
+    assert.equal(s.player.hand.some((c) => c.defId === "coin"), false);
+    const incoming = s.player.deck.slice(0, 2).map((c) => c.uid);
+    const [a, b, kept] = s.player.hand;
+    const res = confirmMulligan(s, [a.uid, b.uid]);
+    assert.equal(res.ok, true);
+    assert.deepEqual(res.replaced, [a.uid, b.uid]);
+    assert.equal(s.player.hand.length, 3);
+    assert.equal(s.player.hand[0].uid, incoming[0]);
+    assert.equal(s.player.hand[1].uid, incoming[1]);
+    assert.equal(s.player.hand[2].uid, kept.uid);
+    assert.equal(s.player.deck.at(-2).uid, a.uid);
+    assert.equal(s.player.deck.at(-1).uid, b.uid);
+    assert.equal(s.player.deck[0].uid === a.uid, false);
+    assert.equal(s.player.hand.some((c) => c.uid === a.uid), false);
+  });
+
+  it("caps at two swaps and does not touch Coin", () => {
+    const s = createMatch({ seed: 3, playerGoesSecond: true });
+    dealOpening(s);
+    assert.equal(s.player.hand.length, 4);
+    assert.equal(s.ai.hand.some((c) => c.defId === "coin"), false);
+    const uids = s.player.hand.map((c) => c.uid);
+    const incoming = s.player.deck.slice(0, 2).map((c) => c.uid);
+    const kept = s.player.hand.slice(2).map((c) => c.uid);
+    confirmMulligan(s, uids);
+    assert.equal(s.player.hand.filter((c) => c.defId !== "coin").length, 4);
+    assert.equal(s.player.hand[0].uid, incoming[0]);
+    assert.equal(s.player.hand[1].uid, incoming[1]);
+    assert.equal(s.player.hand[2].uid, kept[0]);
+    assert.equal(s.player.hand[3].uid, kept[1]);
+    assert.ok(s.player.hand.some((c) => c.defId === "coin"));
+    assert.equal(confirmMulligan(s, [incoming[0]]).ok, false);
+  });
+
+  it("selecting nothing just locks the dealt hand", () => {
+    const s = createMatch({ seed: 11 });
+    dealOpening(s);
+    const before = s.player.hand.map((c) => c.uid);
+    const res = confirmMulligan(s, []);
+    assert.equal(res.ok, true);
+    assert.deepEqual(s.player.hand.map((c) => c.uid), before);
+    assert.equal(s.mulliganDone, true);
   });
 });
 

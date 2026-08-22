@@ -142,6 +142,8 @@ export function createMatch(opts = {}) {
     rng,
     pending: null,
     anim: null,
+    playerGoesSecond: !!opts.playerGoesSecond,
+    mulliganDone: false,
   };
   return state;
 }
@@ -392,15 +394,50 @@ export function beginTurn(state, who) {
 }
 
 export function dealOpening(state) {
-  for (let i = 0; i < 3; i++) drawCard(state, PLAYER, "mulligan");
-  for (let i = 0; i < 4; i++) drawCard(state, AI, "mulligan");
-  burnOrAdd(state, state.ai, instantiate("coin"), "coin");
+  const playerSecond = !!state.playerGoesSecond;
+  const playerN = playerSecond ? 4 : 3;
+  const aiN = playerSecond ? 3 : 4;
+  for (let i = 0; i < playerN; i++) drawCard(state, PLAYER, "mulligan");
+  for (let i = 0; i < aiN; i++) drawCard(state, AI, "mulligan");
+  if (!playerSecond) {
+    burnOrAdd(state, state.ai, instantiate("coin"), "coin");
+  }
+}
+
+export function confirmMulligan(state, uids = []) {
+  if (state.mulliganDone) return { ok: false, reason: "already" };
+  const picks = [];
+  for (const uid of uids || []) {
+    if (picks.length >= 2) break;
+    const card = state.player.hand.find((c) => c.uid === uid);
+    if (!card || card.defId === "coin") continue;
+    if (picks.some((c) => c.uid === uid)) continue;
+    picks.push(card);
+  }
+  for (const card of picks) {
+    const i = state.player.hand.findIndex((c) => c.uid === card.uid);
+    if (i === -1) continue;
+    state.player.hand.splice(i, 1);
+    state.player.deck.push(card);
+    if (!state.player.deck.length) continue;
+    const drawn = state.player.deck.shift();
+    state.player.hand.splice(i, 0, drawn);
+    emit(state, { type: "draw", who: PLAYER, card: drawn, burned: false, reason: "mulligan" });
+    pushLog(state, `CRT Head replaces ${card.name} with ${drawn.name}.`);
+  }
+  if (state.playerGoesSecond) {
+    burnOrAdd(state, state.player, instantiate("coin"), "coin");
+    pushLog(state, "CRT Head takes the Coin.");
+  }
+  state.mulliganDone = true;
+  return { ok: true, replaced: picks.map((c) => c.uid) };
 }
 
 export function startMatch(state) {
   state.screen = "play";
   state.winner = null;
   dealOpening(state);
+  confirmMulligan(state, []);
   beginTurn(state, PLAYER);
 }
 

@@ -12,13 +12,15 @@ import {
   canPlayCard,
   canUnitAttack,
   canUseHeroPower,
+  beginTurn,
+  confirmMulligan,
   createMatch,
+  dealOpening,
   drainFx,
   endTurn,
   legalAttackTargets,
   legalEffectTargets,
   playCard,
-  startMatch,
   useHeroPower,
 } from "./engine.js";
 import { applyAiAction, pickAiAction } from "./ai.js";
@@ -66,9 +68,14 @@ const ui = {
   mode: "idle",
   selectedCard: null,
   selectedAttacker: null,
+  mulliganPicks: [],
   busy: false,
   pointer: { x: 0, y: 0 },
 };
+
+function inMulligan() {
+  return ui.mode === "mulligan";
+}
 
 let busyTimer = null;
 
@@ -222,6 +229,10 @@ function crystalsHtml(side, who, pulse) {
 }
 
 function cancelSelect() {
+  if (ui.mode === "mulligan") {
+    hideAim();
+    return;
+  }
   ui.mode = "idle";
   ui.selectedCard = null;
   ui.selectedAttacker = null;
@@ -477,7 +488,7 @@ async function resolveAnimated(who, kind, apply, meta = {}) {
 }
 
 function clickCard(card) {
-  if (ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
+  if (inMulligan() || ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
   if (!canPlayCard(ui.state, PLAYER, card, null)) {
     sfx("click");
     return;
@@ -506,7 +517,7 @@ function clickCard(card) {
 }
 
 function clickTarget(id) {
-  if (ui.busy || ui.state.winner) return;
+  if (inMulligan() || ui.busy || ui.state.winner) return;
   if (ui.mode === "card-target" && ui.selectedCard) {
     const card = ui.selectedCard;
     const fromEl = findEl(card.uid);
@@ -542,7 +553,7 @@ function clickTarget(id) {
 }
 
 function clickFriendlyUnit(unit) {
-  if (ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
+  if (inMulligan() || ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
   const t = targetsForCurrent();
   if (t.includes(unit.uid)) {
     clickTarget(unit.uid);
@@ -558,7 +569,7 @@ function clickFriendlyUnit(unit) {
 }
 
 function clickHero(who) {
-  if (ui.busy || ui.state.winner) return;
+  if (inMulligan() || ui.busy || ui.state.winner) return;
   const id = HERO_IDS[who];
   const t = targetsForCurrent();
   if (t.includes(id)) {
@@ -575,7 +586,7 @@ function clickHero(who) {
 }
 
 function clickPower() {
-  if (ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
+  if (inMulligan() || ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
   if (!canUseHeroPower(ui.state, PLAYER)) return;
   ui.mode = "power-target";
   ui.selectedCard = null;
@@ -585,7 +596,7 @@ function clickPower() {
 }
 
 async function playerEndTurn() {
-  if (ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
+  if (inMulligan() || ui.busy || ui.state.turn !== PLAYER || ui.state.winner) return;
   cancelSelect();
   sfx("end");
   setBusy(true);
@@ -698,15 +709,7 @@ function fanfare() {
 }
 
 function playAgain() {
-  ui.state = createMatch({ seed: seedFromUrl() });
-  startMatch(ui.state);
-  drainFx(ui.state);
-  cancelSelect();
-  setBusy(false);
-  buildPlay();
-  sync();
-  flashBanner("YOUR TURN", "crt");
-  pulseMana(PLAYER);
+  beginOpening();
 }
 
 function paintTitle() {
@@ -734,14 +737,118 @@ function paintTitle() {
 
 function beginPlay() {
   sfx("click");
+  beginOpening();
+}
+
+function beginOpening() {
   ui.state = createMatch({ seed: seedFromUrl() });
-  startMatch(ui.state);
+  ui.state.screen = "play";
+  dealOpening(ui.state);
   drainFx(ui.state);
   cancelSelect();
+  ui.mode = "mulligan";
+  ui.mulliganPicks = [];
+  setBusy(false);
   buildPlay();
   sync();
-  flashBanner("YOUR TURN", "crt");
-  pulseMana(PLAYER);
+}
+
+function mulliganCards() {
+  return (ui.state?.player.hand || []).filter((c) => c.defId !== "coin");
+}
+
+function toggleMulligan(uid) {
+  if (!inMulligan()) return;
+  const card = mulliganCards().find((c) => c.uid === uid);
+  if (!card) return;
+  const i = ui.mulliganPicks.indexOf(uid);
+  if (i >= 0) {
+    ui.mulliganPicks.splice(i, 1);
+    sfx("click");
+    syncMulligan();
+    return;
+  }
+  if (ui.mulliganPicks.length >= 2) {
+    sfx("click");
+    return;
+  }
+  ui.mulliganPicks.push(uid);
+  sfx("click");
+  syncMulligan();
+}
+
+function clearMulliganPicks() {
+  if (!inMulligan()) return;
+  ui.mulliganPicks = [];
+  syncMulligan();
+}
+
+async function finishMulligan() {
+  if (!inMulligan() || !ui.state) return;
+  sfx("play");
+  const picks = ui.mulliganPicks.slice();
+  confirmMulligan(ui.state, picks);
+  drainFx(ui.state);
+  ui.mulliganPicks = [];
+  ui.mode = "idle";
+  setBusy(true);
+  beginTurn(ui.state, PLAYER);
+  const ev = drainFx(ui.state);
+  sync();
+  try {
+    await animateDraw(PLAYER, ev);
+    await flashBanner("YOUR TURN", "crt");
+    pulseMana(PLAYER);
+  } finally {
+    setBusy(false);
+    sync();
+  }
+}
+
+function syncMulligan() {
+  const overlay = $id("mulligan-screen");
+  const play = $id("play-screen");
+  if (!overlay) return;
+  if (!inMulligan() || !ui.state || ui.state.winner) {
+    overlay.hidden = true;
+    overlay.classList.remove("is-open");
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.innerHTML = "";
+    play?.classList.remove("is-mulligan");
+    return;
+  }
+  play?.classList.add("is-mulligan");
+  overlay.hidden = false;
+  overlay.setAttribute("aria-hidden", "false");
+  overlay.className = "screen is-open";
+  const picks = new Set(ui.mulliganPicks);
+  const n = picks.size;
+  const action = n ? "CONFIRM" : "KEEP";
+  overlay.innerHTML = `
+    <div class="mulligan-card">
+      <div class="mulligan-kicker">CRT Head</div>
+      <h2>OPENING SIGNAL</h2>
+      <p>Pick up to 2 to replace with the next cards on top of the deck.</p>
+      <div class="mulligan-row" id="mulligan-row"></div>
+      <div class="mulligan-meta">${n}/2 selected — Enter ${action.toLowerCase()} · Esc clear</div>
+      <button class="play-btn mulligan-go" type="button">${action}</button>
+    </div>
+  `;
+  const row = overlay.querySelector("#mulligan-row");
+  for (const card of mulliganCards()) {
+    const el = renderCard(card, {
+      playable: true,
+      selected: picks.has(card.uid),
+      onClick: () => toggleMulligan(card.uid),
+    });
+    el.classList.add("mulligan-pick");
+    el.classList.toggle("picked", picks.has(card.uid));
+    row.appendChild(el);
+  }
+  overlay.querySelector(".mulligan-go").addEventListener("click", (e) => {
+    e.stopPropagation();
+    finishMulligan();
+  });
 }
 
 function buildPlay() {
@@ -749,7 +856,7 @@ function buildPlay() {
   root.innerHTML = "";
   const screen = document.createElement("div");
   screen.id = "play-screen";
-  screen.className = "screen";
+  screen.className = `screen${inMulligan() ? " is-mulligan" : ""}`;
   screen.style.setProperty("--table", `url('${titleArt}')`);
   screen.style.setProperty("--matrix", `url('${matrixArt}')`);
   screen.innerHTML = `
@@ -773,6 +880,7 @@ function buildPlay() {
     </div>
     <div class="turn-banner" id="turn-banner"></div>
     <div class="aim-hint" id="aim-hint" hidden></div>
+    <div id="mulligan-screen" class="screen" hidden aria-hidden="true"></div>
     <div id="result-screen" class="screen" hidden aria-hidden="true"></div>
   `;
   const elane = screen.querySelector("#enemy-lane");
@@ -837,7 +945,7 @@ function fillLane(laneId, units, who) {
   if (!lane) return;
   const slots = [...lane.querySelectorAll(".slot")];
   const tset = new Set(targetsForCurrent());
-  const playerReady = ui.state.turn === PLAYER && !ui.busy && !ui.state.winner;
+  const playerReady = ui.state.turn === PLAYER && !ui.busy && !ui.state.winner && !inMulligan();
   units.forEach((unit, i) => {
     const slot = slots[i];
     if (!slot) return;
@@ -876,7 +984,7 @@ function syncChrome() {
   const s = ui.state;
   if (!s || !$id("play-screen")) return;
   const tset = new Set(targetsForCurrent());
-  const playerReady = s.turn === PLAYER && !ui.busy && !s.winner;
+  const playerReady = s.turn === PLAYER && !ui.busy && !s.winner && !inMulligan();
 
   $id("hp-player") && ($id("hp-player").textContent = s.player.hero.hp);
   $id("hp-ai") && ($id("hp-ai").textContent = s.ai.hero.hp);
@@ -942,7 +1050,7 @@ function syncHand() {
   const s = ui.state;
   const hand = $id("player-hand");
   if (!hand) return;
-  const playerReady = s.turn === PLAYER && !ui.busy && !s.winner;
+  const playerReady = s.turn === PLAYER && !ui.busy && !s.winner && !inMulligan();
   const have = [...hand.querySelectorAll(".card")].map((c) => c.dataset.uid);
   const want = s.player.hand.map((c) => c.uid);
   if (have.join() !== want.join()) {
@@ -1012,11 +1120,12 @@ function sync() {
   fillLane("player-lane", ui.state.player.board, PLAYER);
   syncHand();
   syncChrome();
+  syncMulligan();
   syncResult();
 }
 
 function playFromHotkey(n) {
-  if (!ui.state || ui.state.turn !== PLAYER || ui.busy || ui.state.winner) return;
+  if (inMulligan() || !ui.state || ui.state.turn !== PLAYER || ui.busy || ui.state.winner) return;
   const card = ui.state.player.hand[n];
   if (card) clickCard(card);
 }
@@ -1045,8 +1154,18 @@ export function mount() {
       return;
     }
     if (k === "Escape") {
+      if (inMulligan()) {
+        e.preventDefault();
+        clearMulliganPicks();
+        return;
+      }
       cancelSelect();
       sync();
+      return;
+    }
+    if (inMulligan() && (k === "Enter" || k === " ")) {
+      e.preventDefault();
+      finishMulligan();
       return;
     }
     if (ui.state.screen === "title" && (k === "Enter" || k === " ")) {
