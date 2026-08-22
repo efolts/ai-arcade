@@ -62,25 +62,40 @@ export function cloneAt(el, r = rectOf(el)) {
 export async function flyArc(el, toRect, opts = {}) {
   if (!el || !toRect) return;
   const from = rectOf(el) || toRect;
-  const dx2 = toRect.left - from.left;
-  const dy2 = toRect.top - from.top;
-  const lift = opts.arc ?? Math.min(90, Math.abs(dx2) * 0.22 + 36);
-  const rot = opts.rotate ?? (dx2 >= 0 ? 10 : -10);
-  const sx = toRect.width / Math.max(1, from.width);
-  const sy = toRect.height / Math.max(1, from.height);
+  const fromC = centerOf(from);
+  const toC = centerOf(toRect);
+  const dx = toC.x - fromC.x;
+  const dy = toC.y - fromC.y;
+  const lift = opts.arc ?? Math.min(52, Math.abs(dx) * 0.16 + 22);
+  const rot = opts.rotate ?? (dx >= 0 ? 6 : -6);
+  const glow =
+    opts.faction === "tessera"
+      ? "drop-shadow(0 10px 16px rgba(240,180,74,0.28))"
+      : "drop-shadow(0 10px 16px rgba(61,230,255,0.28))";
+  el.classList.add(opts.faction === "tessera" ? "fx-play-tess" : "fx-play-crt");
   await el.animate(
     [
-      { transform: "translate(0,0) rotate(0deg) scale(1)", offset: 0 },
+      { transform: "translate(0,0) rotate(0deg) scale(1)", opacity: 0.96, filter: "none", offset: 0 },
       {
-        transform: `translate(${dx2 / 2}px, ${dy2 / 2 - lift}px) rotate(${rot}deg) scale(1.06)`,
-        offset: 0.45,
+        transform: `translate(${dx * 0.46}px, ${dy * 0.46 - lift}px) rotate(${rot}deg) scale(1.05)`,
+        opacity: 1,
+        filter: glow,
+        offset: 0.4,
       },
       {
-        transform: `translate(${dx2}px, ${dy2}px) rotate(0deg) scale(${sx}, ${sy})`,
+        transform: `translate(${dx}px, ${dy}px) rotate(0deg) scale(0.97)`,
+        opacity: 0.9,
+        filter: glow,
+        offset: 0.82,
+      },
+      {
+        transform: `translate(${dx}px, ${dy}px) rotate(0deg) scale(0.94)`,
+        opacity: 0,
+        filter: "none",
         offset: 1,
       },
     ],
-    { duration: dur(opts.duration ?? 420), easing: "cubic-bezier(.22,.82,.2,1)", fill: "forwards" }
+    { duration: dur(opts.duration ?? 360), easing: "cubic-bezier(.22,.82,.2,1)", fill: "forwards" }
   ).finished.catch(() => {});
 }
 

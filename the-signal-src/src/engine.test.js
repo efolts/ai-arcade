@@ -1,5 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { CRT_DECK_IDS, TESSERA_DECK_IDS, CATALOG } from "./cards.js";
 import {
   AI,
@@ -18,6 +21,24 @@ import {
   resetIds,
 } from "./engine.js";
 import { runAiTurn } from "./ai.js";
+
+describe("card art keys", () => {
+  it("gives every catalog card an art key", () => {
+    for (const [id, def] of Object.entries(CATALOG)) {
+      assert.ok(def.art, id);
+    }
+    assert.equal(CATALOG.grunt.art, "tessera-grunt");
+    assert.equal(CATALOG.tessera_grunt.art, "tessera-grunt");
+    assert.equal(CATALOG.mall_rat.art, "mall-rat");
+    const files = readdirSync(join(dirname(fileURLToPath(import.meta.url)), "art/cards"));
+    for (const def of Object.values(CATALOG)) {
+      assert.ok(
+        files.some((f) => f === `${def.art}.jpg` || f === `${def.art}.png` || f === `${def.art}.svg`),
+        `missing plate for ${def.id} (${def.art})`
+      );
+    }
+  });
+});
 
 describe("decks", () => {
   it("lists every unique from the spec", () => {
@@ -45,6 +66,69 @@ describe("decks", () => {
     assert.equal(CRT_DECK_IDS.filter((id) => id === "remote_hand").length, 2);
     assert.equal(CRT_DECK_IDS.filter((id) => id === "ironhorse").length, 2);
     assert.equal(CRT_DECK_IDS.filter((id) => id === "cyan_bolt").length, 2);
+  });
+});
+
+describe("hero labels", () => {
+  it("names the player CRT Head and the AI Tessera", () => {
+    const s = createMatch({ seed: 1 });
+    assert.equal(s.player.hero.name, "CRT Head");
+    assert.equal(s.ai.hero.name, "Tessera");
+  });
+});
+
+describe("face combat", () => {
+  it("hitting the enemy hero does not damage or remove any minions", () => {
+    const s = createMatch({ seed: 12 });
+    startMatch(s);
+    const rat = instantiate("mall_rat");
+    const intern = instantiate("krcd_intern");
+    const grunt = instantiate("grunt");
+    const elite = instantiate("elite");
+    rat.summonSick = false;
+    rat.canAttack = true;
+    rat.attacksLeft = 1;
+    intern.summonSick = false;
+    intern.canAttack = true;
+    intern.attacksLeft = 1;
+    s.player.board = [rat, intern];
+    s.ai.board = [grunt, elite];
+    const playerSnap = s.player.board.map((u) => ({ uid: u.uid, hp: u.hp, atk: u.atk }));
+    const aiSnap = s.ai.board.map((u) => ({ uid: u.uid, hp: u.hp, atk: u.atk }));
+    const hp = s.ai.hero.hp;
+    const res = attack(s, PLAYER, rat.uid, HERO_IDS[AI]);
+    assert.equal(res.ok, true);
+    assert.equal(s.ai.hero.hp, hp - rat.atk);
+    assert.equal(s.player.hero.hp, 30);
+    assert.deepEqual(
+      s.player.board.map((u) => ({ uid: u.uid, hp: u.hp, atk: u.atk })),
+      playerSnap
+    );
+    assert.deepEqual(
+      s.ai.board.map((u) => ({ uid: u.uid, hp: u.hp, atk: u.atk })),
+      aiSnap
+    );
+    const fx = drainFx(s);
+    assert.equal(fx.some((e) => e.type === "death"), false);
+    assert.equal(fx.filter((e) => e.type === "damage" && e.kind === "unit").length, 0);
+    assert.equal(fx.filter((e) => e.type === "damage" && e.kind === "hero").length, 1);
+  });
+
+  it("minion trades still deal damage both ways", () => {
+    const s = createMatch({ seed: 13 });
+    startMatch(s);
+    const rat = instantiate("mall_rat");
+    const grunt = instantiate("grunt");
+    rat.summonSick = false;
+    rat.canAttack = true;
+    rat.attacksLeft = 1;
+    s.player.board = [rat];
+    s.ai.board = [grunt];
+    const res = attack(s, PLAYER, rat.uid, grunt.uid);
+    assert.equal(res.ok, true);
+    assert.equal(s.player.board.length, 0);
+    assert.equal(s.ai.board.length, 1);
+    assert.equal(s.ai.board[0].hp, 1);
   });
 });
 

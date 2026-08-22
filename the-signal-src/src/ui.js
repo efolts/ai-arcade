@@ -2,6 +2,7 @@ import titleArt from "./art/title.jpg";
 import crtArt from "./art/hero-crt.jpg";
 import tessArt from "./art/hero-tessera.png";
 import remoteArt from "./art/card-remote-hand.jpg";
+import matrixArt from "./art/matrix-bg.jpg";
 import {
   AI,
   HERO_IDS,
@@ -47,6 +48,16 @@ const ART = {
   "hero-crt": crtArt,
   "hero-tessera": tessArt,
 };
+
+const CARD_ART = {};
+for (const [path, url] of Object.entries(
+  import.meta.glob("./art/cards/*.{png,jpg,jpeg,webp,svg}", { eager: true, import: "default" })
+)) {
+  const file = path.split("/").pop() || "";
+  const key = file.replace(/\.(png|jpe?g|webp|svg)$/i, "");
+  const isSvg = /\.svg$/i.test(file);
+  if (!CARD_ART[key] || !isSvg) CARD_ART[key] = url;
+}
 
 const stage = () => document.getElementById("stage");
 
@@ -102,9 +113,16 @@ function lastLog(state) {
   return state.log.length ? state.log[state.log.length - 1].text : "THE SIGNAL";
 }
 
+function artKey(card) {
+  if (card?.art) return card.art;
+  const raw = card?.defId || card?.id || "";
+  if (raw === "grunt" || raw === "tessera_grunt") return "tessera-grunt";
+  return String(raw).replace(/_/g, "-");
+}
+
 function cardArtUrl(card) {
-  const def = card.art || (card.defId === "remote_hand" ? "remote-hand" : null);
-  return def && ART[def] ? ART[def] : null;
+  const key = artKey(card);
+  return CARD_ART[key] || ART[key] || null;
 }
 
 function emphasize(text) {
@@ -135,7 +153,7 @@ function renderCard(card, opts = {}) {
   el.dataset.uid = card.uid;
   el.dataset.id = card.uid;
   const url = cardArtUrl(card);
-  const artInner = url ? "" : `<div class="plate plate-${card.plate || card.type}">${(card.name || "?").slice(0, 2)}</div>`;
+  const artInner = url ? "" : `<div class="plate plate-${card.plate || card.type}"><i class="glyph"></i></div>`;
   const artStyle = url ? `style="background-image:url('${url}')"` : "";
   el.innerHTML = `
     <div class="cost">${card.cost}</div>
@@ -174,7 +192,7 @@ function renderMinion(unit, opts = {}) {
   el.dataset.id = unit.uid;
   const url = cardArtUrl(unit);
   const artStyle = url ? `style="background-image:url('${url}')"` : "";
-  const artInner = url ? "" : `<div class="plate plate-${unit.plate || "unit"}">${(unit.name || "?").slice(0, 2)}</div>`;
+  const artInner = url ? "" : `<div class="plate plate-${unit.plate || "unit"}"><i class="glyph"></i></div>`;
   el.innerHTML = `
     <div class="mini-art plate-${unit.plate || "unit"}" ${artStyle}>${artInner}<div class="badges">${badgeHtml(unit)}</div></div>
     <div class="mini-name">${shortName(unit.name)}</div>
@@ -253,7 +271,16 @@ function updateAim(clientX, clientY) {
 
 function tableCenterRect() {
   const t = $id("table");
-  return rectOf(t) || { left: 400, top: 220, width: 80, height: 80 };
+  const r = rectOf(t);
+  if (!r) return { left: 400, top: 220, width: 72, height: 96 };
+  const w = 72;
+  const h = 96;
+  return {
+    left: r.left + (r.width - w) / 2,
+    top: r.top + (r.height - h) / 2,
+    width: w,
+    height: h,
+  };
 }
 
 function slotRect(who, index) {
@@ -334,7 +361,11 @@ async function animateDraw(who, events) {
   for (const _d of draws) {
     const ghost = cardBack(who === PLAYER ? "crt" : "tessera", "large fx-clone");
     placeFixed(ghost, rectOf(deck) || fallbackRect(who));
-    await flyArc(ghost, rectOf(dest) || tableCenterRect(), { duration: 340, arc: 48 });
+    await flyArc(ghost, rectOf(dest) || tableCenterRect(), {
+      duration: 320,
+      arc: 28,
+      faction: who === PLAYER ? "crt" : "tessera",
+    });
     ghost.remove();
     sfx("draw");
   }
@@ -358,7 +389,8 @@ async function resolveAnimated(who, kind, apply, meta = {}) {
   const fromEl = meta.fromEl;
   const fromR = rectOf(fromEl) || meta.fromR;
   const toR = meta.toR;
-  if (fromEl && who === PLAYER) fromEl.style.visibility = "hidden";
+  const hideSource = !!(fromEl && who === PLAYER && (kind === "unit" || kind === "signal" || kind === "relic"));
+  if (hideSource) fromEl.style.visibility = "hidden";
   let result = { ok: false };
   try {
     result = apply();
@@ -369,6 +401,7 @@ async function resolveAnimated(who, kind, apply, meta = {}) {
     }
 
     if (kind === "unit" || kind === "signal" || kind === "relic") {
+      const faction = who === PLAYER ? "crt" : "tessera";
       const ghost =
         who === PLAYER
           ? makeGhostFromHand(meta.card || result.card, fromEl, fromR)
@@ -377,8 +410,12 @@ async function resolveAnimated(who, kind, apply, meta = {}) {
               placeFixed(g, fromR || fallbackRect(AI));
               return g;
             })();
-      await flyArc(ghost, toR || tableCenterRect(), { duration: kind === "signal" ? 380 : 440 });
-      if (kind === "signal" && meta.targetEl) impactFlash(meta.targetEl, who === PLAYER ? "crt" : "tessera");
+      await flyArc(ghost, toR || tableCenterRect(), {
+        duration: kind === "signal" ? 320 : 360,
+        faction,
+        arc: 36,
+      });
+      if (kind === "signal" && meta.targetEl) impactFlash(meta.targetEl, faction);
       ghost.remove();
       sfx(kind === "relic" ? "equip" : "play");
     } else if (kind === "attack") {
@@ -393,6 +430,7 @@ async function resolveAnimated(who, kind, apply, meta = {}) {
     }
 
     await runEventAnims(events);
+    if (fromEl) fromEl.style.visibility = "";
     cancelSelect();
     sync();
     if (ui.state.winner) {
@@ -688,6 +726,7 @@ function buildPlay() {
   screen.id = "play-screen";
   screen.className = "screen";
   screen.style.setProperty("--table", `url('${titleArt}')`);
+  screen.style.setProperty("--matrix", `url('${matrixArt}')`);
   screen.innerHTML = `
     <div class="hero-strip enemy-strip" id="enemy-strip"></div>
     <div class="enemy-hand" id="enemy-hand"></div>
@@ -789,6 +828,7 @@ function fillLane(laneId, units, who) {
     };
     const existing = slot.querySelector(".minion");
     if (existing && existing.dataset.uid === unit.uid && !existing.classList.contains("dying")) {
+      existing.style.visibility = "";
       existing.className = renderMinion(unit, opts).className;
       existing.querySelector(".pip.atk").textContent = unit.atk;
       const hp = existing.querySelector(".pip.hp");
@@ -921,7 +961,7 @@ function syncResult() {
   const title = s.winner === PLAYER ? "SIGNAL LOCKED" : s.winner === AI ? "SIGNAL LOST" : "DEAD AIR";
   const blurb =
     s.winner === PLAYER
-      ? "CRT holds the food court. Tessera goes dark."
+      ? "CRT Head holds the food court. Tessera goes dark."
       : s.winner === AI
         ? "The Directory writes over the broadcast."
         : "Both heroes drop. The fountain keeps running.";

@@ -86,7 +86,7 @@ function makeHero(who) {
     return {
       id: HERO_IDS[PLAYER],
       who,
-      name: "CRT",
+      name: "CRT Head",
       hp: START_HP,
       maxHp: START_HP,
       powerName: "Remote",
@@ -213,7 +213,7 @@ function checkWinner(state) {
   if (state.player.hero.hp <= 0) {
     state.winner = AI;
     state.screen = "result";
-    pushLog(state, "CRT goes dark. Directory wins.");
+    pushLog(state, "CRT Head goes dark. Directory wins.");
   }
 }
 

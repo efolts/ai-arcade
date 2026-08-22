@@ -48,6 +48,7 @@ function unit(partial) {
     plate: "unit",
     ...partial,
     keywords: { ...(partial.keywords || {}) },
+    art: partial.art || String(partial.id || "").replace(/_/g, "-"),
   };
 }
 
@@ -64,6 +65,7 @@ function signal(partial) {
     art: null,
     plate: "signal",
     ...partial,
+    art: partial.art || String(partial.id || "").replace(/_/g, "-"),
   };
 }
 
@@ -79,6 +81,7 @@ function relic(partial) {
     art: null,
     plate: "relic",
     ...partial,
+    art: partial.art || String(partial.id || "").replace(/_/g, "-"),
   };
 }
 
@@ -204,7 +207,6 @@ export const CATALOG = {
     hp: 5,
     boot: { kind: FX.DAMAGE, n: 3, target: "choose" },
     text: "Boot: deal 3 damage.",
-    art: "hero-crt",
     plate: "lead",
   }),
   dino_mech: unit({
@@ -302,7 +304,6 @@ export const CATALOG = {
     atk: 3,
     durability: 2,
     text: "3 attack, 2 durability.",
-    art: "hero-crt",
     plate: "remotes",
   }),
   shovel: relic({
@@ -324,6 +325,7 @@ export const CATALOG = {
     atk: 1,
     hp: 2,
     text: "",
+    art: "tessera-grunt",
     plate: "grunt",
   }),
   rusher: unit({
@@ -413,7 +415,6 @@ export const CATALOG = {
     hp: 6,
     boot: { kind: FX.BUFF_ALL_FRIENDLY, atk: 1, hp: 1 },
     text: "Boot: give all friendly units +1/+1.",
-    art: "hero-tessera",
     plate: "captain",
   }),
   the_directory: unit({
@@ -426,7 +427,6 @@ export const CATALOG = {
     keywords: { static: true, mesh: true },
     shatter: { kind: FX.DAMAGE_ENEMY_HERO, n: 4 },
     text: "Static. Mesh. Shatter: deal 4 to the enemy hero.",
-    art: "hero-tessera",
     plate: "directory",
   }),
 
@@ -515,6 +515,7 @@ export const CATALOG = {
     hp: 1,
     token: true,
     text: "",
+    art: "tessera-grunt",
     plate: "grunt",
   }),
   coin: signal({
