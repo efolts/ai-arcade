@@ -72,10 +72,10 @@ describe("decks", () => {
 });
 
 describe("hero labels", () => {
-  it("names the player CRT Head and the AI Tessera", () => {
+  it("names the player CRT Head and the AI Tessera Bot", () => {
     const s = createMatch({ seed: 1 });
     assert.equal(s.player.hero.name, "CRT Head");
-    assert.equal(s.ai.hero.name, "Tessera");
+    assert.equal(s.ai.hero.name, "Tessera Bot");
   });
 });
 

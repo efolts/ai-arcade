@@ -100,7 +100,7 @@ function makeHero(who) {
   return {
     id: HERO_IDS[AI],
     who,
-    name: "Tessera",
+    name: "Tessera Bot",
     hp: START_HP,
     maxHp: START_HP,
     powerName: "Deploy",
@@ -209,7 +209,7 @@ function checkWinner(state) {
   if (state.ai.hero.hp <= 0) {
     state.winner = PLAYER;
     state.screen = "result";
-    pushLog(state, "Tessera collapses. THE SIGNAL holds.");
+    pushLog(state, "Tessera Bot collapses. THE SIGNAL holds.");
     return;
   }
   if (state.player.hero.hp <= 0) {
@@ -720,7 +720,7 @@ export function useHeroPower(state, who, targetId = null) {
   }
 
   const grunt = summonToken(state, AI, "tessera_grunt");
-  pushLog(state, grunt ? "Tessera Deploys a 1/1 Grunt." : "Deploy fizzles — board full.");
+  pushLog(state, grunt ? "Tessera Bot Deploys a 1/1 Grunt." : "Deploy fizzles — board full.");
   return { ok: true, type: "power" };
 }
 

@@ -3,6 +3,8 @@ import crtArt from "./art/hero-crt.jpg";
 import tessArt from "./art/hero-tessera.png";
 import remoteArt from "./art/card-remote-hand.jpg";
 import matrixArt from "./art/matrix-bg.jpg";
+import crtBack from "./art/card-back-crt.jpg";
+import tessBack from "./art/card-back-tessera.jpg";
 import {
   AI,
   HERO_IDS,
@@ -604,7 +606,7 @@ async function playerEndTurn() {
   try {
     endTurn(ui.state, PLAYER);
     const ev = drainFx(ui.state);
-    await flashBanner("TESSERA TURN", "tessera");
+    await flashBanner("TESSERA BOT TURN", "tessera");
     await animateDraw(AI, ev);
     sync();
     await runAi();
@@ -859,6 +861,8 @@ function buildPlay() {
   screen.className = `screen${inMulligan() ? " is-mulligan" : ""}`;
   screen.style.setProperty("--table", `url('${titleArt}')`);
   screen.style.setProperty("--matrix", `url('${matrixArt}')`);
+  screen.style.setProperty("--back-crt", `url('${crtBack}')`);
+  screen.style.setProperty("--back-tessera", `url('${tessBack}')`);
   screen.innerHTML = `
     <div class="hero-strip enemy-strip" id="enemy-strip"></div>
     <div class="enemy-hand" id="enemy-hand"></div>
@@ -915,7 +919,7 @@ function renderHeroStrip(id, who) {
       <div class="hp-pip" id="hp-${who}">${side.hero.hp}</div>
     </div>`;
   const meta = `<div class="hero-meta"><div class="hero-name">${side.hero.name}</div><div id="mana-${who}">${crystalsHtml(side, who, false)}</div></div>`;
-  card.innerHTML = who === AI ? meta + portrait : portrait + meta;
+  card.innerHTML = portrait + meta;
   card.querySelector(".portrait").addEventListener("click", () => clickHero(who));
 
   const power = document.createElement("button");
@@ -935,8 +939,7 @@ function renderHeroStrip(id, who) {
   relic.id = who === PLAYER ? "relic-player" : "relic-ai";
   relic.textContent = "No relic";
 
-  if (who === AI) wrap.append(card, power, deck, relic);
-  else wrap.append(card, power, relic, deck);
+  wrap.append(card, power, relic, deck);
   host.appendChild(wrap);
 }
 
@@ -1094,7 +1097,7 @@ function syncResult() {
   const title = s.winner === PLAYER ? "SIGNAL LOCKED" : s.winner === AI ? "SIGNAL LOST" : "DEAD AIR";
   const blurb =
     s.winner === PLAYER
-      ? "CRT Head holds the food court. Tessera goes dark."
+      ? "CRT Head holds the food court. Tessera Bot goes dark."
       : s.winner === AI
         ? "The Directory writes over the broadcast."
         : "Both heroes drop. The fountain keeps running.";

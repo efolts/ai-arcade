@@ -158,9 +158,9 @@ html, body {
   grid-template-columns: 72px auto;
   gap: 8px;
   align-items: center;
-  min-width: 168px;
+  min-width: 188px;
 }
-.hero-card.enemy { grid-template-columns: auto 72px; }
+.hero-card.enemy { grid-template-columns: 72px auto; }
 .portrait {
   width: 72px;
   height: 88px;
@@ -251,29 +251,21 @@ html, body {
   border-radius: 3px;
   position: relative;
   box-shadow: 0 2px 0 #000;
+  background-color: #111;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
 }
 .card-back.tessera {
-  background: linear-gradient(180deg, #ece8df, #9a9588 55%, #3a3832);
-  border: 1px solid #c8c2b4;
-}
-.card-back.tessera::after {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  border: 1px solid #d4a84a;
-  opacity: 0.8;
+  background-color: #1a1814;
+  background-image: var(--back-tessera, none);
+  border: 1px solid #c8b48a;
 }
 .card-back.crt {
-  background: linear-gradient(180deg, #1c2228, #0b0d12 55%, #07080c);
+  background-color: #0b0d12;
+  background-image: var(--back-crt, none);
   border: 1px solid var(--cyan);
   box-shadow: 0 0 6px rgba(61,230,255,0.25), 0 2px 0 #000;
-}
-.card-back.crt::after {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  border: 1px solid var(--cyan);
-  opacity: 0.55;
 }
 .card-back.large { width: 72px; height: 100px; margin: 0; }
 
