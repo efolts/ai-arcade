@@ -163,10 +163,59 @@ export function floatText(atRect, text, cls) {
   window.setTimeout(() => n.remove(), dur(900));
 }
 
-export async function scrapeOff(el) {
-  if (!el) return;
-  el.classList.add("dying");
-  await wait(dur(420));
+function ashSpecks() {
+  const n = reducedMotion() ? 7 : 18;
+  const bits = [];
+  for (let i = 0; i < n; i++) {
+    const angle = (Math.PI * 2 * i) / n + (Math.random() - 0.5) * 0.7;
+    const dist = 14 + Math.random() * 34;
+    bits.push({
+      dx: Math.cos(angle) * dist,
+      dy: Math.sin(angle) * dist - (8 + Math.random() * 18),
+      rot: Math.random() * 90 - 45,
+      delay: Math.random() * 50,
+      w: 3 + Math.random() * 6,
+      h: 2 + Math.random() * 4,
+      s: 0.55 + Math.random() * 0.7,
+    });
+  }
+  return bits;
+}
+
+export async function deathPoof(el, opts = {}) {
+  const faction = opts.faction === "tessera" ? "tessera" : "crt";
+  const r = rectOf(el) || opts.atRect;
+  const layer = fxRoot();
+  if (el) el.classList.add("dying");
+  if (layer && r) {
+    const c = centerOf(r);
+    const burst = document.createElement("div");
+    burst.className = `death-poof ${faction}`;
+    burst.style.left = `${c.x}px`;
+    burst.style.top = `${c.y}px`;
+    const cloud = document.createElement("span");
+    cloud.className = "ash-cloud";
+    burst.appendChild(cloud);
+    for (const spec of ashSpecks()) {
+      const p = document.createElement("i");
+      p.className = "ash";
+      p.style.width = `${spec.w}px`;
+      p.style.height = `${spec.h}px`;
+      p.style.setProperty("--dx", `${spec.dx}px`);
+      p.style.setProperty("--dy", `${spec.dy}px`);
+      p.style.setProperty("--rot", `${spec.rot}deg`);
+      p.style.setProperty("--delay", `${spec.delay}ms`);
+      p.style.setProperty("--s", String(spec.s));
+      burst.appendChild(p);
+    }
+    layer.appendChild(burst);
+    window.setTimeout(() => burst.remove(), dur(620));
+  }
+  await wait(dur(opts.duration ?? 520));
+}
+
+export async function scrapeOff(el, opts = {}) {
+  return deathPoof(el, opts);
 }
 
 export function meshSpark(el) {

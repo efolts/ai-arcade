@@ -431,8 +431,51 @@ html, body {
 .minion.impact-amber { filter: drop-shadow(0 0 10px var(--amber)); }
 .minion.mesh-break .mini-art { animation: meshPop 400ms ease; }
 .minion.dying {
-  animation: scrape 420ms ease forwards;
+  animation: scrape 520ms ease forwards;
   pointer-events: none;
+}
+
+.death-poof {
+  position: fixed;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 92;
+  transform: translate(-50%, -50%);
+}
+.death-poof .ash-cloud {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 78px;
+  height: 58px;
+  transform: translate(-50%, -40%) scale(0.72);
+  border-radius: 50%;
+  animation: ashCloud 520ms ease-out forwards;
+}
+.death-poof.crt .ash-cloud {
+  background: radial-gradient(ellipse at 50% 50%, rgba(90, 110, 116, 0.42), rgba(61, 230, 255, 0.08) 42%, transparent 72%);
+}
+.death-poof.tessera .ash-cloud {
+  background: radial-gradient(ellipse at 50% 50%, rgba(196, 184, 164, 0.4), rgba(240, 180, 74, 0.08) 42%, transparent 72%);
+}
+.death-poof .ash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  border-radius: 1px;
+  transform: translate(-50%, -50%) scale(var(--s, 1));
+  animation: ashDrift 520ms ease-out forwards;
+  animation-delay: var(--delay, 0ms);
+}
+.death-poof.crt .ash {
+  background: #7a888e;
+  box-shadow: 0 0 3px rgba(61, 230, 255, 0.18);
+}
+.death-poof.tessera .ash {
+  background: #c8bca8;
+  box-shadow: 0 0 3px rgba(240, 180, 74, 0.16);
 }
 
 .ticker {
@@ -811,7 +854,21 @@ html, body {
   100% { opacity: 0; transform: translate(-50%, -120%); }
 }
 @keyframes scrape {
-  to { transform: translateY(18px) rotate(-12deg); opacity: 0; filter: brightness(0.4); }
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; filter: brightness(1); }
+  45% { transform: translateY(8px) rotate(-6deg); opacity: 0.55; filter: brightness(0.7) saturate(0.7); }
+  100% { transform: translateY(20px) rotate(-12deg); opacity: 0; filter: brightness(0.35) saturate(0.4); }
+}
+@keyframes ashDrift {
+  0% { transform: translate(-50%, -50%) scale(var(--s, 1)); opacity: 0.9; }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot)) scale(0.35);
+    opacity: 0;
+  }
+}
+@keyframes ashCloud {
+  0% { opacity: 0.55; transform: translate(-50%, -40%) scale(0.7); }
+  35% { opacity: 0.5; transform: translate(-50%, -48%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -58%) scale(1.18); }
 }
 @keyframes impactPop {
   0% { transform: scale(1); }
@@ -876,5 +933,5 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .minion, .floater, .turn-banner, #play-screen::after { animation: none !important; }
+  .card, .minion, .floater, .turn-banner, #play-screen::after, .death-poof .ash, .death-poof .ash-cloud { animation: none !important; }
 }

@@ -99,7 +99,7 @@ function forceUnlock(reason) {
   const banner = $id("turn-banner");
   if (banner) banner.classList.remove("show");
   const fx = $id("fx-layer");
-  if (fx) fx.querySelectorAll(".fx-clone").forEach((n) => n.remove());
+  if (fx) fx.querySelectorAll(".fx-clone, .death-poof").forEach((n) => n.remove());
   hideAim();
   if (ui.state && ui.state.screen === "play") sync();
 }
@@ -322,8 +322,26 @@ function setHint(text) {
   hint.textContent = text;
 }
 
+function orderCombatFx(events) {
+  const skip = new Set();
+  const out = [];
+  for (let i = 0; i < events.length; i++) {
+    if (skip.has(i)) continue;
+    const e = events[i];
+    if (e.type === "death") {
+      const j = events.findIndex((x, k) => k > i && x.type === "shatter" && x.id === e.id);
+      if (j !== -1) {
+        out.push(events[j]);
+        skip.add(j);
+      }
+    }
+    out.push(e);
+  }
+  return out;
+}
+
 async function runEventAnims(events) {
-  for (const e of events) {
+  for (const e of orderCombatFx(events)) {
     if (e.type === "mesh") {
       const n = findEl(e.id);
       meshSpark(n);
@@ -343,11 +361,18 @@ async function runEventAnims(events) {
       floatText(rectOf(findEl(e.id)) || tableCenterRect(), `FATIGUE ${e.amount}`, "floater-fatigue");
       sfx("fatigue");
     } else if (e.type === "shatter") {
+      const n = findEl(e.id);
+      floatText(rectOf(n) || tableCenterRect(), "SHATTER", "floater-mesh");
       await wait(dur(180));
     } else if (e.type === "death") {
+      if (e.kind === "hero") continue;
       const n = findEl(e.id);
       sfx("death");
-      await scrapeOff(n);
+      await scrapeOff(n, {
+        faction: e.faction,
+        atRect: rectOf(n) || tableCenterRect(),
+        duration: 520,
+      });
     } else if (e.type === "draw" && e.who === PLAYER && e.reason === "turn") {
       /* handled by animateDraw */
     }
