@@ -219,30 +219,34 @@ function normalizeFrame(frame, targetH) {
   return out;
 }
 
-/** +1 = profile faces east (right), -1 = west. 0 = unknown. */
+/** +1 = profile faces east (right), -1 = west. 0 = unknown.
+ *  Eyes only (top 30%, inset) — weapon-tip cyan in the same band was
+ *  flipping armor/weapon/full the wrong way. */
 function profileFaceSign(frame) {
   const w = frame.width;
   const h = frame.height;
   const tctx = frame.getContext("2d", { willReadFrequently: true });
-  const p = tctx.getImageData(0, 0, w, Math.max(1, Math.floor(h * 0.42))).data;
+  const hh = Math.max(1, Math.floor(h * 0.3));
+  const p = tctx.getImageData(0, 0, w, hh).data;
   let sx = 0;
   let n = 0;
-  const hh = Math.floor(h * 0.42);
+  const x0 = Math.floor(w * 0.12);
+  const x1 = w - x0;
   for (let y = 0; y < hh; y++) {
-    for (let x = 0; x < w; x++) {
+    for (let x = x0; x < x1; x++) {
       const o = (y * w + x) * 4;
       const r = p[o];
       const g = p[o + 1];
       const b = p[o + 2];
       const a = p[o + 3];
       if (a < 32 || isMagenta(r, g, b)) continue;
-      const cyan = g > 140 && b > 140 && g >= r - 16;
+      const cyan = g > 160 && b > 160 && r < 180 && g >= r;
       if (!cyan) continue;
       sx += x;
       n++;
     }
   }
-  if (n < 3) return 0;
+  if (n < 2) return 0;
   return sx / n >= w * 0.5 ? 1 : -1;
 }
 
