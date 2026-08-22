@@ -177,7 +177,7 @@ function clickCard(card) {
   if (res.ok) {
     sfx("play");
     cancelSelect();
-    paint();
+    afterPlayerAction();
   }
 }
 
@@ -187,21 +187,21 @@ function clickTarget(id) {
     const res = playCard(ui.state, PLAYER, ui.selectedCard.uid, id);
     if (res.ok) sfx("play");
     cancelSelect();
-    paint();
+    afterPlayerAction();
     return;
   }
   if (ui.mode === "power-target") {
     const res = useHeroPower(ui.state, PLAYER, id);
     if (res.ok) sfx("power");
     cancelSelect();
-    paint();
+    afterPlayerAction();
     return;
   }
   if (ui.mode === "attack-target" && ui.selectedAttacker) {
     const res = attack(ui.state, PLAYER, ui.selectedAttacker, id);
     if (res.ok) sfx("attack");
     cancelSelect();
-    paint();
+    afterPlayerAction();
   }
 }
 
@@ -282,6 +282,11 @@ async function runAi() {
 
 function wait(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function afterPlayerAction() {
+  paint();
+  if (ui.state.winner) fanfare();
 }
 
 function fanfare() {
