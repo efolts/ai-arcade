@@ -1,0 +1,119 @@
+:root {
+  --bg: #030406;
+  --cyan: #5ef6ff;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  touch-action: none;
+}
+
+@supports (height: 100dvh) {
+  html,
+  body {
+    height: 100dvh;
+  }
+}
+
+#frame {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+#stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 960px;
+  height: 780px;
+  margin-left: -480px;
+  margin-top: -390px;
+  transform-origin: center center;
+  box-shadow: 0 0 0 1px #111, 0 0 48px rgba(0, 255, 255, 0.08);
+}
+
+#game {
+  display: block;
+  width: 960px;
+  height: 780px;
+  background: #050608;
+}
+
+#crt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.18) 0 1px,
+      transparent 1px 3px
+    ),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+
+#crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    inset 1px 0 0 rgba(255, 40, 40, 0.06),
+    inset -1px 0 0 rgba(40, 220, 255, 0.07);
+  pointer-events: none;
+}
+
+#touch {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#touch:not([hidden]) {
+  display: block;
+}
+
+.stick {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: 2px solid rgba(94, 246, 255, 0.28);
+  background: rgba(8, 12, 16, 0.35);
+  pointer-events: auto;
+  bottom: max(18px, env(safe-area-inset-bottom));
+}
+
+.stick i {
+  position: absolute;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(94, 246, 255, 0.45);
+  box-shadow: 0 0 16px rgba(94, 246, 255, 0.35);
+}
+
+#stickL {
+  left: max(18px, env(safe-area-inset-left));
+}
+
+#stickR {
+  right: max(18px, env(safe-area-inset-right));
+}
