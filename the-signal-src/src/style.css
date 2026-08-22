@@ -34,9 +34,12 @@ html, body {
 }
 
 #stage {
+  --stage-max-w: 1500px;
+  --stage-max-h: 975px;
+  --stage-gutter: 32px;
   position: relative;
-  width: min(100vw, 1200px);
-  height: min(100vh, 780px);
+  width: min(var(--stage-max-w), calc(100vw - var(--stage-gutter)), calc((100vh - var(--stage-gutter)) * 1500 / 975));
+  height: min(var(--stage-max-h), calc(100vh - var(--stage-gutter)), calc((100vw - var(--stage-gutter)) * 975 / 1500));
   overflow: hidden;
   background: #08090e;
   box-shadow: 0 0 0 3px #000, 0 0 0 5px #1c2430, 0 20px 60px #000;
@@ -996,7 +999,7 @@ html, body {
 }
 
 @media (max-height: 640px) {
-  #stage { height: 100vh; }
+  #stage { --stage-gutter: 16px; }
   .minion { height: 108px; }
   .slot { min-height: 100px; }
   .card { height: 140px; width: 100px; }
