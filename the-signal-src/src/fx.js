@@ -1,3 +1,6 @@
+export const STAGE_W = 1500;
+export const STAGE_H = 975;
+
 export function wait(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -26,6 +29,22 @@ function stageBox() {
   return stage ? stage.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
 }
 
+export function stageScale() {
+  const box = stageBox();
+  return box.width > 0 ? box.width / STAGE_W : 1;
+}
+
+export function toStageLocal(r) {
+  const box = stageBox();
+  const s = stageScale() || 1;
+  return {
+    left: (r.left - box.left) / s,
+    top: (r.top - box.top) / s,
+    width: (r.width || 0) / s,
+    height: (r.height || 0) / s,
+  };
+}
+
 export function fxRoot() {
   return document.getElementById("fx-layer");
 }
@@ -33,12 +52,13 @@ export function fxRoot() {
 export function placeFixed(node, r, extra = {}) {
   const layer = fxRoot();
   if (!layer || !r) return node;
+  const local = toStageLocal(r);
   Object.assign(node.style, {
-    position: "fixed",
-    left: `${r.left}px`,
-    top: `${r.top}px`,
-    width: `${r.width}px`,
-    height: `${r.height}px`,
+    position: "absolute",
+    left: `${local.left}px`,
+    top: `${local.top}px`,
+    width: `${local.width}px`,
+    height: `${local.height}px`,
     margin: "0",
     zIndex: "80",
     pointerEvents: "none",
@@ -64,8 +84,9 @@ export async function flyArc(el, toRect, opts = {}) {
   const from = rectOf(el) || toRect;
   const fromC = centerOf(from);
   const toC = centerOf(toRect);
-  const dx = toC.x - fromC.x;
-  const dy = toC.y - fromC.y;
+  const s = stageScale() || 1;
+  const dx = (toC.x - fromC.x) / s;
+  const dy = (toC.y - fromC.y) / s;
   const lift = opts.arc ?? Math.min(52, Math.abs(dx) * 0.16 + 22);
   const rot = opts.rotate ?? (dx >= 0 ? 6 : -6);
   const glow =
@@ -116,8 +137,9 @@ export async function lurchToward(el, towardRect, opts = {}) {
   const b = towardRect || a;
   const ac = centerOf(a);
   const bc = centerOf(b);
-  const dx = (bc.x - ac.x) * 0.42;
-  const dy = (bc.y - ac.y) * 0.42;
+  const s = stageScale() || 1;
+  const dx = ((bc.x - ac.x) * 0.42) / s;
+  const dy = ((bc.y - ac.y) * 0.42) / s;
   await el.animate(
     [
       { transform: "translate(0,0) scale(1)" },
@@ -156,9 +178,9 @@ export function floatText(atRect, text, cls) {
   const n = document.createElement("div");
   n.className = `floater ${cls || ""}`;
   n.textContent = text;
-  const c = centerOf(atRect);
-  n.style.left = `${c.x}px`;
-  n.style.top = `${c.y - 8}px`;
+  const local = toStageLocal({ left: centerOf(atRect).x, top: centerOf(atRect).y - 8, width: 0, height: 0 });
+  n.style.left = `${local.left}px`;
+  n.style.top = `${local.top}px`;
   layer.appendChild(n);
   window.setTimeout(() => n.remove(), dur(900));
 }
@@ -189,10 +211,11 @@ export async function deathPoof(el, opts = {}) {
   if (el) el.classList.add("dying");
   if (layer && r) {
     const c = centerOf(r);
+    const local = toStageLocal({ left: c.x, top: c.y, width: 0, height: 0 });
     const burst = document.createElement("div");
     burst.className = `death-poof ${faction}`;
-    burst.style.left = `${c.x}px`;
-    burst.style.top = `${c.y}px`;
+    burst.style.left = `${local.left}px`;
+    burst.style.top = `${local.top}px`;
     const cloud = document.createElement("span");
     cloud.className = "ash-cloud";
     burst.appendChild(cloud);
@@ -245,12 +268,13 @@ export function drawAim(fromRect, toX, toY, faction = "crt") {
   const svg = aimLayer();
   if (!svg || !fromRect) return;
   const box = stageBox();
-  svg.setAttribute("viewBox", `0 0 ${Math.max(1, box.width)} ${Math.max(1, box.height)}`);
+  const s = stageScale() || 1;
+  svg.setAttribute("viewBox", `0 0 ${STAGE_W} ${STAGE_H}`);
   const a = centerOf(fromRect);
-  const x1 = a.x - box.left;
-  const y1 = a.y - box.top;
-  const x2 = toX - box.left;
-  const y2 = toY - box.top;
+  const x1 = (a.x - box.left) / s;
+  const y1 = (a.y - box.top) / s;
+  const x2 = (toX - box.left) / s;
+  const y2 = (toY - box.top) / s;
   const path = svg.querySelector("path");
   const head = svg.querySelector("circle");
   if (path) path.setAttribute("d", quadraticPath(x1, y1, x2, y2));

@@ -29,6 +29,8 @@ import { applyAiAction, pickAiAction } from "./ai.js";
 import { TYPE, needsChooser, typeLabel } from "./cards.js";
 import { sfx, toggleMute } from "./audio.js";
 import {
+  STAGE_H,
+  STAGE_W,
   cloneAt,
   drawAim,
   dur,
@@ -1032,7 +1034,7 @@ function buildPlay() {
     </div>
     <div class="hero-strip player-strip" id="player-strip"></div>
     <div id="fx-layer">
-      <svg id="aim" viewBox="0 0 1200 780" preserveAspectRatio="none">
+      <svg id="aim" viewBox="0 0 1500 975" preserveAspectRatio="none">
         <path d=""></path>
         <circle r="5" cx="0" cy="0"></circle>
       </svg>
@@ -1318,7 +1320,26 @@ export function paint() {
   sync();
 }
 
+function fitStage() {
+  const frame = document.getElementById("frame");
+  if (!frame) return;
+  const scale = Math.min(frame.clientWidth / STAGE_W, frame.clientHeight / STAGE_H, 1);
+  document.documentElement.style.setProperty("--stage-scale", String(Math.max(0.05, scale)));
+}
+
+function watchFit() {
+  fitStage();
+  const frame = document.getElementById("frame");
+  if (frame && typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => fitStage());
+    ro.observe(frame);
+  }
+  window.addEventListener("resize", fitStage);
+  window.visualViewport?.addEventListener("resize", fitStage);
+}
+
 export function mount() {
+  watchFit();
   const root = stage();
   root.style.setProperty("--table", `url('${titleArt}')`);
   ui.state = createMatch({ seed: seedFromUrl() });

@@ -13,8 +13,18 @@
   </head>
   <body>
     <div id="frame">
-      <div id="stage"></div>
+      <div id="stage-fit">
+        <div id="stage"></div>
+      </div>
     </div>
+    <script>
+      (function () {
+        var frame = document.getElementById("frame");
+        if (!frame) return;
+        var scale = Math.min(frame.clientWidth / 1500, frame.clientHeight / 975, 1);
+        document.documentElement.style.setProperty("--stage-scale", String(Math.max(0.05, scale)));
+      })();
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
