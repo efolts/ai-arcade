@@ -138,6 +138,7 @@ export function createMatch(opts = {}) {
     player: makeSide(PLAYER, opts.playerDeck || CRT_DECK_IDS, rng),
     ai: makeSide(AI, opts.aiDeck || TESSERA_DECK_IDS, rng),
     log: [],
+    fx: [],
     rng,
     pending: null,
     anim: null,
@@ -160,6 +161,17 @@ export function living(state) {
 function pushLog(state, text, extra = {}) {
   state.log.push({ text, t: state.turnNumber, ...extra });
   if (state.log.length > 40) state.log.shift();
+}
+
+function emit(state, event) {
+  if (!state.fx) state.fx = [];
+  state.fx.push(event);
+}
+
+export function drainFx(state) {
+  const ev = state.fx || [];
+  state.fx = [];
+  return ev;
 }
 
 export function findUnit(state, uid) {
@@ -205,21 +217,54 @@ function checkWinner(state) {
   }
 }
 
-export function dealDamage(state, targetRef, amount, _src = "") {
+export function dealDamage(state, targetRef, amount, src = "") {
   if (amount <= 0 || state.winner) return { absorbed: false, dealt: 0, dead: false };
   if (targetRef.kind === "hero") {
     const hero = targetRef.hero;
     hero.hp -= amount;
+    const dead = hero.hp <= 0;
+    emit(state, {
+      type: "damage",
+      id: hero.id,
+      kind: "hero",
+      who: hero.who,
+      faction: hero.who === PLAYER ? FACTION.CRT : FACTION.TESSERA,
+      amount,
+      absorbed: false,
+      dead,
+      src,
+    });
     checkWinner(state);
-    return { absorbed: false, dealt: amount, dead: hero.hp <= 0 };
+    return { absorbed: false, dealt: amount, dead };
   }
   const unit = targetRef.unit;
+  const found = findUnit(state, unit.uid);
+  const who = found?.who || targetRef.who;
   if (unit.keywords.mesh) {
     unit.keywords.mesh = false;
+    emit(state, {
+      type: "mesh",
+      id: unit.uid,
+      kind: "unit",
+      who,
+      faction: unit.faction,
+      src,
+    });
     return { absorbed: true, dealt: 0, dead: false };
   }
   unit.hp -= amount;
   const dead = unit.hp <= 0;
+  emit(state, {
+    type: "damage",
+    id: unit.uid,
+    kind: "unit",
+    who,
+    faction: unit.faction,
+    amount,
+    absorbed: false,
+    dead,
+    src,
+  });
   if (dead) killUnit(state, unit.uid);
   return { absorbed: false, dealt: amount, dead };
 }
@@ -250,6 +295,17 @@ export function killUnit(state, uid) {
     if (i === -1) continue;
     const [unit] = side.board.splice(i, 1);
     side.grave.push(unit);
+    emit(state, {
+      type: "death",
+      id: unit.uid,
+      who,
+      faction: unit.faction,
+      name: unit.name,
+      shatter: !!(unit.shatter && !unit.silenced),
+    });
+    if (unit.shatter && !unit.silenced) {
+      emit(state, { type: "shatter", id: unit.uid, who, name: unit.name });
+    }
     resolveShatter(state, unit, who);
     return unit;
   }
@@ -285,12 +341,14 @@ export function drawCard(state, who, reason = "draw") {
   if (side.deck.length === 0) {
     side.hero.fatigue += 1;
     const dmg = side.hero.fatigue;
+    emit(state, { type: "fatigue", who, amount: dmg, id: side.hero.id });
     dealDamage(state, { kind: "hero", hero: side.hero }, dmg, "fatigue");
     pushLog(state, `${side.hero.name} takes ${dmg} fatigue.`);
     return null;
   }
   const card = side.deck.shift();
-  burnOrAdd(state, side, card, reason);
+  const kept = burnOrAdd(state, side, card, reason);
+  emit(state, { type: "draw", who, card, burned: !kept, reason });
   return card;
 }
 
@@ -302,6 +360,7 @@ export function summonToken(state, who, defId) {
   unit.canAttack = false;
   unit.attacksLeft = 0;
   side.board.push(unit);
+  emit(state, { type: "summon", who, unit, token: true });
   return unit;
 }
 
@@ -559,9 +618,10 @@ export function playCard(state, who, cardUid, targetId = null) {
     unit.attacksLeft = unit.keywords.rush ? 1 : 0;
     unit.justPlayed = true;
     side.board.push(unit);
+    emit(state, { type: "play", who, card: unit, as: "unit", targetId });
     pushLog(state, `${side.hero.name} plays ${unit.name}.`);
     if (unit.boot && !unit.silenced) applyEffect(state, who, unit.boot, targetId, unit.name);
-    return { ok: true, type: "unit", card: unit };
+    return { ok: true, type: "unit", card: unit, targetId };
   }
 
   if (card.type === TYPE.RELIC) {
@@ -576,14 +636,16 @@ export function playCard(state, who, cardUid, targetId = null) {
     };
     side.hero.canAttack = true;
     pushLog(state, `${side.hero.name} equips ${card.name} (${card.atk}/${card.durability}).`);
+    emit(state, { type: "play", who, card, as: "relic" });
     side.grave.push(card);
     return { ok: true, type: "relic", card };
   }
 
   pushLog(state, `${side.hero.name} casts ${card.name}.`);
+  emit(state, { type: "play", who, card, as: "signal", targetId });
   applyEffect(state, who, card.effect, targetId, card.name);
   side.grave.push(card);
-  return { ok: true, type: "signal", card };
+  return { ok: true, type: "signal", card, targetId };
 }
 
 export function canUseHeroPower(state, who, targetId = null) {

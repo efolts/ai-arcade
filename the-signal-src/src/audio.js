@@ -77,6 +77,24 @@ export function sfx(name) {
     case "click":
       beep(760, 0.04, "square", 0.02);
       break;
+    case "draw":
+      beep(380, 0.07, "triangle", 0.03, 140);
+      break;
+    case "impact":
+      beep(110, 0.08, "sawtooth", 0.045, -40);
+      break;
+    case "mesh":
+      beep(880, 0.07, "triangle", 0.03, -220);
+      break;
+    case "death":
+      beep(160, 0.16, "sawtooth", 0.04, -90);
+      break;
+    case "fatigue":
+      beep(90, 0.14, "square", 0.04, -30);
+      break;
+    case "equip":
+      beep(300, 0.1, "triangle", 0.03, 80);
+      break;
     default:
       break;
   }

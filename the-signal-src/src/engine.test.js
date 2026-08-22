@@ -6,13 +6,12 @@ import {
   PLAYER,
   HERO_IDS,
   attack,
-  beginTurn,
   createMatch,
   dealDamage,
+  drainFx,
   drawCard,
   endTurn,
   playCard,
-  sideOf,
   startMatch,
   useHeroPower,
   instantiate,
@@ -38,11 +37,14 @@ describe("decks", () => {
     assert.equal(TESSERA_DECK_IDS.length, 30);
   });
 
-  it("CRT list matches the printed copies", () => {
-    assert.equal(CRT_DECK_IDS.length, 33);
-    assert.equal(CRT_DECK_IDS.filter((id) => id === "mall_rat").length, 2);
-    assert.equal(CRT_DECK_IDS.filter((id) => id === "prize_clerk").length, 1);
+  it("CRT list is 30 after dropping spare copies", () => {
+    assert.equal(CRT_DECK_IDS.length, 30);
+    assert.equal(CRT_DECK_IDS.filter((id) => id === "mall_rat").length, 1);
+    assert.equal(CRT_DECK_IDS.filter((id) => id === "fountain_guard").length, 1);
+    assert.equal(CRT_DECK_IDS.filter((id) => id === "mother_sprout").length, 1);
     assert.equal(CRT_DECK_IDS.filter((id) => id === "remote_hand").length, 2);
+    assert.equal(CRT_DECK_IDS.filter((id) => id === "ironhorse").length, 2);
+    assert.equal(CRT_DECK_IDS.filter((id) => id === "cyan_bolt").length, 2);
   });
 });
 
@@ -145,6 +147,22 @@ describe("relics and hero powers", () => {
     assert.equal(s.ai.board.at(-1).defId, "tessera_grunt");
     assert.equal(s.ai.board.at(-1).atk, 1);
     assert.equal(s.ai.board.at(-1).hp, 1);
+  });
+});
+
+describe("fx events", () => {
+  it("emits mesh then damage", () => {
+    const s = createMatch({ seed: 11 });
+    startMatch(s);
+    drainFx(s);
+    const u = instantiate("antenna_kid");
+    s.player.board = [u];
+    dealDamage(s, { kind: "unit", unit: u }, 4, "test");
+    const first = drainFx(s);
+    assert.equal(first.some((e) => e.type === "mesh"), true);
+    dealDamage(s, { kind: "unit", unit: u }, 1, "test");
+    const second = drainFx(s);
+    assert.equal(second.some((e) => e.type === "damage" && e.amount === 1), true);
   });
 });
 

@@ -530,14 +530,14 @@ export const CATALOG = {
 };
 
 const CRT_LIST = [
-  ["mall_rat", 2],
+  ["mall_rat", 1],
   ["scanline", 2],
-  ["fountain_guard", 2],
+  ["fountain_guard", 1],
   ["krcd_intern", 2],
   ["prize_clerk", 1],
   ["antenna_kid", 2],
   ["remote_hand", 2],
-  ["mother_sprout", 2],
+  ["mother_sprout", 1],
   ["signal_ghost", 1],
   ["ironhorse", 2],
   ["crt_lead", 1],
