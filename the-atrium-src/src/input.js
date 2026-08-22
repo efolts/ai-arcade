@@ -1,7 +1,19 @@
 export function createInput(canvas, sticks) {
   const keys = new Set();
   const mouse = { x: 480, y: 390, down: false, clicked: false, moved: false, lastMove: 0 };
-  const pad = { mx: 0, my: 0, ax: 0, ay: 0, fire: false, south: false, east: false, lb: false, connected: false };
+  const pad = {
+    mx: 0,
+    my: 0,
+    ax: 0,
+    ay: 0,
+    fire: false,
+    south: false,
+    east: false,
+    west: false,
+    lb: false,
+    rb: false,
+    connected: false,
+  };
   const touch = {
     active: false,
     move: { x: 0, y: 0 },
@@ -24,6 +36,8 @@ export function createInput(canvas, sticks) {
     KeyK: "fire",
     Enter: "start",
     KeyE: "shop",
+    KeyQ: "field",
+    KeyF: "recall",
     KeyM: "mute",
     KeyP: "pause",
     Escape: "esc",
@@ -181,6 +195,8 @@ export function createInput(canvas, sticks) {
       pad.mx = pad.my = pad.ax = pad.ay = 0;
       pad.fire = false;
       pad.lb = false;
+      pad.rb = false;
+      pad.west = false;
       return;
     }
     pad.connected = true;
@@ -195,7 +211,9 @@ export function createInput(canvas, sticks) {
       pad.ax * pad.ax + pad.ay * pad.ay > 0.12;
     pad.south = !!(gp.buttons[0] && gp.buttons[0].pressed);
     pad.east = !!(gp.buttons[1] && gp.buttons[1].pressed);
+    pad.west = !!(gp.buttons[2] && gp.buttons[2].pressed);
     pad.lb = !!(gp.buttons[4] && gp.buttons[4].pressed);
+    pad.rb = !!(gp.buttons[5] && gp.buttons[5].pressed);
   }
 
   const consumed = new Set();

@@ -20,19 +20,24 @@ import { sfx, startMusic, tickMusic, unlockAudio, toggleMute, isMuted } from "./
 import { gunOrigin, shatterDuration } from "./pix.js";
 import {
   BASE_MAX_HP,
+  LEVEL_CAP,
   XP_FOR,
   addXp,
   armorBonus,
   armorByTier,
   emptyGear,
   gunSpec,
+  isStat,
   kioskPos,
+  levelHpBonus,
   playerSkin,
   rankMult,
   rollDrop,
   roomPrimary,
   shopCols,
   skinTint,
+  statPrice,
+  statRank,
   weaponByTier,
   xpToNext,
 } from "./progress.js";
@@ -164,9 +169,11 @@ function botStats(kind, wave, level, weaponTier = 0, pass = 1) {
   const s = table[kind] || table.grunt;
   let hpMul = rank.hp;
   if (kind === "rusher" && pass >= 2) hpMul *= 1.15;
+  if (pass >= 2 && kind !== "boss") hpMul *= 1.16;
   const hp = Math.max(1, Math.round(s.hp * hpMul));
-  let speed = s.speed * (kind === "boss" ? Math.min(1.32, rank.speed) : f * rank.speed);
-  if (kind !== "boss") speed = Math.min(speed, 198);
+  let speed = s.speed * (kind === "boss" ? Math.min(1.38, rank.speed) : f * rank.speed);
+  if (pass >= 2 && kind !== "boss") speed *= 1.08;
+  if (kind !== "boss") speed = Math.min(speed, pass >= 2 ? 210 : 198);
   const resist = rank.resist && (kind === "security" || kind === "boss");
   return { ...s, hp, speed, resist };
 }
@@ -194,7 +201,9 @@ export function createGame(canvas, input) {
   let muted = false;
   let padSouthWas = false;
   let padEastWas = false;
+  let padWestWas = false;
   let padLbWas = false;
+  let padRbWas = false;
 
   const world = {
     player: null,
@@ -255,6 +264,11 @@ export function createGame(canvas, input) {
       dashCd: 0,
       dashX: 0,
       dashY: 0,
+      fieldT: 0,
+      fieldCd: 0,
+      recallT: 0,
+      recallCd: 0,
+      windUsed: false,
       powers: { spread: 0, rapid: 0, speed: 0 },
       hp: BASE_MAX_HP,
       maxHp: BASE_MAX_HP,
@@ -328,6 +342,11 @@ export function createGame(canvas, input) {
     p.iframes = 2.85;
     p.dashT = 0;
     p.dashCd = 0;
+    p.fieldT = 0;
+    p.fieldCd = 0;
+    p.recallT = 0;
+    p.recallCd = 0;
+    p.windUsed = false;
     syncPlayerBody();
     p.hp = p.maxHp;
     startRoomWaves(false);
@@ -395,6 +414,7 @@ export function createGame(canvas, input) {
       } else {
         nShot = lastWave ? 1 : 0;
         if (world.pass >= 2 && rank.shots) nShot += 1;
+        if (world.pass >= 2 && lastWave) nShot += 1;
       }
       for (let i = 0; i < nShot; i++) {
         world.spawn.push({ kind: "shotgun", wait: lateWait + 0.2 + i * 0.16, gates: last && last.gates });
@@ -486,7 +506,7 @@ export function createGame(canvas, input) {
       if (room === "food") p = late ? (lastWave ? 0.5 : 0.32) : 0.1;
       if (room === "fashions") p = lastWave ? 0.15 : late ? 0.1 : 0;
       if (room === "service") p = 0.4;
-      if (pass2) p = Math.min(0.7, p + 0.18);
+      if (pass2) p = Math.min(0.76, p + 0.22);
       return Math.random() < p;
     }
     if (kind === "mannequin") {
@@ -503,7 +523,7 @@ export function createGame(canvas, input) {
     else if (b.kind === "security") gap = 1.65;
     else if (b.kind === "mannequin") gap = 1.15;
     if (b.elite) gap *= 0.72;
-    if (world.pass >= 2) gap *= 0.82;
+    if (world.pass >= 2) gap *= 0.74;
     return gap;
   }
 
@@ -555,6 +575,10 @@ export function createGame(canvas, input) {
       dashT: -0.4,
       tele: 0,
       tankDropped: false,
+      lastPhase: 1,
+      atk: 0,
+      spinDir: 1,
+      slamT: 0,
     };
     if (elite) {
       bot.hp = Math.max(2, Math.round(bot.hp * 2.2));
@@ -604,7 +628,7 @@ export function createGame(canvas, input) {
   }
 
   function dropPickup(x, y, forced) {
-    const roll = forced || rollDrop(world.pass);
+    const roll = forced || rollDrop(world.pass, world.gear.luckUp || 0);
     if (!roll) return;
     world.pickups.push({
       x,
@@ -643,7 +667,7 @@ export function createGame(canvas, input) {
     const p = world.player;
     if (!p) return;
     const arm = armorBonus(world.gear.armor);
-    const next = BASE_MAX_HP + (world.level - 1) + arm.hp;
+    const next = BASE_MAX_HP + levelHpBonus(world.level) + arm.hp + (world.gear.hpUp || 0);
     const dh = next - (p.maxHp || BASE_MAX_HP);
     p.maxHp = next;
     p.hp = clamp((p.hp || next) + Math.max(0, dh), 1, next);
@@ -711,20 +735,33 @@ export function createGame(canvas, input) {
   function hurtPlayer(opts = {}) {
     const p = world.player;
     if (p.dead || (world.readyT || 0) > 0 || p.iframes > 0) return;
-    const red = armorBonus(world.gear.armor).red;
+    let red = armorBonus(world.gear.armor).red;
+    if (world.pass >= 2) red *= 0.7;
     if (opts.contact && red > 0 && Math.random() < red) {
       p.iframes = 0.28;
       floater(p.x, p.y - 16, "GRAZE", "#c8c8c4");
       return;
     }
     p.hp -= 1;
-    p.iframes = 1.15;
+    p.iframes = world.pass >= 2 ? 0.86 : 1.15;
     flash = 0.1;
     sfx.playerHit();
     burst(p.x, p.y, 10, "#5ef6ff", 0.3);
+    if (p.hp <= 0 && world.gear.wind && !p.windUsed) {
+      p.hp = 1;
+      p.windUsed = true;
+      p.iframes = 2.35;
+      flash = 0.22;
+      announce = "SECOND WIND";
+      announceT = 1.5;
+      floater(p.x, p.y - 20, "SECOND WIND", "#7cff9a");
+      burst(p.x, p.y, 16, "#7cff9a", 0.4);
+      return;
+    }
     if (p.hp > 0) return;
     world.lives -= 1;
     p.hp = p.maxHp;
+    p.windUsed = false;
     world.mult = 1;
     world.multT = 0;
     cameraPunch(9, 0.09);
@@ -743,11 +780,47 @@ export function createGame(canvas, input) {
     }
   }
 
+  function tryStaticField() {
+    const p = world.player;
+    if (!p || p.dead || !world.gear.static || (p.fieldCd || 0) > 0) return;
+    p.fieldCd = 4.4;
+    p.fieldT = 0.24;
+    cameraPunch(5, 0.07);
+    flash = Math.max(flash, 0.08);
+    sfx.bomb();
+    burst(p.x, p.y, 22, "#7ffff8", 0.34);
+    const R = 108;
+    for (const b of world.bots) {
+      if (b.dead) continue;
+      const d = Math.hypot(b.x - p.x, b.y - p.y);
+      if (d > R + b.r) continue;
+      const dmg = b.kind === "boss" ? 6 : b.kind === "security" ? 5 : 4;
+      b.hp -= dmg;
+      const n = d > 0.001 ? { x: (b.x - p.x) / d, y: (b.y - p.y) / d } : { x: 0, y: -1 };
+      b.x += n.x * 38;
+      b.y += n.y * 38;
+      b.stun = Math.max(b.stun || 0, 0.38);
+      if (b.hp <= 0) killBot(b);
+    }
+    floater(p.x, p.y - 22, "STATIC", "#7ffff8");
+  }
+
+  function tryRemoteRecall() {
+    const p = world.player;
+    if (!p || p.dead || !world.gear.recall || (p.recallCd || 0) > 0) return;
+    p.recallCd = 7.4;
+    p.recallT = 3.6;
+    sfx.pickup();
+    announce = "REMOTE RECALL";
+    announceT = 1.1;
+    burst(p.x, p.y, 10, "#e8b44a", 0.28);
+  }
+
   function firePlayer() {
     const p = world.player;
     const spec = gunSpec(world.gear.weapon, world.level);
     if (p.fireT > 0) return;
-    p.fireT = spec.rate;
+    p.fireT = spec.rate * Math.pow(0.94, world.gear.rateUp || 0);
     p.muzzle = 0.07;
     const hand = gunOrigin(p);
     for (const off of spec.angles) {
@@ -791,6 +864,7 @@ export function createGame(canvas, input) {
   function openShop() {
     if (!shopAvailable()) return;
     world.shopOpen = true;
+    clampShopCursor();
     sfx.shop();
   }
 
@@ -809,43 +883,67 @@ export function createGame(canvas, input) {
     if (col === 0) {
       const owned = world.gear.armor >= item.tier;
       const eq = world.gear.armor === item.tier;
-      return { owned, eq, can: !eq && world.tokens >= item.price };
+      return { owned, eq, can: !eq && world.tokens >= item.price, price: item.price };
     }
     if (col === 1) {
       const owned = world.gear.weapon >= item.tier;
       const eq = world.gear.weapon === item.tier;
-      return { owned, eq, can: !eq && world.tokens >= item.price };
+      return { owned, eq, can: !eq && world.tokens >= item.price, price: item.price };
+    }
+    if (isStat(item)) {
+      const rank = statRank(world.gear, item);
+      const price = statPrice(item, rank);
+      const maxed = rank >= item.max;
+      return { owned: rank > 0, eq: false, can: !maxed && world.tokens >= price, rank, max: item.max, price, maxed };
     }
     if (item.id === "sneakers") {
-      return { owned: world.gear.sneakers, eq: world.gear.sneakers, can: !world.gear.sneakers && world.tokens >= item.price };
+      return { owned: world.gear.sneakers, eq: world.gear.sneakers, can: !world.gear.sneakers && world.tokens >= item.price, price: item.price };
     }
     if (item.id === "signal") {
-      return { owned: world.gear.signal, eq: world.gear.signal, can: !world.gear.signal && world.tokens >= item.price };
+      return { owned: world.gear.signal, eq: world.gear.signal, can: !world.gear.signal && world.tokens >= item.price, price: item.price };
     }
     if (item.id === "dash") {
-      return { owned: world.gear.dash, eq: world.gear.dash, can: !world.gear.dash && world.tokens >= item.price };
+      return { owned: world.gear.dash, eq: world.gear.dash, can: !world.gear.dash && world.tokens >= item.price, price: item.price };
+    }
+    if (item.id === "static") {
+      return { owned: world.gear.static, eq: world.gear.static, can: !world.gear.static && world.tokens >= item.price, price: item.price };
+    }
+    if (item.id === "recall") {
+      return { owned: world.gear.recall, eq: world.gear.recall, can: !world.gear.recall && world.tokens >= item.price, price: item.price };
+    }
+    if (item.id === "wind") {
+      return { owned: world.gear.wind, eq: world.gear.wind, can: !world.gear.wind && world.tokens >= item.price, price: item.price };
     }
     if (item.id === "1up2") {
       const n = world.gear.passLives;
-      return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price };
+      return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price, price: item.price };
     }
     const n = world.gear.extraLives;
-    return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price };
+    return { owned: n >= 2, eq: false, can: n < 2 && world.tokens >= item.price, price: item.price };
+  }
+
+  function shopLayout() {
+    return { ox: 146, oy: 148, cw: 164, rh: 86, cardW: 154, cardH: 78 };
   }
 
   function shopHit(mx, my) {
-    const ox = 168;
-    const oy = 168;
-    const cw = 210;
-    const rh = 108;
-    for (let c = 0; c < 3; c++) {
-      for (let r = 0; r < 3; r++) {
+    const { ox, oy, cw, rh, cardW, cardH } = shopLayout();
+    const cols = shopCols(world.pass, world.gear);
+    for (let c = 0; c < cols.length; c++) {
+      for (let r = 0; r < cols[c].length; r++) {
         const x = ox + c * cw;
         const y = oy + r * rh;
-        if (mx >= x && mx <= x + 200 && my >= y && my <= y + 98) return { c, r };
+        if (mx >= x && mx <= x + cardW && my >= y && my <= y + cardH) return { c, r };
       }
     }
     return null;
+  }
+
+  function clampShopCursor() {
+    const cols = shopCols(world.pass, world.gear);
+    world.shopCol = clamp(world.shopCol, 0, cols.length - 1);
+    const n = Math.max(1, cols[world.shopCol].length);
+    world.shopRow = clamp(world.shopRow, 0, n - 1);
   }
 
   function buySelected() {
@@ -855,12 +953,16 @@ export function createGame(canvas, input) {
       sfx.ui();
       return;
     }
-    world.tokens -= item.price;
+    world.tokens -= st.price != null ? st.price : item.price;
     if (world.shopCol === 0) world.gear.armor = item.tier;
     else if (world.shopCol === 1) world.gear.weapon = item.tier;
+    else if (isStat(item)) world.gear[item.rankKey] = (world.gear[item.rankKey] || 0) + 1;
     else if (item.id === "sneakers") world.gear.sneakers = true;
     else if (item.id === "signal") world.gear.signal = true;
     else if (item.id === "dash") world.gear.dash = true;
+    else if (item.id === "static") world.gear.static = true;
+    else if (item.id === "recall") world.gear.recall = true;
+    else if (item.id === "wind") world.gear.wind = true;
     else if (item.id === "1up" || item.id === "1up2") {
       if (item.id === "1up2") world.gear.passLives += 1;
       else world.gear.extraLives += 1;
@@ -868,7 +970,8 @@ export function createGame(canvas, input) {
     }
     syncPlayerBody();
     sfx.pickup();
-    announce = "EQUIPPED  —  " + item.name;
+    const rankNow = isStat(item) ? statRank(world.gear, item) : 0;
+    announce = isStat(item) ? `EQUIPPED  —  ${item.name} +${rankNow}` : "EQUIPPED  —  " + item.name;
     announceT = 1.3;
   }
 
@@ -919,17 +1022,35 @@ export function createGame(canvas, input) {
     input.pollGamepad();
     const southTap = input.pad.south && !padSouthWas;
     const eastTap = input.pad.east && !padEastWas;
+    const westTap = input.pad.west && !padWestWas;
     const lbTap = input.pad.lb && !padLbWas;
+    const rbTap = input.pad.rb && !padRbWas;
     padSouthWas = input.pad.south;
     padEastWas = input.pad.east;
+    padWestWas = input.pad.west;
     padLbWas = input.pad.lb;
+    padRbWas = input.pad.rb;
     if (world.shopOpen) {
       if (input.consume("esc") || eastTap) closeShop();
       if (input.consume("start") || input.consume("shop")) buySelected();
-      if (input.consume("left")) world.shopCol = (world.shopCol + 2) % 3;
-      if (input.consume("right")) world.shopCol = (world.shopCol + 1) % 3;
-      if (input.consume("up")) world.shopRow = (world.shopRow + 2) % 3;
-      if (input.consume("down")) world.shopRow = (world.shopRow + 1) % 3;
+      const cols = shopCols(world.pass, world.gear);
+      const nc = cols.length;
+      if (input.consume("left")) {
+        world.shopCol = (world.shopCol + nc - 1) % nc;
+        clampShopCursor();
+      }
+      if (input.consume("right")) {
+        world.shopCol = (world.shopCol + 1) % nc;
+        clampShopCursor();
+      }
+      if (input.consume("up")) {
+        const n = Math.max(1, cols[world.shopCol].length);
+        world.shopRow = (world.shopRow + n - 1) % n;
+      }
+      if (input.consume("down")) {
+        const n = Math.max(1, cols[world.shopCol].length);
+        world.shopRow = (world.shopRow + 1) % n;
+      }
       if (input.mouse.clicked) {
         const col = shopHit(input.mouse.x, input.mouse.y);
         if (col) {
@@ -988,6 +1109,10 @@ export function createGame(canvas, input) {
     } else {
       p.dashCd = Math.max(0, (p.dashCd || 0) - dt);
       p.dashT = Math.max(0, (p.dashT || 0) - dt);
+      p.fieldCd = Math.max(0, (p.fieldCd || 0) - dt);
+      p.fieldT = Math.max(0, (p.fieldT || 0) - dt);
+      p.recallCd = Math.max(0, (p.recallCd || 0) - dt);
+      p.recallT = Math.max(0, (p.recallT || 0) - dt);
       if (world.gear.dash && p.dashCd <= 0 && (input.consume("dash") || lbTap)) {
         const d = ml > 0.2 ? norm(mx, my) : { x: Math.cos(p.aim), y: Math.sin(p.aim) };
         p.dashT = 0.14;
@@ -997,7 +1122,13 @@ export function createGame(canvas, input) {
         p.iframes = Math.max(p.iframes, 0.2);
         burst(p.x, p.y, 6, "#5ef6ff", 0.18);
       }
-      const spd = 210 * (world.gear.sneakers ? 1.28 : 1);
+      if (world.gear.static && p.fieldCd <= 0 && (input.consume("field") || rbTap)) {
+        tryStaticField();
+      }
+      if (world.gear.recall && p.recallCd <= 0 && (input.consume("recall") || westTap)) {
+        tryRemoteRecall();
+      }
+      const spd = 210 * (world.gear.sneakers ? 1.28 : 1) * (1 + 0.055 * (world.gear.moveUp || 0));
       if (p.dashT > 0) {
         p.vx = p.dashX * 520;
         p.vy = p.dashY * 520;
@@ -1107,10 +1238,33 @@ export function createGame(canvas, input) {
         }
       } else if (b.kind === "boss") {
         const phase = bossPhaseOf(b, world.pass);
-        b.orbitT = (b.orbitT || 0) + dt * (1.15 + phase * 0.22);
+        if ((b.lastPhase || 1) < phase) {
+          b.lastPhase = phase;
+          b.tele = 0.3;
+          b.fireT = 0.28;
+          flash = 0.28;
+          cameraPunch(8, 0.1);
+          announce = `DIRECTORY PHASE ${phase}`;
+          announceT = 2;
+          sfx.boss();
+        }
+        b.orbitT = (b.orbitT || 0) + dt * (1.15 + phase * 0.28);
         const want = 148;
         const side = Math.cos(b.orbitT);
-        if (dist < want - 24) {
+        b.slamT = Math.max(0, (b.slamT || 0) - dt);
+        if (b.slamT > 0) {
+          sx = Math.cos(ang);
+          sy = Math.sin(ang);
+          moveSpd = b.speed * (3.15 + phase * 0.1);
+          if (b.slamT <= dt) {
+            const n = phase >= 4 ? 14 : 10;
+            for (let i = 0; i < n; i++) {
+              const a = (i / n) * Math.PI * 2;
+              fireAmber(b.x + Math.cos(a) * 22, b.y + Math.sin(a) * 22, a, 220, 4.5);
+            }
+            b.tele = 0.18;
+          }
+        } else if (dist < want - 24) {
           sx = -Math.cos(ang);
           sy = -Math.sin(ang);
         } else if (dist > want + 46) {
@@ -1120,16 +1274,18 @@ export function createGame(canvas, input) {
           sx = -Math.sin(ang) * side;
           sy = Math.cos(ang) * side;
         }
+        if (b.slamT <= 0) moveSpd *= 1 + (phase - 1) * 0.16;
         b.dashT = (b.dashT || 0) - dt;
-        if (b.dashT <= -1.25) {
-          b.dashT = 0.2;
+        const dashWait = phase >= 4 ? 0.68 : phase >= 3 ? 0.88 : phase >= 2 ? 1.04 : 1.25;
+        if (b.slamT <= 0 && b.dashT <= -dashWait) {
+          b.dashT = 0.22;
           b.tele = 0.16;
         }
-        if (b.dashT > 0) {
+        if (b.slamT <= 0 && b.dashT > 0) {
           const cut = ang + (side >= 0 ? 0.7 : -0.7);
           sx = Math.cos(cut);
           sy = Math.sin(cut);
-          moveSpd = b.speed * (2.1 + phase * 0.15);
+          moveSpd = b.speed * (2.1 + phase * 0.22);
         }
         b.tele = Math.max(0, (b.tele || 0) - dt);
       }
@@ -1193,10 +1349,11 @@ export function createGame(canvas, input) {
       }
       if (b.kind === "boss" && b.fireT <= 0) {
         const phase = bossPhaseOf(b, world.pass);
-        let gap = phase >= 4 ? 0.52 : phase >= 3 ? 0.64 : phase >= 2 ? 0.88 : 1.12;
-        if (world.pass >= 2) gap *= 0.86;
+        let gap = phase >= 4 ? 0.48 : phase >= 3 ? 0.6 : phase >= 2 ? 0.8 : 1.12;
+        if (world.pass >= 2) gap *= 0.84;
         b.fireT = gap;
-        b.tele = 0.12;
+        b.tele = 0.14;
+        b.atk = (b.atk || 0) + 1;
         const aim = ang;
         const ring = (n, spd, rad) => {
           for (let i = 0; i < n; i++) {
@@ -1210,50 +1367,93 @@ export function createGame(canvas, input) {
             fireAmber(b.x + Math.cos(a) * 22, b.y + Math.sin(a) * 22, a, spd, 4.2);
           }
         };
+        const cross = () => {
+          for (let q = 0; q < 4; q++) {
+            const a = q * (Math.PI / 2) + ((b.atk || 0) % 2 === 0 ? 0 : Math.PI / 4);
+            for (let k = 0; k < 3; k++) {
+              fireAmber(b.x + Math.cos(a) * 18, b.y + Math.sin(a) * 18, a, 150 + k * 42, 4.2);
+            }
+          }
+        };
+        const spiral = () => {
+          const dir = b.spinDir || 1;
+          for (let i = 0; i < 14; i++) {
+            const a = t * 1.4 + i * 0.45 * dir;
+            fireAmber(b.x + Math.cos(a) * 20, b.y + Math.sin(a) * 20, a, 158 + (i % 3) * 14, 4);
+          }
+          b.spinDir = -dir;
+        };
         if (phase === 1) {
           ring(8, 150, 24);
           if ((b.addI || 0) % 2 === 1) aimed([-0.16, 0, 0.16], 240);
         } else if (phase === 2) {
-          if ((b.addI || 0) % 2 === 0) ring(10, 168, 24);
-          else aimed([-0.28, -0.12, 0, 0.12, 0.28], 250);
+          if (b.atk % 2 === 0) ring(10, 168, 24);
+          else aimed([-0.42, -0.28, -0.14, 0, 0.14, 0.28, 0.42], 255);
         } else if (phase === 3) {
-          ring(12, 190, 22);
-          aimed([-0.2, 0, 0.2], 270);
+          if (b.atk % 2 === 0) {
+            cross();
+            aimed([-0.18, 0, 0.18], 260);
+          } else {
+            spiral();
+          }
         } else {
-          ring(16, 88, 20);
-          ring(10, 210, 28);
-          aimed([-0.14, 0, 0.14], 280);
+          if (b.atk % 3 === 0) {
+            b.slamT = 0.28;
+            b.tele = 0.22;
+          } else if (b.atk % 3 === 1) {
+            spiral();
+            aimed([-0.14, 0, 0.14], 280);
+          } else {
+            ring(16, 88, 20);
+            ring(10, 210, 28);
+            cross();
+          }
         }
       }
       if (b.kind === "boss") {
         const phase = bossPhaseOf(b, world.pass);
         b.addT = (b.addT ?? 2.8) - dt;
         const liveAdds = world.bots.filter((x) => x !== b && !x.dead).length;
-        const cap = phase >= 4 ? 7 : phase >= 3 ? 6 : 5;
-        const wait = (phase >= 3 ? 3.1 : 3.6) * (world.pass >= 2 ? 0.85 : 1);
+        const cap = (phase >= 4 ? 7 : phase >= 3 ? 6 : 5) + (world.pass >= 2 ? 1 : 0);
+        const wait = (phase >= 3 ? 3.1 : 3.6) * (world.pass >= 2 ? 0.78 : 1);
         if (b.addT <= 0 && liveAdds < cap) {
           b.addT = wait;
           b.addI = (b.addI || 0) + 1;
-          if (phase === 1) {
+          if (announceT < 0.55) {
+            if (phase === 1) {
+              spawnBot("rusher", ["N", "E"]);
+              announce = "THE MALL COMES WITH YOU — RUSHERS";
+            } else if (phase === 2) {
+              spawnBot("rusher", ["N", "S"]);
+              spawnBot("rusher", ["E", "W"]);
+              spawnBot("shotgun", ["N", "S"]);
+              announce = "THE MALL COMES WITH YOU — STATIC";
+            } else {
+              spawnBot("rusher", ["N", "E"]);
+              spawnBot("shotgun", ["S"]);
+              if (!b.tankDropped || phase >= 4) {
+                spawnBot("security", ["W", "E"]);
+                b.tankDropped = true;
+                announce = "THE MALL COMES WITH YOU — SECURITY";
+              } else {
+                announce = "THE MALL COMES WITH YOU — RUSHERS";
+              }
+            }
+            announceT = 1.4;
+          } else if (phase === 1) {
             spawnBot("rusher", ["N", "E"]);
-            announce = "THE MALL COMES WITH YOU — RUSHERS";
           } else if (phase === 2) {
             spawnBot("rusher", ["N", "S"]);
             spawnBot("rusher", ["E", "W"]);
             spawnBot("shotgun", ["N", "S"]);
-            announce = "THE MALL COMES WITH YOU — STATIC";
           } else {
             spawnBot("rusher", ["N", "E"]);
             spawnBot("shotgun", ["S"]);
             if (!b.tankDropped || phase >= 4) {
               spawnBot("security", ["W", "E"]);
               b.tankDropped = true;
-              announce = "THE MALL COMES WITH YOU — SECURITY";
-            } else {
-              announce = "THE MALL COMES WITH YOU — RUSHERS";
             }
           }
-          announceT = 1.4;
         }
       }
     }
@@ -1299,7 +1499,15 @@ export function createGame(canvas, input) {
 
     for (const u of world.pickups) {
       u.t -= dt;
-      if (hits(u, p)) {
+      if ((p.recallT || 0) > 0 && u.kind === "token") {
+        const d = Math.hypot(p.x - u.x, p.y - u.y);
+        if (d < 230 && d > 2) {
+          u.x += ((p.x - u.x) / d) * 280 * dt;
+          u.y += ((p.y - u.y) / d) * 280 * dt;
+        }
+      }
+      const grab = (p.recallT || 0) > 0 && u.kind === "token" ? { ...p, r: p.r + 10 } : p;
+      if (hits(u, grab)) {
         u.t = 0;
         applyPickup(u);
       }
@@ -1394,6 +1602,61 @@ export function createGame(canvas, input) {
     return true;
   }
 
+  function hpFillColor(ratio) {
+    if (ratio > 0.58) return "#3ee86a";
+    if (ratio > 0.3) return "#e8d44a";
+    return "#ff3a3a";
+  }
+
+  function drawPlayerHpBar(x, cy, p) {
+    const max = Math.max(1, p.maxHp || 1);
+    const hp = clamp(p.hp, 0, max);
+    const ratio = hp / max;
+    const barW = 132;
+    const barH = 12;
+    const by = cy - barH / 2;
+    ctx.fillStyle = ratio > 0.3 ? "#3ee86a" : "#ff3a3a";
+    ctx.beginPath();
+    ctx.moveTo(x + 5, cy - 4);
+    ctx.lineTo(x + 9, cy);
+    ctx.lineTo(x + 5, cy + 4);
+    ctx.lineTo(x + 1, cy);
+    ctx.closePath();
+    ctx.fill();
+    const bx = x + 14;
+    ctx.fillStyle = "#14180f";
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.fillStyle = hpFillColor(ratio);
+    ctx.fillRect(bx, by, barW * ratio, barH);
+    const segs = Math.min(max, 12);
+    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.lineWidth = 1;
+    for (let i = 1; i < segs; i++) {
+      const tx = bx + (barW * i) / segs;
+      ctx.beginPath();
+      ctx.moveTo(tx, by + 1);
+      ctx.lineTo(tx, by + barH - 1);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = "rgba(180,255,180,0.55)";
+    ctx.strokeRect(bx, by, barW, barH);
+    ctx.fillStyle = "#f2f2f0";
+    ctx.font = "bold 10px Courier New, monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${hp}/${max}`, bx + barW + 6, cy + 1);
+    ctx.textBaseline = "alphabetic";
+  }
+
+  function helpLine() {
+    const bits = ["WASD MOVE"];
+    if (world.gear.dash) bits.push("SHIFT DASH");
+    if (world.gear.static) bits.push("Q FIELD");
+    if (world.gear.recall) bits.push("F RECALL");
+    bits.push("E SHOP", "M MUTE");
+    return bits.join("  ");
+  }
+
   function drawChyron() {
     ctx.fillStyle = "#050608";
     ctx.fillRect(0, 0, W, HUD_TOP);
@@ -1434,12 +1697,20 @@ export function createGame(canvas, input) {
       const need = xpToNext(world.level);
       const barX = 198;
       const barW = 160;
+      const capped = world.level >= LEVEL_CAP || !need;
       ctx.fillStyle = "#122";
       ctx.fillRect(barX, 28, barW, 8);
       ctx.fillStyle = "#5ef6ff";
-      ctx.fillRect(barX, 28, barW * (need ? clamp(world.xp / need, 0, 1) : 1), 8);
+      ctx.fillRect(barX, 28, barW * (capped ? 1 : clamp(world.xp / need, 0, 1)), 8);
       ctx.strokeStyle = "rgba(94,246,255,0.5)";
       ctx.strokeRect(barX, 28, barW, 8);
+      if (capped) {
+        ctx.fillStyle = "#022428";
+        ctx.font = "bold 8px Courier New, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("MAX", barX + barW / 2, 33);
+        ctx.textAlign = "left";
+      }
       ctx.fillStyle = "#e8b44a";
       ctx.font = "bold 12px Courier New, monospace";
       ctx.fillText(`TKN ${world.tokens}`, 372, 34);
@@ -1461,22 +1732,31 @@ export function createGame(canvas, input) {
       for (let i = 0; i < 5; i++) drawCrtLife(ctx, 108 + i * 26, H - HUD_BOT / 2, i < world.lives);
       const p = world.player;
       if (p) {
-        ctx.fillStyle = "#7cff9a";
-        ctx.font = "bold 11px Courier New, monospace";
-        ctx.fillText(`HP ${p.hp}/${p.maxHp}`, 250, H - HUD_BOT / 2 + 1);
+        drawPlayerHpBar(248, H - HUD_BOT / 2, p);
         const gear = [];
         if (world.gear.armor) gear.push((armorByTier(world.gear.armor) || {}).name);
         if (world.gear.weapon) gear.push((weaponByTier(world.gear.weapon) || {}).name);
         if (world.gear.sneakers) gear.push("SNEAK");
         if (world.gear.dash) gear.push("DASH");
+        if (world.gear.static) gear.push("FIELD");
+        if (world.gear.recall) gear.push("RECALL");
+        if (world.gear.wind) gear.push("WIND");
+        if (world.gear.hpUp) gear.push(`HP+${world.gear.hpUp}`);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(456, H - HUD_BOT + 4, 200, HUD_BOT - 6);
+        ctx.clip();
         ctx.fillStyle = "#8ff";
-        ctx.font = "10px Courier New, monospace";
-        ctx.fillText(gear.filter(Boolean).join("  "), 340, H - HUD_BOT / 2 + 1);
+        ctx.font = "9px Courier New, monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(gear.filter(Boolean).join("  "), 456, H - HUD_BOT / 2 + 1);
+        ctx.restore();
       }
       ctx.textAlign = "right";
       ctx.fillStyle = "#667";
       ctx.font = "10px Trebuchet MS, sans-serif";
-      const help = muted || isMuted() ? "MUTED  M" : world.gear.dash ? "WASD MOVE  SHIFT DASH  E SHOP  M MUTE" : "WASD MOVE  E SHOP  M MUTE";
+      const help = muted || isMuted() ? "MUTED  M" : helpLine();
       ctx.fillText(help, W - 16, H - HUD_BOT / 2);
     }
   }
@@ -1549,6 +1829,21 @@ export function createGame(canvas, input) {
     if (world.player && (state === "play" || world.player.dead)) {
       drawPlayer(ctx, world.player, t);
       const p = world.player;
+      if ((p.fieldT || 0) > 0) {
+        const k = p.fieldT / 0.24;
+        ctx.strokeStyle = `rgba(94,246,255,${0.25 + k * 0.55})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 40 + (1 - k) * 70, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if ((p.recallT || 0) > 0) {
+        ctx.strokeStyle = `rgba(232,180,74,${0.2 + (p.recallT % 0.4) * 0.4})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 26 + Math.sin(t * 10) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       if (p.dead) {
         /* shatter only */
       } else {
@@ -1579,6 +1874,7 @@ export function createGame(canvas, input) {
       ctx.fillStyle = "rgba(232,180,74,0.85)";
       ctx.fillRect(bx + bw / 3, by, 1, 10);
       ctx.fillRect(bx + (bw * 2) / 3, by, 1, 10);
+      if (world.pass >= 2) ctx.fillRect(bx + bw * 0.22, by, 1, 10);
       ctx.fillStyle = "#fff";
       ctx.font = "bold 10px Trebuchet MS, sans-serif";
       ctx.textAlign = "center";
@@ -1720,28 +2016,26 @@ export function createGame(canvas, input) {
     ctx.fillStyle = "rgba(4,8,10,0.78)";
     ctx.fillRect(ARENA.x, ARENA.y, ARENA.s, ARENA.s);
     ctx.fillStyle = "#0c1214";
-    ctx.fillRect(148, 78, 664, 560);
+    ctx.fillRect(134, 64, 688, 616);
     ctx.strokeStyle = "#5ef6ff";
     ctx.lineWidth = 2;
-    ctx.strokeRect(148, 78, 664, 560);
+    ctx.strokeRect(134, 64, 688, 616);
     ctx.fillStyle = "#e8b44a";
-    ctx.font = "bold 22px Trebuchet MS, sans-serif";
+    ctx.font = "bold 20px Trebuchet MS, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(world.pass >= 2 ? "PRIZE BOOTH  —  LOOP GEAR" : "PRIZE BOOTH", W / 2, 108);
+    ctx.fillText(world.pass >= 2 ? "PRIZE BOOTH  —  LOOP GEAR" : "PRIZE BOOTH", W / 2, 88);
     ctx.fillStyle = "#5ef6ff";
     ctx.font = "11px Courier New, monospace";
-    ctx.fillText(`TKN ${world.tokens}    LV ${world.level}    PASS ${world.pass}    ESC / B CLOSES`, W / 2, 130);
-    const heads = world.pass >= 2 ? ["SIGNAL+ ARMOR", "SIGNAL+ GUNS", "LOOP STOCK"] : ["ARMOR", "WEAPONS", "CHARACTER"];
+    ctx.fillText(`TKN ${world.tokens}    LV ${world.level}    PASS ${world.pass}    ESC / B CLOSES`, W / 2, 110);
+    const heads = world.pass >= 2 ? ["SIGNAL+ ARMOR", "SIGNAL+ GUNS", "LOOP STOCK", "SIGNAL AMPS"] : ["ARMOR", "WEAPONS", "CHARACTER", "AMPS"];
     const cols = shopCols(world.pass, world.gear);
-    const ox = 168;
-    const oy = 168;
-    const cw = 210;
-    const rh = 108;
-    for (let c = 0; c < 3; c++) {
+    const { ox, oy, cw, rh, cardW, cardH } = shopLayout();
+    for (let c = 0; c < cols.length; c++) {
       ctx.fillStyle = "#5ef6ff";
-      ctx.font = "bold 13px Courier New, monospace";
-      ctx.fillText(heads[c], ox + c * cw + 100, 154);
-      for (let r = 0; r < 3; r++) {
+      ctx.font = "bold 11px Courier New, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(heads[c], ox + c * cw + cardW / 2, oy - 12);
+      for (let r = 0; r < cols[c].length; r++) {
         const item = cols[c][r];
         if (!item) continue;
         const x = ox + c * cw;
@@ -1749,21 +2043,26 @@ export function createGame(canvas, input) {
         const sel = world.shopCol === c && world.shopRow === r;
         const st = itemState(c, item);
         ctx.fillStyle = sel ? "rgba(94,246,255,0.18)" : "rgba(255,255,255,0.04)";
-        ctx.fillRect(x, y, 200, 98);
+        ctx.fillRect(x, y, cardW, cardH);
         ctx.strokeStyle = sel ? "#5ef6ff" : st.eq ? "#e8b44a" : "#334";
-        ctx.strokeRect(x, y, 200, 98);
+        ctx.strokeRect(x, y, cardW, cardH);
         ctx.fillStyle = "#f2f2f0";
-        ctx.font = "bold 12px Trebuchet MS, sans-serif";
+        ctx.font = "bold 11px Trebuchet MS, sans-serif";
         ctx.textAlign = "left";
-        ctx.fillText(item.name, x + 10, y + 22);
+        const title = isStat(item) && st.rank ? `${item.name} +${st.rank}` : item.name;
+        ctx.fillText(title, x + 8, y + 16);
         ctx.fillStyle = "#9aa";
-        ctx.font = "10px Courier New, monospace";
-        ctx.fillText(item.blurb, x + 10, y + 42);
-        ctx.fillStyle = st.can ? "#e8b44a" : st.eq || st.owned ? "#667" : "#844";
-        ctx.font = "bold 12px Courier New, monospace";
+        ctx.font = "9px Courier New, monospace";
+        ctx.fillText(item.blurb, x + 8, y + 34);
+        ctx.fillStyle = st.can ? "#e8b44a" : st.eq || st.owned || st.maxed ? "#667" : "#844";
+        ctx.font = "bold 11px Courier New, monospace";
         const sold = st.owned && c === 2 && (item.id === "1up" || item.id === "1up2");
-        const tag = st.eq ? "EQUIPPED" : sold ? "SOLD OUT" : st.owned ? "OWNED" : `${item.price} TKN`;
-        ctx.fillText(tag, x + 10, y + 78);
+        let tag = `${st.price != null ? st.price : item.price} TKN`;
+        if (st.eq) tag = "EQUIPPED";
+        else if (st.maxed) tag = "MAXED";
+        else if (sold) tag = "SOLD OUT";
+        else if (st.owned && !isStat(item)) tag = "OWNED";
+        ctx.fillText(tag, x + 8, y + 62);
       }
     }
     ctx.restore();
