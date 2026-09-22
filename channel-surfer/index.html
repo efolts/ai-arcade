@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#07080c" />
+    <title>CHANNEL SURFER</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script type="module" crossorigin src="./assets/index-3i_Sqiys.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index--T7uLXwn.css">
+  </head>
+  <body>
+    <div id="frame">
+      <div id="stage" class="mode-title ch-live">
+        <canvas id="view" width="960" height="780"></canvas>
+        <div id="noise" aria-hidden="true"></div>
+        <div id="crt" aria-hidden="true"></div>
+        <div id="hurt" aria-hidden="true"></div>
+        <div id="flash" aria-hidden="true"></div>
+
+        <div id="hud">
+          <div id="bars">
+            <div class="bar">
+              <label>HEALTH</label>
+              <div class="track"><i id="health-fill"></i></div>
+              <b id="health-num">100</b>
+            </div>
+            <div class="bar">
+              <label>SIGNAL</label>
+              <div class="track signal"><i id="signal-fill"></i></div>
+              <b id="signal-num">100</b>
+            </div>
+          </div>
+          <div id="channel-readout">
+            <span>CHANNEL</span>
+            <strong id="ch-name">LIVE</strong>
+          </div>
+          <div id="wave-readout">
+            <span>WAVE 1</span>
+            <strong id="enemy-count">6</strong>
+            <em>TESSERA</em>
+          </div>
+          <div id="crosshair" aria-hidden="true"><b></b><b></b><b></b><b></b></div>
+          <div id="tip"></div>
+          <div id="banner"></div>
+          <div id="hint">WASD move · click fire · 1 2 3 · wheel / Q · esc pause</div>
+          <div id="brand">KRCD 7</div>
+        </div>
+
+        <div id="title">
+          <p class="kicker">KRCD 7 · MALL COURT · AFTER HOURS</p>
+          <h1><span>CHANNEL</span><span>SURFER</span></h1>
+          <p class="promise">The FPS where changing the channel changes the fight.</p>
+          <div class="cards">
+            <div><b>1 LIVE</b><span>Precise cyan bolt. Signal comes back.</span></div>
+            <div><b>2 STATIC</b><span>Spread shot. Reveals cloaks and visor seams. Drains Signal.</span></div>
+            <div><b>3 DEAD AIR</b><span>Faster. Phase striped shutters. Cannot fire. Drains Signal.</span></div>
+          </div>
+          <p class="controls">WASD move · mouse look · click fire · wheel or Q cycles · Esc pause · M mute</p>
+          <button id="start" type="button">Click or press Enter</button>
+        </div>
+
+        <div id="panel" hidden>
+          <div class="card">
+            <p class="kicker" id="panel-kicker">KRCD 7</p>
+            <h2 id="panel-title">Paused</h2>
+            <p id="panel-body"></p>
+            <ul id="rules">
+              <li><b>LIVE</b> Hitscan bolt, solid mall, Signal regenerates.</li>
+              <li><b>STATIC</b> Short spread. Reveals the fountain cloak, the alley cache, and visor seams.</li>
+              <li><b>DEAD AIR</b> Phase the east shutter. No firing. Faster drain.</li>
+              <li>Kills restore Signal. Close, burst, and STATIC kills restore more.</li>
+            </ul>
+            <p id="panel-meta"></p>
+            <div class="row">
+              <button id="panel-primary" type="button">Resume</button>
+              <button id="panel-secondary" type="button">Restart</button>
+            </div>
+          </div>
+        </div>
+        <p id="boot-error"></p>
+      </div>
+    </div>
+  </body>
+</html>
