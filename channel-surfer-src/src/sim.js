@@ -335,6 +335,7 @@ export function resolveShot(origin, dir, range, enemies, colliders) {
   for (const e of enemies) {
     if (!e.alive || !e.hittable) continue;
     const spheres = [
+      // Fitted to the Phase 3 kit: helmet crown ~1.84, chest across the body sphere.
       { y: (e.y || 0) + 1.62, r: 0.26, weak: true },
       { y: (e.y || 0) + 0.98, r: 0.46, weak: false },
     ];

@@ -216,8 +216,8 @@ describe("weapons", () => {
 });
 
 describe("court layout", () => {
-  it("ships one court cloak, one cloaked cache, and no phase-3 bosses", () => {
-    assert.equal(PHASE, 2);
+  it("ships the two-room slice with phase-3 art and no later bosses", () => {
+    assert.equal(PHASE, 3);
     assert.equal(ENEMIES.filter((e) => e.cloak).length, 1);
     assert.equal(ENEMIES.find((e) => e.cloak).id, "fountain");
     assert.equal(PICKUPS.filter((p) => p.cloaked).length, 1);
@@ -233,6 +233,10 @@ describe("court layout", () => {
     );
     const reserved = new Set(RESERVED_CONTENT.map((item) => item.id));
     assert.equal(reserved.has("directory"), true);
+    assert.equal(reserved.has("arsenal"), true);
+    assert.equal(reserved.has("upgrades"), true);
+    assert.equal(reserved.has("wings"), true);
+    assert.equal(reserved.has("broadcast-echo"), true);
     assert.equal(reserved.has("visor-priest"), false);
     for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES]) assert.equal(reserved.has(enemy.id), false);
     assert.ok(LEASHES.alley);

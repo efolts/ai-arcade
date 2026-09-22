@@ -1,6 +1,6 @@
-/** Phase 2: mall court plus the radio wing. Collision and encounters are shared by tests and meshes. */
+/** Phase 3 art on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
 
-export const PHASE = 2;
+export const PHASE = 3;
 
 export const BOUNDS = { minX: -15.55, maxX: 15.55, minZ: -28.15, maxZ: 13.55 };
 
@@ -45,9 +45,11 @@ export const LEASHES = {
 };
 
 export const RESERVED_CONTENT = [
-  { id: "directory", phase: 3, kind: "boss" },
-  { id: "upgrades", phase: 3, kind: "system" },
-  { id: "broadcast-echo", phase: 3, kind: "system" },
+  { id: "arsenal", phase: 4, kind: "system" },
+  { id: "upgrades", phase: 5, kind: "system" },
+  { id: "wings", phase: 6, kind: "level" },
+  { id: "directory", phase: 6, kind: "boss" },
+  { id: "broadcast-echo", phase: 6, kind: "later" },
 ];
 
 function box(id, mat, x, y, z, w, h, d, extra = {}) {

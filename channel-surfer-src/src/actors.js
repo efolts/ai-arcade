@@ -1,193 +1,296 @@
 import * as THREE from "three";
 import { PRIEST_SPAWN, createChapelEnemies, createEnemies } from "./level.js";
+import { frustum, geos, mesh } from "./meshkit.js";
 
-function limb(material, w, h, d, jointMat) {
-  const pivot = new THREE.Group();
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-  mesh.position.y = -h / 2;
-  mesh.castShadow = true;
-  const joint = new THREE.Mesh(new THREE.SphereGeometry(Math.max(w, d) * 0.55, 8, 8), jointMat);
-  pivot.add(mesh, joint);
-  return pivot;
+function mark(material, rest = 0x000000, restI = 0) {
+  material.userData.rest = rest;
+  material.userData.restI = restI;
+  material.emissive = new THREE.Color(rest);
+  material.emissiveIntensity = restI;
+  return material;
 }
 
-function buildTessera(options = {}) {
+function palette(textures) {
+  const pearl = mark(
+    new THREE.MeshStandardMaterial({
+      map: textures.pearl,
+      roughness: 0.52,
+      metalness: 0.1,
+      flatShading: true,
+    })
+  );
+  const worn = mark(
+    new THREE.MeshStandardMaterial({
+      map: textures.pearlWorn,
+      roughness: 0.68,
+      metalness: 0.06,
+      flatShading: true,
+    })
+  );
+  const joint = mark(
+    new THREE.MeshStandardMaterial({
+      map: textures.joint,
+      color: 0x222222,
+      roughness: 0.4,
+      metalness: 0.55,
+      flatShading: true,
+    })
+  );
+  const visor = mark(
+    new THREE.MeshStandardMaterial({
+      color: 0x070707,
+      roughness: 0.16,
+      metalness: 0.78,
+      flatShading: true,
+    })
+  );
+  const cloth = mark(
+    new THREE.MeshStandardMaterial({
+      map: textures.cloth,
+      roughness: 0.78,
+      metalness: 0.02,
+      flatShading: true,
+    })
+  );
+  const gold = mark(
+    new THREE.MeshStandardMaterial({
+      map: textures.gold,
+      roughness: 0.36,
+      metalness: 0.68,
+      flatShading: true,
+    }),
+    0x6a5018,
+    0.16
+  );
+  const amber = new THREE.MeshBasicMaterial({ color: 0xffb14a });
+  return { pearl, worn, joint, visor, cloth, gold, amber };
+}
+
+function jointSphere(material, radius, x, y, z) {
+  const obj = mesh(geos().joint, material, x, y, z);
+  obj.scale.setScalar(radius);
+  return obj;
+}
+
+function paint(list, amount, tint = 0xfff6ee) {
+  for (const material of list) {
+    if (amount > 0.02) {
+      material.emissive.setHex(tint);
+      material.emissiveIntensity = amount;
+    } else {
+      material.emissive.setHex(material.userData.rest || 0x000000);
+      material.emissiveIntensity = material.userData.restI || 0;
+    }
+  }
+}
+
+function buildTessera(textures, options = {}) {
   const group = new THREE.Group();
-  const pearl = new THREE.MeshStandardMaterial({
-    color: 0xf4f1ea,
-    roughness: 0.42,
-    metalness: 0.08,
-    emissive: 0xfff6ea,
-    emissiveIntensity: 0,
-  });
-  const black = new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.38, metalness: 0.45 });
-  const joint = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, roughness: 0.5, metalness: 0.25 });
+  const g = geos();
+  const mat = palette(textures);
+  const parts = [];
 
-  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.24), pearl);
-  pelvis.position.y = 0.84;
-  pelvis.castShadow = true;
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.58, 0.28), pearl);
-  torso.position.y = 1.24;
-  torso.castShadow = true;
-  const band = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.08, 0.3), black);
-  band.position.y = 1.02;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.3), pearl);
-  head.position.y = 1.68;
-  head.castShadow = true;
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.12, 0.06), black);
-  visor.position.set(0, 1.68, 0.16);
-  const weak = new THREE.Mesh(
-    new THREE.BoxGeometry(0.26, 0.05, 0.03),
-    new THREE.MeshBasicMaterial({ color: 0xffb14a })
-  );
-  weak.position.set(0, 1.68, 0.2);
+  const helmet = mesh(g.helmet, mat.pearl, 0, 1.66, 0);
+  helmet.scale.set(1.06, 0.94, 1.08);
+  const collar = mesh(g.collar, mat.joint, 0, 1.46, 0);
+  const chest = mesh(g.chest, mat.pearl, 0, 1.24, 0);
+  const abdomen = mesh(g.abdomen, mat.pearl, 0, 0.96, 0);
+  const pelvis = mesh(g.pelvis, mat.pearl, 0, 0.82, 0);
+  const belt = mesh(new THREE.BoxGeometry(0.38, 0.06, 0.24), mat.joint, 0, 1.04, 0);
+  const pecL = mesh(g.pec, mat.pearl, -0.1, 1.28, 0.15);
+  pecL.rotation.y = 0.22;
+  const pecR = mesh(g.pec, mat.pearl, 0.1, 1.28, 0.15);
+  pecR.rotation.y = -0.22;
+  const sensor = mesh(new THREE.BoxGeometry(0.04, 0.055, 0.02), mat.pearl, 0, 1.8, 0.155);
+  sensor.rotation.z = Math.PI / 4;
+
+  const visorFront = mesh(new THREE.BoxGeometry(0.32, 0.17, 0.055), mat.visor, 0, 1.63, 0.155);
+  const visorL = mesh(new THREE.BoxGeometry(0.055, 0.15, 0.12), mat.visor, -0.15, 1.63, 0.07);
+  visorL.rotation.y = 0.65;
+  const visorR = mesh(new THREE.BoxGeometry(0.055, 0.15, 0.12), mat.visor, 0.15, 1.63, 0.07);
+  visorR.rotation.y = -0.65;
+  const weak = mesh(g.seam, mat.amber, 0, 1.645, 0.175);
   weak.visible = false;
+  weak.castShadow = false;
 
-  const lLeg = limb(pearl, 0.14, 0.72, 0.14, joint);
-  lLeg.position.set(-0.12, 0.74, 0);
-  const rLeg = limb(pearl, 0.14, 0.72, 0.14, joint);
-  rLeg.position.set(0.12, 0.74, 0);
-  const lArm = limb(pearl, 0.1, 0.58, 0.1, joint);
-  lArm.position.set(-0.34, 1.42, 0);
-  const rArm = limb(pearl, 0.1, 0.58, 0.1, joint);
-  rArm.position.set(0.34, 1.42, 0);
+  parts.push(helmet, collar, chest, abdomen, pelvis, belt, pecL, pecR, sensor, visorFront, visorL, visorR, weak);
 
-  const gun = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.32), black);
-  gun.position.set(0, -0.58, 0.12);
-  const muzzle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.05, 0.05, 0.08),
-    new THREE.MeshBasicMaterial({ color: 0xffb14a })
-  );
-  muzzle.position.set(0, -0.58, 0.3);
+  function limb(side, shoulder) {
+    const pivot = new THREE.Group();
+    if (shoulder) {
+      pivot.add(jointSphere(mat.joint, 0.055, 0, 0, 0));
+      pivot.add(mesh(g.upper, mat.pearl, 0, -0.16, 0));
+      pivot.add(jointSphere(mat.joint, 0.042, 0, -0.3, 0));
+      pivot.add(mesh(g.forearm, mat.joint, 0, -0.42, 0));
+      pivot.add(mesh(g.hand, mat.joint, 0, 0.08, 0));
+      const pad = mesh(g.shoulder, mat.pearl, side * 0.02, 0.02, 0);
+      pivot.add(pad);
+    } else {
+      pivot.add(jointSphere(mat.joint, 0.058, 0, 0, 0));
+      pivot.add(mesh(g.thigh, mat.pearl, 0, -0.2, 0));
+      pivot.add(jointSphere(mat.joint, 0.048, 0, -0.38, 0));
+      pivot.add(mesh(g.shin, mat.worn, 0, -0.56, 0));
+      const foot = mesh(g.foot, mat.worn, 0, -0.76, 0.03);
+      pivot.add(foot);
+    }
+    return pivot;
+  }
+
+  const lLeg = limb(-1, false);
+  lLeg.position.set(-0.12, 0.8, 0);
+  lLeg.rotation.z = 0.08;
+  const rLeg = limb(1, false);
+  rLeg.position.set(0.12, 0.8, 0);
+  rLeg.rotation.z = -0.08;
+  const lArm = limb(-1, true);
+  lArm.position.set(-0.32, 1.4, 0);
+  lArm.rotation.z = 0.42;
+  const rArm = limb(1, true);
+  rArm.position.set(0.32, 1.4, 0);
+  rArm.rotation.z = -0.36;
+
+  const gun = mesh(g.gun, mat.joint, 0.045, 0.02, 0.02);
+  const muzzle = mesh(g.muzzle, mat.amber, 0.045, -0.525, 0.22);
+  muzzle.castShadow = false;
   rArm.add(gun, muzzle);
 
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.42, 12),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false })
   );
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.03;
+  shadow.position.y = 0.02;
 
-  group.add(pelvis, torso, band, head, visor, weak, lLeg, rLeg, lArm, rArm, shadow);
+  group.add(...parts, lLeg, rLeg, lArm, rArm, shadow);
+
   if (options.vestment) {
-    const robe = new THREE.Mesh(
-      new THREE.BoxGeometry(0.64, 0.78, 0.38),
-      new THREE.MeshStandardMaterial({ color: 0xf7f4ee, roughness: 0.62, metalness: 0.02 })
-    );
-    robe.position.set(0, 0.92, 0);
-    robe.castShadow = true;
-    const stole = new THREE.Mesh(
-      new THREE.BoxGeometry(0.16, 0.7, 0.08),
-      new THREE.MeshStandardMaterial({ color: 0xd4b15a, roughness: 0.38, metalness: 0.62, emissive: 0x6a5018, emissiveIntensity: 0.12 })
-    );
-    stole.position.set(0, 1.18, 0.18);
-    group.add(robe, stole);
+    const tabard = mesh(g.tabard, mat.cloth, 0, 0.78, 0.16);
+    const back = mesh(new THREE.BoxGeometry(0.28, 0.42, 0.04), mat.cloth, 0, 0.95, -0.14);
+    const stole = mesh(g.stole, mat.gold, 0, 1.16, 0.18);
+    const mantle = mesh(frustum(0.52, 0.2, 0.34, 0.14, 0.12), mat.cloth, 0, 1.4, 0);
+    group.add(tabard, back, stole, mantle);
   }
-  return { group, pearl, weak, lLeg, rLeg, lArm, rArm, muzzle };
+
+  return {
+    group,
+    weak,
+    lLeg,
+    rLeg,
+    lArm,
+    rArm,
+    muzzle,
+    flashMats: [mat.pearl, mat.worn, mat.joint, mat.visor, mat.cloth, mat.gold],
+    flash: 0,
+  };
 }
 
-function buildPriest() {
+function buildPriest(textures) {
   const group = new THREE.Group();
-  const robeMat = new THREE.MeshStandardMaterial({
-    color: 0xf7f4ee,
-    roughness: 0.58,
-    metalness: 0.04,
-    emissive: 0x000000,
-    emissiveIntensity: 0,
-  });
-  const pearlMat = new THREE.MeshStandardMaterial({
-    color: 0xf4f1ea,
-    roughness: 0.4,
-    metalness: 0.12,
-    emissive: 0x000000,
-    emissiveIntensity: 0,
-  });
-  const blackMat = new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.35, metalness: 0.48 });
-  const goldMat = new THREE.MeshStandardMaterial({
-    color: 0xd4b15a,
-    roughness: 0.34,
-    metalness: 0.72,
-    emissive: 0x8a6820,
-    emissiveIntensity: 0.16,
-  });
-  const amberMat = new THREE.MeshBasicMaterial({ color: 0xffb14a });
+  const mat = palette(textures);
+  const g = geos();
 
-  const robe = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.72, 0.52), robeMat);
-  robe.position.y = 1.02;
-  robe.castShadow = true;
-  const stole = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.35, 0.08), goldMat);
-  stole.position.set(0, 1.12, 0.28);
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.1, 0.56), goldMat);
-  belt.position.y = 1.18;
-  const hem = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.56), goldMat);
-  hem.position.y = 0.22;
+  const robe = mesh(frustum(0.95, 0.42, 0.62, 0.32, 1.42), mat.cloth, 0, 0.84, 0);
+  const mantle = mesh(frustum(1.15, 0.4, 0.55, 0.26, 0.22), mat.cloth, 0, 1.52, 0);
+  const cowl = mesh(frustum(0.46, 0.3, 0.28, 0.2, 0.22), mat.cloth, 0, 1.7, 0);
+  const hem = mesh(new THREE.BoxGeometry(1.0, 0.06, 0.46), mat.gold, 0, 0.16, 0);
+  const belt = mesh(new THREE.BoxGeometry(0.7, 0.08, 0.38), mat.gold, 0, 1.12, 0.02);
+  const stole = mesh(new THREE.BoxGeometry(0.16, 1.15, 0.05), mat.gold, 0, 1.05, 0.2);
+  const pendant = mesh(new THREE.SphereGeometry(0.045, 8, 6), mat.gold, 0, 0.72, 0.24);
 
-  const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.42, 0.42), pearlMat);
-  helmet.position.y = 2.05;
-  helmet.castShadow = true;
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.16, 0.08), blackMat);
-  visor.position.set(0, 2.04, 0.2);
-  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.045, 0.03), amberMat);
-  seam.position.set(0, 2.04, 0.25);
+  const helmet = mesh(g.helmet, mat.pearl, 0, 2.05, 0);
+  helmet.scale.setScalar(1.18);
+  const sensor = mesh(new THREE.BoxGeometry(0.05, 0.07, 0.025), mat.pearl, 0, 2.24, 0.16);
+  sensor.rotation.z = Math.PI / 4;
+  const visor = mesh(new THREE.BoxGeometry(0.42, 0.18, 0.06), mat.visor, 0, 2.02, 0.22);
+  const visorL = mesh(new THREE.BoxGeometry(0.05, 0.12, 0.12), mat.visor, -0.18, 2.02, 0.07);
+  visorL.rotation.y = 0.5;
+  const visorR = mesh(new THREE.BoxGeometry(0.05, 0.12, 0.12), mat.visor, 0.18, 2.02, 0.07);
+  visorR.rotation.y = -0.5;
+  const seam = mesh(new THREE.BoxGeometry(0.26, 0.035, 0.02), mat.amber, 0, 2.02, 0.21);
   seam.visible = false;
+  seam.castShadow = false;
 
   const haloMat = new THREE.MeshStandardMaterial({
     color: 0xe6c56a,
+    map: textures.gold,
     roughness: 0.28,
     metalness: 0.64,
     emissive: 0xe6c56a,
     emissiveIntensity: 0.85,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.94,
     depthWrite: false,
   });
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.055, 10, 28), haloMat);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.045, 8, 28), haloMat);
   halo.position.set(0, 2.22, -0.16);
+  const inner = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.018, 6, 24), haloMat);
+  halo.add(inner);
 
   function raisedArm(side) {
     const pivot = new THREE.Group();
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.72, 0.15), pearlMat);
-    mesh.position.y = 0.36;
-    mesh.castShadow = true;
-    const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.18), goldMat);
-    cuff.position.y = 0.08;
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), amberMat);
-    hand.position.y = 0.78;
-    pivot.add(mesh, cuff, hand);
-    pivot.position.set(side * 0.58, 1.48, 0.08);
-    pivot.rotation.z = side * -0.85;
-    return { pivot, hand };
+    const sleeve = mesh(frustum(0.2, 0.16, 0.11, 0.1, 0.56), mat.cloth, 0, 0.3, 0);
+    const cuff = mesh(new THREE.BoxGeometry(0.14, 0.05, 0.12), mat.gold, 0, 0.58, 0);
+    const glove = mesh(new THREE.BoxGeometry(0.12, 0.09, 0.045), mat.pearl, 0, 0.68, 0.02);
+    const palm = mesh(new THREE.BoxGeometry(0.07, 0.05, 0.02), mat.amber, 0, 0.68, 0.05);
+    palm.castShadow = false;
+    pivot.add(sleeve, cuff, glove, palm);
+    pivot.position.set(side * 0.42, 1.5, 0.02);
+    return { pivot, hand: palm };
   }
   const left = raisedArm(-1);
   const right = raisedArm(1);
-  const lArm = left.pivot;
-  const rArm = right.pivot;
-  const lHand = left.hand;
-  const rHand = right.hand;
 
-  for (const y of [1.45, 1.22, 0.98]) {
-    const chain = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.035, 0.035), goldMat);
-    chain.position.set(0, y, 0.3);
+  for (const y of [1.38, 1.2, 1.0]) {
+    const chain = mesh(new THREE.BoxGeometry(0.42, 0.028, 0.028), mat.gold, 0, y, 0.22);
     group.add(chain);
   }
 
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.72, 14),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
+    new THREE.CircleGeometry(0.78, 14),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false })
   );
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.03;
+  shadow.position.y = 0.02;
 
-  group.add(robe, stole, belt, hem, helmet, visor, seam, halo, lArm, rArm, shadow);
+  group.add(
+    robe,
+    mantle,
+    cowl,
+    hem,
+    belt,
+    stole,
+    pendant,
+    helmet,
+    sensor,
+    visor,
+    visorL,
+    visorR,
+    seam,
+    halo,
+    left.pivot,
+    right.pivot,
+    shadow
+  );
   group.position.set(PRIEST_SPAWN.x, 0, PRIEST_SPAWN.z);
-  return { group, robe: robeMat, pearl: pearlMat, halo, haloMat, seam, lArm, rArm, lHand, rHand };
+  return {
+    group,
+    halo,
+    haloMat,
+    seam,
+    lArm: left.pivot,
+    rArm: right.pivot,
+    lHand: left.hand,
+    rHand: right.hand,
+    flashMats: [mat.pearl, mat.cloth, mat.visor, mat.gold],
+    flash: 0,
+  };
 }
 
-export function createActors(scene) {
+export function createActors(scene, textures) {
   const records = new Map();
   const chapelIds = new Set(createChapelEnemies().map((enemy) => enemy.id));
   for (const enemy of [...createEnemies(), ...createChapelEnemies()]) {
-    const built = buildTessera({ vestment: chapelIds.has(enemy.id) });
+    const built = buildTessera(textures, { vestment: chapelIds.has(enemy.id) });
     built.group.position.set(enemy.x, 0, enemy.z);
     built.group.visible = enemy.visible;
     built.death = 0;
@@ -199,21 +302,21 @@ export function createActors(scene) {
     records.set(enemy.id, built);
   }
 
-  const priestRec = buildPriest();
+  const priestRec = buildPriest(textures);
   priestRec.died = false;
   priestRec.death = 0;
   priestRec.pose = 0;
   scene.add(priestRec.group);
 
-  const boltGeo = new THREE.SphereGeometry(0.09, 8, 6);
+  const boltGeo = new THREE.SphereGeometry(0.08, 7, 5);
   const boltMat = new THREE.MeshBasicMaterial({ color: 0xffb020 });
   const boltMeshes = [];
   for (let i = 0; i < 16; i++) {
-    const mesh = new THREE.Mesh(boltGeo, boltMat);
-    mesh.visible = false;
-    mesh.frustumCulled = false;
-    scene.add(mesh);
-    boltMeshes.push(mesh);
+    const bolt = new THREE.Mesh(boltGeo, boltMat);
+    bolt.visible = false;
+    bolt.frustumCulled = false;
+    scene.add(bolt);
+    boltMeshes.push(bolt);
   }
 
   return {
@@ -225,7 +328,9 @@ export function createActors(scene) {
         rec.prevZ = enemy.z;
         rec.group.position.set(enemy.x, 0, enemy.z);
         rec.group.rotation.set(0, 0, 0);
-        rec.pearl.emissiveIntensity = 0;
+        rec.group.scale.setScalar(1);
+        rec.flash = 0;
+        paint(rec.flashMats, 0);
         rec.weak.visible = false;
         if (!enemy.alive) {
           rec.died = true;
@@ -242,13 +347,12 @@ export function createActors(scene) {
       priestRec.died = false;
       priestRec.death = 0;
       priestRec.pose = 0;
+      priestRec.flash = 0;
       priestRec.group.visible = true;
       priestRec.group.rotation.set(0, 0, 0);
       priestRec.group.position.set(priest.x, 0, priest.z);
       priestRec.halo.scale.setScalar(1);
-      priestRec.robe.emissive.setHex(0x000000);
-      priestRec.robe.emissiveIntensity = 0;
-      priestRec.pearl.emissiveIntensity = 0;
+      paint(priestRec.flashMats, 0);
       priestRec.seam.visible = false;
     },
     syncPriest(priest, dt, time, channel) {
@@ -260,12 +364,13 @@ export function createActors(scene) {
         priestRec.death -= dt;
         const k = 1 - Math.max(priestRec.death, 0) / 1.05;
         priestRec.group.visible = priestRec.death > 0;
-        priestRec.group.rotation.x = k * 1.2;
+        priestRec.group.rotation.x = k * 1.25;
         priestRec.group.position.set(priest.x, -k * 0.55, priest.z);
         priestRec.halo.scale.setScalar(Math.max(0, 1 - k));
         priestRec.seam.visible = false;
-        priestRec.robe.emissive.setHex(0xfff6ea);
-        priestRec.robe.emissiveIntensity = Math.max(0, 0.7 - k);
+        priestRec.lArm.rotation.x = 0.9;
+        priestRec.rArm.rotation.x = 0.7;
+        paint(priestRec.flashMats, k < 0.45 ? (1 - k / 0.45) * 2.4 : 0);
         return;
       }
       priestRec.died = false;
@@ -283,23 +388,18 @@ export function createActors(scene) {
       priestRec.halo.visible = true;
       const pulse = riteHalo ? 1 + Math.sin(time * 7) * 0.06 : 1;
       priestRec.halo.scale.setScalar(pulse);
-      priestRec.haloMat.opacity = revealed ? 1 : riteHalo ? 0.95 : 0.88;
-      priestRec.haloMat.emissiveIntensity = revealed ? 2.4 : riteHalo ? 1.5 : 0.85;
+      priestRec.haloMat.opacity = revealed ? 1 : riteHalo ? 0.96 : 0.9;
+      priestRec.haloMat.emissiveIntensity = revealed ? 2.4 : riteHalo ? 1.55 : 0.85;
       priestRec.seam.visible = !!priest.exposed;
-      const hand = priest.windup > 0 || priest.phase === "rite" ? 1.5 : 1;
+      const hot = priest.windup > 0 || priest.phase === "rite";
+      priestRec.lHand.visible = hot;
+      priestRec.rHand.visible = hot;
+      const hand = hot ? 1.45 : 1;
       priestRec.lHand.scale.setScalar(hand);
       priestRec.rHand.scale.setScalar(hand);
-      if (priest.hurt > 0) {
-        priestRec.robe.emissive.setHex(0xfff8ee);
-        priestRec.robe.emissiveIntensity = 0.92;
-        priestRec.pearl.emissive.setHex(0xfff8ee);
-        priestRec.pearl.emissiveIntensity = 0.75;
-      } else {
-        priestRec.robe.emissive.setHex(0x000000);
-        priestRec.robe.emissiveIntensity = 0;
-        priestRec.pearl.emissive.setHex(0x000000);
-        priestRec.pearl.emissiveIntensity = 0;
-      }
+      if (priest.hurt > 0) priestRec.flash = 0.2;
+      priestRec.flash = Math.max(0, priestRec.flash - dt);
+      paint(priestRec.flashMats, priestRec.flash > 0 ? (priestRec.flash / 0.2) * 2.6 : 0);
     },
     sync(enemies, dt, time, channel) {
       for (const enemy of enemies) {
@@ -307,14 +407,20 @@ export function createActors(scene) {
         if (!enemy.alive) {
           if (!rec.died) {
             rec.died = true;
-            rec.death = 0.75;
+            rec.death = 0.85;
           }
           rec.death -= dt;
-          const k = 1 - Math.max(rec.death, 0) / 0.75;
+          const k = 1 - Math.max(rec.death, 0) / 0.85;
           rec.group.visible = rec.death > 0;
-          rec.group.rotation.x = k * 1.25;
-          rec.group.position.set(enemy.x, -k * 0.35, enemy.z);
+          rec.group.rotation.x = k * 1.35;
+          rec.group.position.set(enemy.x, -k * 0.4, enemy.z);
+          rec.group.scale.setScalar(1);
+          rec.lArm.rotation.x = 0.5 + k * 0.6;
+          rec.rArm.rotation.x = 0.3 + k * 0.9;
+          rec.lLeg.rotation.x = -0.25 * k;
+          rec.rLeg.rotation.x = 0.4 * k;
           rec.weak.visible = false;
+          paint(rec.flashMats, k < 0.4 ? (1 - k / 0.4) * 2.4 : 0);
           continue;
         }
         rec.died = false;
@@ -326,20 +432,23 @@ export function createActors(scene) {
         rec.prevX = enemy.x;
         rec.prevZ = enemy.z;
         const swing = moved > 0.004 ? Math.sin(time * 8 + rec.phase) : Math.sin(time * 1.6 + rec.phase) * 0.15;
-        rec.lLeg.rotation.x = swing * 0.75;
-        rec.rLeg.rotation.x = -swing * 0.75;
-        rec.lArm.rotation.x = -swing * 0.4;
-        rec.rArm.rotation.x = swing * 0.3 + (enemy.windup > 0 ? -0.8 : -0.15);
+        rec.lLeg.rotation.x = swing * 0.7;
+        rec.rLeg.rotation.x = -swing * 0.7;
+        rec.lArm.rotation.x = -swing * 0.45;
+        rec.rArm.rotation.x = swing * 0.25 + (enemy.windup > 0 ? -0.95 : -0.06);
         rec.weak.visible = !!enemy.exposed;
-        if (enemy.hurt > 0) {
-          rec.pearl.emissive.setHex(0xfff8ee);
-          rec.pearl.emissiveIntensity = 0.9;
+        if (enemy.hurt > 0) rec.flash = 0.16;
+        rec.flash = Math.max(0, rec.flash - dt);
+        if (rec.flash > 0) {
+          paint(rec.flashMats, (rec.flash / 0.16) * 2.8);
+          rec.group.scale.setScalar(1.035);
         } else if (enemy.cloaked && enemy.visible) {
-          rec.pearl.emissive.setHex(0xffd7a8);
-          rec.pearl.emissiveIntensity = 0.28 + Math.sin(time * 9) * 0.12;
+          const pulse = 0.22 + Math.sin(time * 9) * 0.1;
+          paint(rec.flashMats, pulse, 0xffd7a8);
+          rec.group.scale.setScalar(1);
         } else {
-          rec.pearl.emissive.setHex(0x000000);
-          rec.pearl.emissiveIntensity = 0;
+          paint(rec.flashMats, 0);
+          rec.group.scale.setScalar(1);
         }
         rec.muzzle.scale.setScalar(enemy.windup > 0 ? 1.8 : 1);
         if (enemy.cloaked && enemy.visible && channel !== "STATIC" && enemy.reveal < 0.5) {
@@ -349,14 +458,14 @@ export function createActors(scene) {
     },
     syncBolts(bolts) {
       for (let i = 0; i < boltMeshes.length; i++) {
-        const mesh = boltMeshes[i];
+        const boltMesh = boltMeshes[i];
         const bolt = bolts[i];
         if (!bolt) {
-          mesh.visible = false;
+          boltMesh.visible = false;
           continue;
         }
-        mesh.visible = true;
-        mesh.position.set(bolt.x, bolt.y, bolt.z);
+        boltMesh.visible = true;
+        boltMesh.position.set(bolt.x, bolt.y, bolt.z);
       }
     },
   };

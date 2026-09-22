@@ -20,6 +20,7 @@ export const PRIEST_TUNING = {
   boltSpeed: 12.5,
 };
 
+// Fitted to the Phase 3 priest kit. Helmet center 2.05, robe mass at 1.2, halo ring still reaches this sphere.
 const HEAD_Y = 2.05;
 const BODY_Y = 1.2;
 const HALO_Y = 2.62;

@@ -97,7 +97,7 @@ export function createGame(canvas, audio) {
   camera.add(fill);
 
   const world = createWorld(scene);
-  const actors = createActors(scene);
+  const actors = createActors(scene, world.textures);
   const viewmodel = createViewmodel(camera, world.textures);
 
   const SPARK_N = 72;
@@ -109,7 +109,7 @@ export function createGame(canvas, audio) {
   const sparksMesh = new THREE.Points(
     sparkGeo,
     new THREE.PointsMaterial({
-      size: 0.085,
+      size: 0.12,
       vertexColors: true,
       transparent: true,
       depthWrite: false,
@@ -117,6 +117,34 @@ export function createGame(canvas, audio) {
     })
   );
   scene.add(sparksMesh);
+
+  const impactCanvas = document.createElement("canvas");
+  impactCanvas.width = 64;
+  impactCanvas.height = 64;
+  const impactCtx = impactCanvas.getContext("2d");
+  const impactGrad = impactCtx.createRadialGradient(32, 32, 1, 32, 32, 30);
+  impactGrad.addColorStop(0, "rgba(255,255,255,1)");
+  impactGrad.addColorStop(0.35, "rgba(255,214,150,0.75)");
+  impactGrad.addColorStop(1, "rgba(255,160,60,0)");
+  impactCtx.fillStyle = impactGrad;
+  impactCtx.fillRect(0, 0, 64, 64);
+  const impactTex = new THREE.CanvasTexture(impactCanvas);
+  impactTex.colorSpace = THREE.SRGBColorSpace;
+  const impactSprites = [];
+  for (let i = 0; i < 12; i++) {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: impactTex,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    sprite.visible = false;
+    sprite.frustumCulled = false;
+    scene.add(sprite);
+    impactSprites.push(sprite);
+  }
 
   const TR = 28;
   const tracerPos = new Float32Array(TR * 6);
@@ -148,6 +176,7 @@ export function createGame(canvas, audio) {
   let promptKind = "";
   let riteText = "";
   let sparks = [];
+  let impacts = [];
   let tracers = [];
   let player = { x: 0, y: 1.58, z: 8, yaw: 0, pitch: 0, vx: 0, vz: 0 };
   let rng = mulberry32(1);
@@ -189,6 +218,8 @@ export function createGame(canvas, audio) {
       });
     }
     if (sparks.length > SPARK_N) sparks.splice(0, sparks.length - SPARK_N);
+    impacts.push({ x, y, z, life: 0.14, max: 0.14, color });
+    if (impacts.length > impactSprites.length) impacts.shift();
   }
 
   function banner(text) {
@@ -244,6 +275,7 @@ export function createGame(canvas, audio) {
     riteText = "";
     bolts = [];
     sparks = [];
+    impacts = [];
     tracers = [];
     player = freshPlayer(PLAYER_SPAWN);
     rng = mulberry32((Date.now() & 0xffff) + 3);
@@ -286,6 +318,7 @@ export function createGame(canvas, audio) {
     riteText = "";
     bolts = [];
     sparks = [];
+    impacts = [];
     tracers = [];
     player = freshPlayer(CHAPEL_ENTRY);
     arm = 0.45;
@@ -359,7 +392,7 @@ export function createGame(canvas, audio) {
       const end = chosen
         ? { x: chosen.x, y: chosen.y, z: chosen.z }
         : { x: origin.x + dir.x * reach, y: origin.y + dir.y * reach, z: origin.z + dir.z * reach };
-      if (!chosen || chosen.t > 0.45) tracers.push({ a: muzzle, b: end, color: tracerColor, life: 0.11 });
+      if (!chosen || chosen.t > 0.45) tracers.push({ a: muzzle, b: end, color: tracerColor, life: 0.16 });
       if (usePriest) {
         const amount =
           damageAtRange(begun.profile.damage, priestHit.t, begun.profile.range, begun.profile.falloff) *
@@ -384,7 +417,7 @@ export function createGame(canvas, audio) {
       }
       if (!hit) continue;
       if (hit.kind === "world") {
-        burst(hit.x, hit.y, hit.z, [0.75, 0.68, 0.55], 3);
+        burst(hit.x, hit.y, hit.z, [0.75, 0.68, 0.55], 6);
         continue;
       }
       const index = enemies.findIndex((enemy) => enemy.id === hit.id);
@@ -397,7 +430,7 @@ export function createGame(canvas, audio) {
       applied.enemy.hurt = 0.1;
       enemies[index] = applied.enemy;
       connected = applied.dealt > 0;
-      burst(hit.x, hit.y, hit.z, [0.96, 0.94, 0.9], 4);
+      burst(hit.x, hit.y, hit.z, [0.96, 0.94, 0.9], 8);
       if (applied.killed) {
         const reward = rewardForKill(state, {
           distance: hit.t,
@@ -757,6 +790,25 @@ export function createGame(canvas, audio) {
     sparkGeo.attributes.position.needsUpdate = true;
     sparkGeo.attributes.color.needsUpdate = true;
 
+    for (let i = impacts.length - 1; i >= 0; i--) {
+      impacts[i].life -= dt;
+      if (impacts[i].life <= 0) impacts.splice(i, 1);
+    }
+    for (let i = 0; i < impactSprites.length; i++) {
+      const sprite = impactSprites[i];
+      const impact = impacts[i];
+      if (!impact) {
+        sprite.visible = false;
+        continue;
+      }
+      const k = impact.life / impact.max;
+      sprite.visible = true;
+      sprite.position.set(impact.x, impact.y, impact.z);
+      sprite.scale.setScalar(0.18 + (1 - k) * 0.55);
+      sprite.material.opacity = k;
+      sprite.material.color.setRGB(impact.color[0], impact.color[1], impact.color[2]);
+    }
+
     for (let i = tracers.length - 1; i >= 0; i--) {
       tracers[i].life -= dt;
       if (tracers[i].life <= 0) tracers.splice(i, 1);
@@ -800,7 +852,9 @@ export function createGame(canvas, audio) {
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch - recoil;
     camera.rotation.z = 0;
-    viewmodel.update(dt, mode === "play" ? Math.hypot(player.vx, player.vz) : 0);
+    const { right } = aim(player.yaw, 0);
+    const strafe = mode === "play" ? player.vx * right.x + player.vz * right.z : 0;
+    viewmodel.update(dt, mode === "play" ? Math.hypot(player.vx, player.vz) : 0, { strafe });
   }
 
   return {

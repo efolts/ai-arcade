@@ -2,7 +2,7 @@
 
 The FPS where changing TV channels changes combat and the level.
 
-Phase 2 is the playable slice in this repo: the KRCD mall court, the radio wing behind it, one remote hijack, and the Visor Priest. Phase 3 stays on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
+The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 3 is the art pass on that slice. Phases 4–6 stay on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
 
 ## Promise
 
@@ -109,10 +109,14 @@ Clearing him drops the choir, pays Signal, and opens the wing-clear card. Best t
 
 ## Presentation
 
-- First-person wood-and-metal remote, leather gloves, trench cuffs. The IR lens is the only cyan light on the body.
-- Court Tessera are pearl shells, black visor, black joints, amber muzzle. Choir Tessera wear a white vestment and a gold stole. Hit flash, amber bolts with a short plant-and-fire tell, tip-over deaths, sparks.
-- The priest is taller than the choir: robe, gold chains, raised arms during a rite, a gold halo that flares when STATIC can actually hit it.
-- The court is low-poly and lit like a real interior. The wing is the same mall language with candles and a gold seal. Signage is original KRCD copy only.
+Phase 3 is a GoldSrc / early-Source pass on the same two rooms. Hard edges, a short palette, canvas atlases, silhouettes that read at range. No Source 2 meshes and no downloaded model packs.
+
+- CRT viewmodel: wood-cased remote, brushed face, button grid, trench cuffs, leather gloves with fingers. Bob follows the walk and the strafe. LIVE muzzle flash is a cyan cross at the lens. The IR lens is the only cyan light on the body.
+- Court Tessera are low-poly humanoids: faceted pearl helmet, wraparound black visor, pearl chest plates, black ball joints, worn shins, a small amber muzzle. No badges and no cyan. Choir Tessera keep that kit and add a white tabard, mantle, and gold stole so the legs stay readable.
+- Hit flash whites the shell out for a short beat without changing hurt time. Deaths tip the kit over, limbs go limp, and the shell flashes before it drops. Amber bolts still have a plant-and-fire tell. Impacts are sparks plus a short additive flash. Retuned shots stay the cyan exception.
+- The priest is the same language at boss scale: pearl helmet, wide black visor, white and gold robes, gold chains, raised sleeves, a double gold halo. Amber shows on the palms only while he is winding up or in a rite, and on the visor seam when LIVE can break it. The halo flares when STATIC can hit it. No cyan on the priest.
+- Hurt spheres are unchanged: Tessera head `y+1.62 r0.26` and body `y+0.98 r0.46`; priest head `2.05 r0.3`, body `1.2 r0.62`, halo `2.62 r0.42`. The kits were built to those volumes.
+- Court floor, walls, trim, and ceiling use tighter tile and panel atlases. The radio wing has a darker stone floor on top of the same slab. Signage is still original KRCD copy. Candles and the gold seal stay.
 - Grade is a CSS treatment on the canvas plus fog. The HUD stays a CRT overlay so it stays readable when the picture goes to snow.
 - Audio is WebAudio: bolt, spread, dry click, channel ticks, impacts, a quiet carrier, plus a door, a rite chord, a break, a failed rite, and the PA squeal. DEAD AIR low-passes the bus. STATIC adds hiss.
 
@@ -127,7 +131,7 @@ npm test
 npm run build
 ```
 
-Tests are `node --test` on `src/sim.test.js`. They cover the Phase 1 channel, Signal, shot, cloak, and shutter rules, plus the radio door, the rite veil, the hijack catalog, the three priest answers, and the dormant choir. Phase 3 ids in `RESERVED_CONTENT` (Directory, upgrades, Broadcast Echo) must not appear as encounters.
+Tests are `node --test` on `src/sim.test.js`. They cover the channel, Signal, shot, cloak, and shutter rules, plus the radio door, the rite veil, the hijack catalog, the three priest answers, and the dormant choir. `PHASE` is 3. Ids in `RESERVED_CONTENT` (arsenal, upgrades, wings, Directory, Broadcast Echo) must not appear as encounters.
 
 ## Phases
 
@@ -135,16 +139,27 @@ Tests are `node --test` on `src/sim.test.js`. They cover the Phase 1 channel, Si
 
 Title, three channels, one mall court, HUD, pause, clear, retry. Still the front half of this slice.
 
-### Phase 2 — this slice
+### Phase 2 — rooms and the priest
 
-Radio wing behind a door that opens when the court is clear. One PA hijack. Visor Priest with three rites, one per channel. Wing checkpoint on death.
+Radio wing behind a door that opens when the court is clear. One PA hijack. Visor Priest with three rites, one per channel. Wing checkpoint on death. Still the playable layout.
 
-### Phase 3 — still unbuilt
+### Phase 3 — this art pass
 
-- A short upgrade track that modifies `TUNING` (pellet count, drain rate, phase speed), not a skill tree that replaces channels.
-- The Directory as the final boss of the mall: a map that fights back, using every channel rule in one encounter.
-- Broadcast Echo: a ghost of a previous clear that replays your channel timeline as hazards or help. Record the timeline in the sim.
-- The rest of the hijack catalog (shutter, sprinkler, camera) and any further rooms. Do not turn this slice into a campaign map.
+Low-poly Tessera and priest kits, CRT viewmodel, mall and nave materials, hit flash and death poses, impact flashes. Same two rooms. Same combat numbers.
+
+### Phase 4 — not started
+
+Arsenal and ammo. No new weapons in this slice.
+
+### Phase 5 — not started
+
+Level-up that modifies `TUNING` (pellet count, drain rate, phase speed). Not a tree that replaces channels.
+
+### Phase 6 — not started
+
+Four wings and the Directory as the mall’s final boss. Not a campaign map yet.
+
+Broadcast Echo (a ghost that replays a channel timeline) and the rest of the hijack catalog (shutter, sprinkler, camera) stay hooks only. They are not part of Phases 4–6 as locked, and they are not in this build.
 
 ## Hooks
 
@@ -153,4 +168,5 @@ Radio wing behind a door that opens when the court is clear. One PA hijack. Viso
 - `ai.js` — Tessera step. `dormant` and `stun` are data. Enemies never phase.
 - `boss.js` — priest rites, chip damage, and the halo ray. New bosses should be new steppers, not extra Tessera.
 - `hijack.js` — catalog, aim test, cooldown, retune. Add a playable entry beside `pa-horn` instead of a special case in the renderer.
+- `meshkit.js` / `textures.js` / `viewmodel.js` — Phase 3 kits and atlases. They do not own combat rules.
 - Renderer (`world.js`, `actors.js`, `game.js`) reads that data and does not invent rules.

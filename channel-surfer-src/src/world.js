@@ -13,7 +13,7 @@ export function createWorld(scene) {
     floor: std({ map: textures.floor, roughness: 0.94, metalness: 0.02 }),
     wall: std({ map: textures.wall, roughness: 0.88, metalness: 0.03 }),
     ceiling: std({ map: textures.ceiling, roughness: 0.96, metalness: 0 }),
-    trim: std({ color: 0x8d8478, roughness: 0.72, metalness: 0.08 }),
+    trim: std({ map: textures.trim, roughness: 0.74, metalness: 0.08 }),
     metal: std({ color: 0x6d7378, roughness: 0.38, metalness: 0.62 }),
     wood: std({ map: textures.wood, roughness: 0.66, metalness: 0.04 }),
     runner: std({ color: 0x4a4038, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
@@ -263,6 +263,22 @@ export function createWorld(scene) {
   candle(-1.35, -27.15);
   candle(1.35, -27.15);
 
+  const nave = new THREE.Mesh(
+    new THREE.PlaneGeometry(15.2, 13.2),
+    std({
+      map: textures.nave,
+      roughness: 0.92,
+      metalness: 0.04,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    })
+  );
+  nave.rotation.x = -Math.PI / 2;
+  nave.position.set(0, 0.018, -21.55);
+  nave.receiveShadow = true;
+  scene.add(nave);
+
   const cacheDef = PICKUPS.find((p) => p.kind === "signal");
   const aidDef = PICKUPS.find((p) => p.kind === "health");
   const cache = new THREE.Group();
@@ -284,9 +300,9 @@ export function createWorld(scene) {
   aid.position.set(aidDef.x, 0.2, aidDef.z);
   scene.add(aid);
 
-  const hemi = new THREE.HemisphereLight(0xe4ddd2, 0x3a332b, 1.05);
+  const hemi = new THREE.HemisphereLight(0xf0e8dc, 0x3a322a, 0.98);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff3e2, 2.8);
+  const sun = new THREE.DirectionalLight(0xfff3e2, 2.65);
   sun.position.set(7, 16, 8);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
