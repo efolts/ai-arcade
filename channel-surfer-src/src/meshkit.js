@@ -45,6 +45,14 @@ export function shell(profile, segments = 10) {
   return geo;
 }
 
+/** Indexed lathe so the surface stays smooth. Profile points are [radius, height]. */
+export function smoothShell(profile, segments = 24) {
+  const pts = profile.map(([radius, y]) => new THREE.Vector2(radius, y));
+  const geo = new THREE.LatheGeometry(pts, segments);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export function mesh(geo, material, x = 0, y = 0, z = 0) {
   const obj = new THREE.Mesh(geo, material);
   obj.position.set(x, y, z);
@@ -58,13 +66,34 @@ export function merged(parts) {
 }
 
 const HELMET_PROFILE = [
-  [0.02, 0.18],
-  [0.09, 0.16],
-  [0.145, 0.1],
-  [0.158, 0.02],
-  [0.15, -0.05],
-  [0.12, -0.11],
-  [0.075, -0.15],
+  [0.015, 0.19],
+  [0.08, 0.175],
+  [0.135, 0.12],
+  [0.158, 0.04],
+  [0.155, -0.02],
+  [0.132, -0.09],
+  [0.09, -0.14],
+  [0.055, -0.16],
+];
+
+const TORSO_PROFILE = [
+  [0.1, 0.7],
+  [0.155, 0.8],
+  [0.15, 0.96],
+  [0.175, 1.16],
+  [0.22, 1.34],
+  [0.2, 1.46],
+  [0.11, 1.52],
+];
+
+const ROBE_PROFILE = [
+  [0.46, 0.06],
+  [0.5, 0.28],
+  [0.44, 0.62],
+  [0.36, 1.0],
+  [0.32, 1.28],
+  [0.24, 1.55],
+  [0.16, 1.66],
 ];
 
 let shared = null;
@@ -72,17 +101,18 @@ let shared = null;
 export function geos() {
   if (shared) return shared;
   const handParts = [];
-  const palm = new THREE.BoxGeometry(0.074, 0.05, 0.09);
-  palm.translate(0, -0.62, 0.02);
+  const palm = new THREE.SphereGeometry(0.04, 10, 8);
+  palm.scale(1.15, 0.7, 1.35);
+  palm.translate(0, -0.6, 0.02);
   handParts.push(palm);
   for (let i = 0; i < 4; i++) {
-    const finger = new THREE.BoxGeometry(0.014, 0.05, 0.016);
-    finger.translate(-0.024 + i * 0.016, -0.67, 0.045);
+    const finger = new THREE.CylinderGeometry(0.008, 0.01, 0.055, 6);
+    finger.translate(-0.022 + i * 0.015, -0.66, 0.04);
     handParts.push(finger);
   }
-  const thumb = new THREE.BoxGeometry(0.016, 0.04, 0.016);
-  thumb.translate(0.046, -0.62, 0.03);
-  thumb.rotateZ(0.7);
+  const thumb = new THREE.CylinderGeometry(0.009, 0.011, 0.04, 6);
+  thumb.translate(0.042, -0.6, 0.03);
+  thumb.rotateZ(0.8);
   handParts.push(thumb);
 
   const gunParts = [];
@@ -97,26 +127,37 @@ export function geos() {
   gunParts.push(grip);
 
   shared = {
-    helmet: shell(HELMET_PROFILE, 10),
+    helmet: smoothShell(HELMET_PROFILE, 36),
+    torso: smoothShell(TORSO_PROFILE, 32),
+    robe: smoothShell(ROBE_PROFILE, 36),
+    visor: new THREE.SphereGeometry(0.164, 48, 32, Math.PI / 2 - 1.05, 2.1, Math.PI * 0.36, Math.PI * 0.46),
     chest: frustum(0.34, 0.2, 0.48, 0.26, 0.4),
     abdomen: frustum(0.3, 0.18, 0.34, 0.2, 0.18),
     pelvis: frustum(0.32, 0.2, 0.28, 0.18, 0.14),
     pec: frustum(0.15, 0.1, 0.17, 0.12, 0.2),
     shoulder: frustum(0.1, 0.1, 0.14, 0.12, 0.08),
-    thigh: frustum(0.11, 0.11, 0.085, 0.085, 0.32),
-    shin: frustum(0.08, 0.09, 0.065, 0.065, 0.3),
-    foot: new THREE.BoxGeometry(0.1, 0.055, 0.18),
-    upper: frustum(0.085, 0.085, 0.07, 0.07, 0.24),
-    forearm: frustum(0.064, 0.064, 0.05, 0.052, 0.2),
+    thigh: new THREE.CylinderGeometry(0.055, 0.072, 0.34, 12),
+    shin: new THREE.CylinderGeometry(0.04, 0.055, 0.32, 12),
+    foot: new THREE.BoxGeometry(0.1, 0.05, 0.18),
+    upper: new THREE.CylinderGeometry(0.04, 0.05, 0.26, 12),
+    forearm: new THREE.CylinderGeometry(0.03, 0.04, 0.22, 12),
     hand: merged(handParts),
     gun: merged(gunParts),
     collar: new THREE.CylinderGeometry(0.07, 0.09, 0.08, 8),
-    joint: new THREE.SphereGeometry(1, 6, 5),
+    joint: new THREE.SphereGeometry(1, 16, 12),
     skirt: frustum(0.34, 0.16, 0.5, 0.22, 0.62),
     tabard: new THREE.BoxGeometry(0.22, 0.58, 0.045),
     stole: new THREE.BoxGeometry(0.09, 0.5, 0.04),
     muzzle: new THREE.BoxGeometry(0.028, 0.028, 0.04),
     seam: new THREE.BoxGeometry(0.2, 0.028, 0.02),
   };
+  for (const geo of Object.values(shared)) {
+    if (!geo?.index || geo.attributes.tangent || !geo.attributes.uv || !geo.attributes.normal) continue;
+    try {
+      geo.computeTangents();
+    } catch {
+      /* merged props without a clean index still render; they just skip the normal map */
+    }
+  }
   return shared;
 }

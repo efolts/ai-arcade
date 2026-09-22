@@ -25,6 +25,75 @@ function noise(g, w, h, count, color, size) {
   }
 }
 
+function linearTex(canvas, repeatX = 1, repeatY = 1) {
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  tex.anisotropy = 4;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  return tex;
+}
+
+function fieldTex(w, h, sample, repeatX = 1, repeatY = 1) {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const [r, g, b] = sample(x, y, w, h);
+      const i = (y * w + x) * 4;
+      img.data[i] = r;
+      img.data[i + 1] = g;
+      img.data[i + 2] = b;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return linearTex(canvas, repeatX, repeatY);
+}
+
+function heightToNormal(w, h, heightAt, strength, repeatX = 1, repeatY = 1) {
+  const hgt = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) hgt[y * w + x] = heightAt(x, y, w, h);
+  }
+  return fieldTex(
+    w,
+    h,
+    (x, y) => {
+      const l = hgt[y * w + ((x + w - 1) % w)];
+      const r = hgt[y * w + ((x + 1) % w)];
+      const u = hgt[((y + h - 1) % h) * w + x];
+      const d = hgt[((y + 1) % h) * w + x];
+      let nx = (l - r) * strength;
+      let ny = (u - d) * strength;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      return [(nx / len) * 127.5 + 127.5, (ny / len) * 127.5 + 127.5, (nz / len) * 127.5 + 127.5];
+    },
+    repeatX,
+    repeatY
+  );
+}
+
+function roughTex(w, h, roughAt, repeatX = 1, repeatY = 1) {
+  return fieldTex(
+    w,
+    h,
+    (x, y) => {
+      const v = Math.max(0, Math.min(1, roughAt(x, y, w, h))) * 255;
+      return [v, v, v];
+    },
+    repeatX,
+    repeatY
+  );
+}
+
 export function makeTextures() {
   const floor = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = "#5c564c";
@@ -270,7 +339,147 @@ export function makeTextures() {
     g.fillRect(0, 0, w, 4);
   });
 
-  return { floor, wall, ceiling, wood, hazard, snow, pearl, pearlWorn, joint, gold, cloth, leather, trench, nave, trim, brushed };
+  const pearlNormal = heightToNormal(128, 128, (x, y, w, h) => {
+    const u = x / w;
+    const v = y / h;
+    const edge = Math.min(u, 1 - u, v, 1 - v);
+    const bevel = Math.min(1, edge * 10);
+    const groove = Math.abs(u - 0.5) < 0.012 || Math.abs(v - 0.5) < 0.012 ? 0.2 : 1;
+    return bevel * groove;
+  }, 3.2);
+  const pearlRough = roughTex(128, 128, (x, y, w, h) => {
+    const u = x / w;
+    const v = y / h;
+    const edge = Math.min(u, 1 - u, v, 1 - v);
+    return 0.18 + (1 - Math.min(1, edge * 7)) * 0.34;
+  });
+  const goldNormal = heightToNormal(64, 64, (x, y, w, h) => {
+    const brush = Math.sin(x * 0.85 + y * 0.2) * 0.08;
+    const lip = y < 5 ? 0.25 : y > h - 6 ? -0.2 : 0;
+    return 0.55 + brush + lip;
+  }, 2.4);
+  const goldRough = roughTex(64, 64, (x, y) => 0.22 + (Math.sin(x * 0.7) * 0.5 + 0.5) * 0.12 + (y % 9 === 0 ? 0.08 : 0));
+  const clothNormal = heightToNormal(128, 128, (x, y) => {
+    const weave = Math.sin(x * 0.85) * 0.05 + Math.sin(y * 1.15) * 0.04;
+    const thread = x % 8 === 0 ? -0.06 : 0;
+    return 0.5 + weave + thread;
+  }, 2.2);
+  const clothRough = roughTex(128, 128, (x, y, w, h) => 0.78 + (y / h) * 0.1 + (x % 8 === 0 ? 0.06 : 0));
+  const floorNormal = heightToNormal(
+    256,
+    256,
+    (x, y) => {
+      const tile = 64;
+      const lx = x % tile;
+      const ly = y % tile;
+      const edge = Math.min(lx, ly, tile - 1 - lx, tile - 1 - ly);
+      return edge < 3 ? 0.05 : 0.72 + Math.sin(x * 0.17) * Math.sin(y * 0.13) * 0.06;
+    },
+    4.5,
+    8,
+    6
+  );
+  const floorRough = roughTex(
+    256,
+    256,
+    (x, y) => {
+      const tile = 64;
+      const edge = Math.min(x % tile, y % tile, tile - 1 - (x % tile), tile - 1 - (y % tile));
+      return edge < 3 ? 0.95 : 0.78;
+    },
+    8,
+    6
+  );
+  const naveNormal = heightToNormal(
+    256,
+    256,
+    (x, y) => {
+      const tile = 64;
+      const edge = Math.min(x % tile, y % tile, tile - 1 - (x % tile), tile - 1 - (y % tile));
+      return edge < 4 ? 0 : 0.66;
+    },
+    5,
+    4,
+    4
+  );
+  const naveRough = roughTex(
+    256,
+    256,
+    (x, y) => {
+      const tile = 64;
+      const edge = Math.min(x % tile, y % tile);
+      return edge < 4 ? 0.96 : 0.84;
+    },
+    4,
+    4
+  );
+  const woodNormal = heightToNormal(128, 128, (x, y) => {
+    const grain = Math.sin(y * 0.42 + Math.sin(x * 0.07) * 2.4) * 0.14;
+    const pore = x % 22 === 0 ? -0.08 : 0;
+    return 0.5 + grain + pore;
+  }, 3.1);
+  const woodRough = roughTex(128, 128, (x, y, w, h) => 0.48 + (Math.sin(y * 0.35) * 0.5 + 0.5) * 0.22 + (y / h) * 0.08);
+  const leatherNormal = heightToNormal(128, 128, (x, y, w, h) => {
+    const pore = Math.sin(x * 1.6) * Math.sin(y * 1.25) * 0.05;
+    const crease = Math.abs(y / h - 0.22) < 0.018 ? -0.22 : 0;
+    return 0.55 + pore + crease;
+  }, 2.6);
+  const leatherRough = roughTex(128, 128, (x, y, w, h) => 0.62 + (Math.sin(x * 0.4 + y * 0.2) * 0.5 + 0.5) * 0.2 + (y / h) * 0.08);
+
+  const seal = canvasTex(256, 64, (g, w, h) => {
+    g.fillStyle = "#3c362e";
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = "#2e2924";
+    for (let i = 0; i < w; i += 32) g.fillRect(i, 0, 2, h);
+    g.strokeStyle = "#e6c56a";
+    g.lineWidth = 3;
+    g.strokeRect(6, 8, w - 12, h - 16);
+    g.lineWidth = 2;
+    g.beginPath();
+    g.ellipse(w / 2, h / 2, 30, 18, 0, 0, Math.PI * 2);
+    g.stroke();
+    g.beginPath();
+    g.ellipse(w / 2, h / 2, 16, 9, 0, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = "#f0d48a";
+    g.beginPath();
+    g.arc(w / 2, h / 2, 3.5, 0, Math.PI * 2);
+    g.fill();
+  });
+
+  return {
+    floor,
+    wall,
+    ceiling,
+    wood,
+    hazard,
+    snow,
+    pearl,
+    pearlWorn,
+    joint,
+    gold,
+    cloth,
+    leather,
+    trench,
+    nave,
+    trim,
+    brushed,
+    pearlNormal,
+    pearlRough,
+    goldNormal,
+    goldRough,
+    clothNormal,
+    clothRough,
+    floorNormal,
+    floorRough,
+    naveNormal,
+    naveRough,
+    woodNormal,
+    woodRough,
+    leatherNormal,
+    leatherRough,
+    seal,
+  };
 }
 
 export function makeSign(title, sub, bg = "#16130f", fg = "#f4efe6") {

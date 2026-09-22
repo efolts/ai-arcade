@@ -4,21 +4,52 @@ import { BLOCKS, HIJACK_SPAWNS, PICKUPS, VEIL_Z, activeColliders } from "./level
 import { makeSign, makeTextures } from "./textures.js";
 
 function std(params) {
-  return new THREE.MeshStandardMaterial(params);
+  return new THREE.MeshStandardMaterial({ envMapIntensity: 0.32, ...params });
+}
+
+function tangents(geo) {
+  if (geo?.index && geo.attributes?.uv && geo.attributes?.normal && !geo.attributes.tangent) geo.computeTangents();
+  return geo;
+}
+
+function tiled(tex, x, y) {
+  const copy = tex.clone();
+  copy.repeat.set(x, y);
+  copy.needsUpdate = true;
+  return copy;
 }
 
 export function createWorld(scene) {
   const textures = makeTextures();
   const materials = {
-    floor: std({ map: textures.floor, roughness: 0.94, metalness: 0.02 }),
+    floor: std({
+      map: textures.floor,
+      normalMap: textures.floorNormal,
+      roughnessMap: textures.floorRough,
+      roughness: 1,
+      metalness: 0.03,
+    }),
     wall: std({ map: textures.wall, roughness: 0.88, metalness: 0.03 }),
     ceiling: std({ map: textures.ceiling, roughness: 0.96, metalness: 0 }),
     trim: std({ map: textures.trim, roughness: 0.74, metalness: 0.08 }),
     metal: std({ color: 0x6d7378, roughness: 0.38, metalness: 0.62 }),
-    wood: std({ map: textures.wood, roughness: 0.66, metalness: 0.04 }),
+    wood: std({
+      map: tiled(textures.wood, 2, 2),
+      normalMap: tiled(textures.woodNormal, 2, 2),
+      roughnessMap: tiled(textures.woodRough, 2, 2),
+      roughness: 1,
+      metalness: 0.04,
+    }),
     runner: std({ color: 0x4a4038, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
     dark: std({ color: 0x141210, roughness: 0.9 }),
-    brass: std({ color: 0xb08d4e, roughness: 0.36, metalness: 0.64 }),
+    brass: std({
+      map: tiled(textures.gold, 2, 2),
+      normalMap: tiled(textures.goldNormal, 2, 2),
+      roughnessMap: tiled(textures.goldRough, 2, 2),
+      roughness: 1,
+      metalness: 0.84,
+      envMapIntensity: 0.75,
+    }),
     plant: std({ color: 0x4d4938, roughness: 0.92 }),
     glass: std({
       color: 0xc5d0d2,
@@ -39,6 +70,9 @@ export function createWorld(scene) {
     }),
   };
   materials.hazard.side = THREE.DoubleSide;
+  materials.floor.normalScale.set(0.7, 0.7);
+  materials.wood.normalScale.set(0.85, 0.85);
+  materials.brass.normalScale.set(0.4, 0.4);
 
   const buckets = new Map();
   function addBox(mat, x, y, z, w, h, d) {
@@ -75,11 +109,18 @@ export function createWorld(scene) {
       doorGroup = new THREE.Group();
       const slab = new THREE.Mesh(
         new THREE.BoxGeometry(block.w * 0.92, block.h * 0.98, block.d * 0.62),
-        std({ color: 0xe7e0d2, roughness: 0.62, metalness: 0.06 })
+        std({ color: 0xe7e0d2, roughness: 0.58, metalness: 0.08, envMapIntensity: 0.35 })
       );
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(block.w, 0.16, block.d * 0.8), materials.brass);
+      const panelMat = std({ color: 0xd5cec2, roughness: 0.66, metalness: 0.05 });
+      for (const py of [-block.h * 0.18, block.h * 0.16]) {
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(block.w * 0.62, block.h * 0.28, 0.045), panelMat);
+        panel.position.set(0, py, block.d * 0.36);
+        panel.castShadow = true;
+        doorGroup.add(panel);
+      }
+      const frame = new THREE.Mesh(tangents(new THREE.BoxGeometry(block.w, 0.16, block.d * 0.8)), materials.brass);
       frame.position.y = block.h * 0.42;
-      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.14, block.h * 0.72, block.d * 0.78), materials.brass);
+      const stripe = new THREE.Mesh(tangents(new THREE.BoxGeometry(0.14, block.h * 0.72, block.d * 0.78)), materials.brass);
       const plaque = new THREE.Mesh(
         new THREE.PlaneGeometry(1.7, 0.5),
         new THREE.MeshBasicMaterial({ map: makeSign("RADIO", "WING", "#1c140c", "#f0d48a") })
@@ -127,6 +168,7 @@ export function createWorld(scene) {
 
   for (const [name, geos] of buckets) {
     const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos);
+    if (materials[name].normalMap) tangents(merged);
     const mesh = new THREE.Mesh(merged, materials[name]);
     mesh.castShadow = name !== "floor" && name !== "ceiling" && name !== "runner";
     mesh.receiveShadow = true;
@@ -134,12 +176,36 @@ export function createWorld(scene) {
   }
 
   const basin = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.55, 1.55, 0.08, 16),
-    std({ color: 0x3e3a34, roughness: 0.95 })
+    new THREE.CylinderGeometry(1.35, 1.35, 0.06, 24),
+    std({ color: 0x3e3a34, roughness: 0.9, metalness: 0.08 })
   );
-  basin.position.set(0, 0.05, -0.05);
+  basin.position.set(0, 0.04, -0.05);
   basin.receiveShadow = true;
   scene.add(basin);
+  const bowl = new THREE.Mesh(
+    new THREE.LatheGeometry(
+      [
+        new THREE.Vector2(0.35, 0.02),
+        new THREE.Vector2(1.2, 0.05),
+        new THREE.Vector2(1.42, 0.2),
+        new THREE.Vector2(1.22, 0.28),
+      ],
+      28
+    ),
+    std({ map: textures.trim, roughness: 0.62, metalness: 0.16, envMapIntensity: 0.4 })
+  );
+  bowl.position.set(0, 0.02, -0.05);
+  bowl.castShadow = true;
+  bowl.receiveShadow = true;
+  scene.add(bowl);
+  const water = new THREE.Mesh(
+    new THREE.CircleGeometry(1.12, 24),
+    std({ color: 0x243033, roughness: 0.12, metalness: 0.55, envMapIntensity: 0.8 })
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(0, 0.1, -0.05);
+  water.receiveShadow = true;
+  scene.add(water);
 
   const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 0.12, 12), materials.brass);
   dish.position.set(0, 4.28, -2.15);
@@ -211,35 +277,49 @@ export function createWorld(scene) {
 
   const seal = new THREE.Mesh(
     new THREE.PlaneGeometry(3.15, 0.34),
-    new THREE.MeshBasicMaterial({ color: 0xe6c56a })
+    std({ map: textures.seal, roughness: 0.38, metalness: 0.62, envMapIntensity: 0.55 })
   );
+  seal.receiveShadow = true;
   seal.rotation.x = -Math.PI / 2;
   seal.position.set(0, 0.045, VEIL_Z);
   scene.add(seal);
 
   const hornDef = HIJACK_SPAWNS[0];
   const hornMat = std({
-    color: 0xc6a15a,
-    roughness: 0.32,
-    metalness: 0.7,
+    map: textures.gold,
+    normalMap: textures.goldNormal,
+    roughnessMap: textures.goldRough,
+    roughness: 1,
+    metalness: 0.8,
     emissive: 0xd4b15a,
     emissiveIntensity: 0.12,
+    envMapIntensity: 0.7,
   });
   const horn = new THREE.Group();
-  const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.34, 0.62, 10), hornMat);
+  const bell = new THREE.Mesh(tangents(new THREE.CylinderGeometry(0.08, 0.34, 0.62, 16)), hornMat);
   bell.rotation.z = Math.PI / 2;
   bell.castShadow = true;
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.45, 8), materials.brass);
+  const neck = new THREE.Mesh(tangents(new THREE.CylinderGeometry(0.06, 0.06, 0.45, 10)), materials.brass);
   neck.rotation.z = Math.PI / 2;
   neck.position.x = -0.42;
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffb14a }));
+  const plate = new THREE.Mesh(tangents(new THREE.BoxGeometry(0.08, 0.32, 0.24)), materials.brass);
+  plate.position.set(-0.66, 0, 0);
+  plate.castShadow = true;
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffb14a }));
   bulb.position.x = 0.28;
   const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(0.55, 0.03, 6, 18),
-    new THREE.MeshBasicMaterial({ color: 0x67f6ff, transparent: true, opacity: 0, depthWrite: false })
+    new THREE.TorusGeometry(0.55, 0.03, 8, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfff1c8, transparent: true, opacity: 0, depthWrite: false })
   );
   ring.rotation.y = Math.PI / 2;
-  horn.add(bell, neck, bulb, ring);
+  horn.add(bell, neck, plate, bulb, ring);
+  for (const [offset, radius] of [[-0.08, 0.16], [0.08, 0.24], [0.2, 0.3]]) {
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.012, 6, 16), materials.brass);
+    rib.rotation.y = Math.PI / 2;
+    rib.position.x = offset;
+    rib.castShadow = true;
+    horn.add(rib);
+  }
   horn.position.set(hornDef.x, hornDef.y, hornDef.z);
   scene.add(horn);
   const hornLight = new THREE.PointLight(0xffb15a, 7, 5.5, 2);
@@ -267,17 +347,34 @@ export function createWorld(scene) {
     new THREE.PlaneGeometry(15.2, 13.2),
     std({
       map: textures.nave,
-      roughness: 0.92,
-      metalness: 0.04,
+      normalMap: textures.naveNormal,
+      roughnessMap: textures.naveRough,
+      roughness: 1,
+      metalness: 0.05,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     })
   );
+  nave.material.normalScale.set(0.8, 0.8);
+  tangents(nave.geometry);
   nave.rotation.x = -Math.PI / 2;
   nave.position.set(0, 0.018, -21.55);
   nave.receiveShadow = true;
   scene.add(nave);
+
+  for (const [px, pz] of [
+    [-3.15, -18.2],
+    [-3.15, -20.45],
+    [3.15, -18.2],
+    [3.15, -20.45],
+  ]) {
+    const back = new THREE.Mesh(tangents(new THREE.BoxGeometry(2.85, 0.62, 0.08)), materials.wood);
+    back.position.set(px, 0.62, pz + 0.22);
+    back.castShadow = true;
+    back.receiveShadow = true;
+    scene.add(back);
+  }
 
   const cacheDef = PICKUPS.find((p) => p.kind === "signal");
   const aidDef = PICKUPS.find((p) => p.kind === "health");
@@ -300,10 +397,10 @@ export function createWorld(scene) {
   aid.position.set(aidDef.x, 0.2, aidDef.z);
   scene.add(aid);
 
-  const hemi = new THREE.HemisphereLight(0xf0e8dc, 0x3a322a, 0.98);
+  const hemi = new THREE.HemisphereLight(0xe8e0d4, 0x3a3228, 0.74);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff3e2, 2.65);
-  sun.position.set(7, 16, 8);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.35);
+  sun.position.set(8, 18, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 1;
@@ -312,10 +409,15 @@ export function createWorld(scene) {
   sun.shadow.camera.right = 30;
   sun.shadow.camera.top = 30;
   sun.shadow.camera.bottom = -30;
-  sun.shadow.bias = -0.00035;
-  sun.shadow.normalBias = 0.04;
+  sun.shadow.bias = -0.00025;
+  sun.shadow.normalBias = 0.025;
+  sun.shadow.radius = 1.5;
   sun.target.position.set(0, 0, -8);
   scene.add(sun, sun.target);
+  const fill = new THREE.DirectionalLight(0xffe2c4, 0.7);
+  fill.position.set(-10, 8, -6);
+  fill.castShadow = false;
+  scene.add(fill);
 
   const practicals = [];
   function practical(x, y, z, intensity = 36, distance = 8) {
@@ -343,8 +445,8 @@ export function createWorld(scene) {
   let pulse = 0;
   let lastTime = 0;
 
-  scene.background = new THREE.Color(0xc4bdb2);
-  scene.fog = new THREE.Fog(0xc4bdb2, 18, 48);
+  scene.background = new THREE.Color(0xb3ab9f);
+  scene.fog = new THREE.Fog(0xb3ab9f, 12, 40);
 
   return {
     colliders: activeColliders(),
@@ -387,10 +489,10 @@ export function createWorld(scene) {
         fog.far = 36;
         scene.background.setHex(0x242830);
       } else {
-        fog.color.setHex(0xc4bdb2);
-        fog.near = 18;
-        fog.far = 48;
-        scene.background.setHex(0xc4bdb2);
+        fog.color.setHex(0xb3ab9f);
+        fog.near = 12;
+        fog.far = 40;
+        scene.background.setHex(0xb3ab9f);
       }
       for (const gate of gates) {
         gate.material.opacity = channel === "DEAD_AIR" ? 0.14 : 0.97;
@@ -410,10 +512,10 @@ export function createWorld(scene) {
       if (pulse > 0) pulse = Math.max(0, pulse - dt);
       ring.material.opacity = pulse > 0 ? pulse / 0.48 : 0;
       ring.scale.setScalar(pulse > 0 ? 1 + (1 - pulse / 0.48) * 2.4 : 1);
-      hornMat.emissive.setHex(hornHot ? 0x67f6ff : 0xd4b15a);
+      hornMat.emissive.setHex(hornHot ? 0xfff6dd : 0xd4b15a);
       hornMat.emissiveIntensity = hornHot ? 1.15 : hornAimed ? 0.85 : 0.12;
-      bulb.material.color.setHex(hornHot ? 0x67f6ff : 0xffb14a);
-      hornLight.color.setHex(hornHot ? 0x67f6ff : 0xffb15a);
+      bulb.material.color.setHex(hornHot ? 0xfff1c8 : 0xffb14a);
+      hornLight.color.setHex(hornHot ? 0xffe2a0 : 0xffb15a);
       hornLight.intensity = hornHot ? 22 : hornAimed ? 14 : 7;
       flicker.intensity = 18 + Math.sin(time * 28) * 10 + (Math.random() < 0.04 ? -12 : 0);
       if (channel === "STATIC") {

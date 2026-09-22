@@ -1,6 +1,31 @@
 import * as THREE from "three";
 import { PRIEST_SPAWN, createChapelEnemies, createEnemies } from "./level.js";
-import { frustum, geos, mesh } from "./meshkit.js";
+import { geos, mesh } from "./meshkit.js";
+
+let contactMat = null;
+function contactBlob(radius) {
+  if (!contactMat) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 64;
+    const g = canvas.getContext("2d");
+    const grd = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    grd.addColorStop(0, "rgba(0,0,0,0.48)");
+    grd.addColorStop(0.5, "rgba(0,0,0,0.2)");
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    contactMat = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false });
+  }
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(radius, 24), contactMat);
+  blob.rotation.x = -Math.PI / 2;
+  blob.position.y = 0.025;
+  blob.castShadow = false;
+  blob.receiveShadow = false;
+  return blob;
+}
 
 function mark(material, rest = 0x000000, restI = 0) {
   material.userData.rest = rest;
@@ -14,54 +39,75 @@ function palette(textures) {
   const pearl = mark(
     new THREE.MeshStandardMaterial({
       map: textures.pearl,
-      roughness: 0.52,
-      metalness: 0.1,
-      flatShading: true,
+      normalMap: textures.pearlNormal,
+      roughnessMap: textures.pearlRough,
+      roughness: 1,
+      metalness: 0.14,
+      envMapIntensity: 0.55,
     })
   );
+  pearl.normalScale.set(0.55, 0.55);
   const worn = mark(
     new THREE.MeshStandardMaterial({
       map: textures.pearlWorn,
-      roughness: 0.68,
-      metalness: 0.06,
-      flatShading: true,
+      normalMap: textures.pearlNormal,
+      roughnessMap: textures.pearlRough,
+      roughness: 1,
+      metalness: 0.08,
+      envMapIntensity: 0.4,
     })
   );
+  worn.normalScale.set(0.7, 0.7);
   const joint = mark(
     new THREE.MeshStandardMaterial({
       map: textures.joint,
-      color: 0x222222,
-      roughness: 0.4,
-      metalness: 0.55,
-      flatShading: true,
+      color: 0x1a1a1a,
+      roughness: 0.38,
+      metalness: 0.62,
+      envMapIntensity: 0.45,
     })
   );
   const visor = mark(
-    new THREE.MeshStandardMaterial({
-      color: 0x070707,
-      roughness: 0.16,
-      metalness: 0.78,
-      flatShading: true,
+    new THREE.MeshPhysicalMaterial({
+      color: 0x07080c,
+      roughness: 0.08,
+      metalness: 0.58,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+      envMapIntensity: 0.8,
+      reflectivity: 0.7,
     })
   );
+  visor.polygonOffset = true;
+  visor.polygonOffsetFactor = -2;
+  visor.polygonOffsetUnits = -2;
   const cloth = mark(
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshPhysicalMaterial({
       map: textures.cloth,
-      roughness: 0.78,
-      metalness: 0.02,
-      flatShading: true,
+      normalMap: textures.clothNormal,
+      roughnessMap: textures.clothRough,
+      roughness: 1,
+      metalness: 0,
+      sheen: 0.42,
+      sheenRoughness: 0.55,
+      sheenColor: new THREE.Color(0xf6f1e8),
+      envMapIntensity: 0.32,
     })
   );
+  cloth.normalScale.set(0.4, 0.4);
   const gold = mark(
     new THREE.MeshStandardMaterial({
       map: textures.gold,
-      roughness: 0.36,
-      metalness: 0.68,
-      flatShading: true,
+      normalMap: textures.goldNormal,
+      roughnessMap: textures.goldRough,
+      roughness: 1,
+      metalness: 0.86,
+      envMapIntensity: 0.9,
     }),
     0x6a5018,
     0.16
   );
+  gold.normalScale.set(0.35, 0.35);
   const amber = new THREE.MeshBasicMaterial({ color: 0xffb14a });
   return { pearl, worn, joint, visor, cloth, gold, amber };
 }
@@ -90,30 +136,23 @@ function buildTessera(textures, options = {}) {
   const mat = palette(textures);
   const parts = [];
 
-  const helmet = mesh(g.helmet, mat.pearl, 0, 1.66, 0);
-  helmet.scale.set(1.06, 0.94, 1.08);
-  const collar = mesh(g.collar, mat.joint, 0, 1.46, 0);
-  const chest = mesh(g.chest, mat.pearl, 0, 1.24, 0);
-  const abdomen = mesh(g.abdomen, mat.pearl, 0, 0.96, 0);
-  const pelvis = mesh(g.pelvis, mat.pearl, 0, 0.82, 0);
-  const belt = mesh(new THREE.BoxGeometry(0.38, 0.06, 0.24), mat.joint, 0, 1.04, 0);
-  const pecL = mesh(g.pec, mat.pearl, -0.1, 1.28, 0.15);
-  pecL.rotation.y = 0.22;
-  const pecR = mesh(g.pec, mat.pearl, 0.1, 1.28, 0.15);
-  pecR.rotation.y = -0.22;
-  const sensor = mesh(new THREE.BoxGeometry(0.04, 0.055, 0.02), mat.pearl, 0, 1.8, 0.155);
-  sensor.rotation.z = Math.PI / 4;
-
-  const visorFront = mesh(new THREE.BoxGeometry(0.32, 0.17, 0.055), mat.visor, 0, 1.63, 0.155);
-  const visorL = mesh(new THREE.BoxGeometry(0.055, 0.15, 0.12), mat.visor, -0.15, 1.63, 0.07);
-  visorL.rotation.y = 0.65;
-  const visorR = mesh(new THREE.BoxGeometry(0.055, 0.15, 0.12), mat.visor, 0.15, 1.63, 0.07);
-  visorR.rotation.y = -0.65;
-  const weak = mesh(g.seam, mat.amber, 0, 1.645, 0.175);
+  const torso = mesh(g.torso, mat.pearl);
+  const belt = mesh(new THREE.CylinderGeometry(0.188, 0.188, 0.048, 18), mat.joint, 0, 1.02, 0);
+  const collar = mesh(g.collar, mat.joint, 0, 1.5, 0);
+  const head = new THREE.Group();
+  head.position.set(0, 1.66, 0);
+  const helmet = mesh(g.helmet, mat.pearl);
+  helmet.scale.set(1.06, 0.96, 1.08);
+  const visor = mesh(new THREE.SphereGeometry(0.162, 40, 28), mat.visor, 0, -0.02, 0.138);
+  visor.scale.set(1.08, 0.76, 0.58);
+  const sensor = mesh(new THREE.SphereGeometry(0.026, 12, 8), mat.pearl, 0, 0.12, 0.155);
+  sensor.scale.set(1, 0.65, 0.5);
+  const weak = mesh(g.seam, mat.amber, 0, -0.02, 0.185);
   weak.visible = false;
   weak.castShadow = false;
+  head.add(helmet, visor, sensor, weak);
 
-  parts.push(helmet, collar, chest, abdomen, pelvis, belt, pecL, pecR, sensor, visorFront, visorL, visorR, weak);
+  parts.push(torso, belt, collar, head);
 
   function limb(side, shoulder) {
     const pivot = new THREE.Group();
@@ -123,7 +162,8 @@ function buildTessera(textures, options = {}) {
       pivot.add(jointSphere(mat.joint, 0.042, 0, -0.3, 0));
       pivot.add(mesh(g.forearm, mat.joint, 0, -0.42, 0));
       pivot.add(mesh(g.hand, mat.joint, 0, 0.08, 0));
-      const pad = mesh(g.shoulder, mat.pearl, side * 0.02, 0.02, 0);
+      const pad = mesh(g.joint, mat.pearl, side * 0.02, 0.02, 0.01);
+      pad.scale.set(0.09, 0.055, 0.078);
       pivot.add(pad);
     } else {
       pivot.add(jointSphere(mat.joint, 0.058, 0, 0, 0));
@@ -154,12 +194,7 @@ function buildTessera(textures, options = {}) {
   muzzle.castShadow = false;
   rArm.add(gun, muzzle);
 
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.42, 12),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false })
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.02;
+  const shadow = contactBlob(0.48);
 
   group.add(...parts, lLeg, rLeg, lArm, rArm, shadow);
 
@@ -167,9 +202,19 @@ function buildTessera(textures, options = {}) {
     const tabard = mesh(g.tabard, mat.cloth, 0, 0.78, 0.16);
     const back = mesh(new THREE.BoxGeometry(0.28, 0.42, 0.04), mat.cloth, 0, 0.95, -0.14);
     const stole = mesh(g.stole, mat.gold, 0, 1.16, 0.18);
-    const mantle = mesh(frustum(0.52, 0.2, 0.34, 0.14, 0.12), mat.cloth, 0, 1.4, 0);
+    const mantle = mesh(
+      new THREE.LatheGeometry(
+        [new THREE.Vector2(0.18, 0), new THREE.Vector2(0.32, 0.04), new THREE.Vector2(0.24, 0.1)],
+        24
+      ),
+      mat.cloth,
+      0,
+      1.4,
+      0
+    );
     group.add(tabard, back, stole, mantle);
   }
+  stampTangents(group);
 
   return {
     group,
@@ -179,6 +224,7 @@ function buildTessera(textures, options = {}) {
     lArm,
     rArm,
     muzzle,
+    shadow,
     flashMats: [mat.pearl, mat.worn, mat.joint, mat.visor, mat.cloth, mat.gold],
     flash: 0,
   };
@@ -189,94 +235,106 @@ function buildPriest(textures) {
   const mat = palette(textures);
   const g = geos();
 
-  const robe = mesh(frustum(0.95, 0.42, 0.62, 0.32, 1.42), mat.cloth, 0, 0.84, 0);
-  const mantle = mesh(frustum(1.15, 0.4, 0.55, 0.26, 0.22), mat.cloth, 0, 1.52, 0);
-  const cowl = mesh(frustum(0.46, 0.3, 0.28, 0.2, 0.22), mat.cloth, 0, 1.7, 0);
-  const hem = mesh(new THREE.BoxGeometry(1.0, 0.06, 0.46), mat.gold, 0, 0.16, 0);
-  const belt = mesh(new THREE.BoxGeometry(0.7, 0.08, 0.38), mat.gold, 0, 1.12, 0.02);
-  const stole = mesh(new THREE.BoxGeometry(0.16, 1.15, 0.05), mat.gold, 0, 1.05, 0.2);
-  const pendant = mesh(new THREE.SphereGeometry(0.045, 8, 6), mat.gold, 0, 0.72, 0.24);
+  const robe = mesh(g.robe, mat.cloth);
+  const mantle = mesh(
+    new THREE.LatheGeometry(
+      [
+        new THREE.Vector2(0.22, 0),
+        new THREE.Vector2(0.5, 0.06),
+        new THREE.Vector2(0.42, 0.16),
+        new THREE.Vector2(0.2, 0.22),
+      ],
+      28
+    ),
+    mat.cloth,
+    0,
+    1.46,
+    0
+  );
+  const cowl = mesh(
+    new THREE.LatheGeometry(
+      [new THREE.Vector2(0.12, 0), new THREE.Vector2(0.22, 0.06), new THREE.Vector2(0.16, 0.16)],
+      24
+    ),
+    mat.cloth,
+    0,
+    1.68,
+    0
+  );
+  const hem = mesh(new THREE.TorusGeometry(0.48, 0.018, 8, 32), mat.gold, 0, 0.12, 0);
+  hem.rotation.x = Math.PI / 2;
+  const belt = mesh(new THREE.TorusGeometry(0.35, 0.02, 8, 28), mat.gold, 0, 1.12, 0);
+  belt.rotation.x = Math.PI / 2;
+  const stole = mesh(new THREE.BoxGeometry(0.14, 1.05, 0.04), mat.gold, 0, 1.02, 0.22);
+  const pendant = mesh(new THREE.SphereGeometry(0.045, 12, 10), mat.gold, 0, 0.7, 0.26);
 
-  const helmet = mesh(g.helmet, mat.pearl, 0, 2.05, 0);
-  helmet.scale.setScalar(1.18);
-  const sensor = mesh(new THREE.BoxGeometry(0.05, 0.07, 0.025), mat.pearl, 0, 2.24, 0.16);
-  sensor.rotation.z = Math.PI / 4;
-  const visor = mesh(new THREE.BoxGeometry(0.42, 0.18, 0.06), mat.visor, 0, 2.02, 0.22);
-  const visorL = mesh(new THREE.BoxGeometry(0.05, 0.12, 0.12), mat.visor, -0.18, 2.02, 0.07);
-  visorL.rotation.y = 0.5;
-  const visorR = mesh(new THREE.BoxGeometry(0.05, 0.12, 0.12), mat.visor, 0.18, 2.02, 0.07);
-  visorR.rotation.y = -0.5;
-  const seam = mesh(new THREE.BoxGeometry(0.26, 0.035, 0.02), mat.amber, 0, 2.02, 0.21);
+  const head = new THREE.Group();
+  head.position.set(0, 2.05, 0);
+  head.scale.setScalar(1.18);
+  const helmet = mesh(g.helmet, mat.pearl);
+  const sensor = mesh(new THREE.SphereGeometry(0.028, 12, 8), mat.pearl, 0, 0.125, 0.15);
+  sensor.scale.set(1, 0.62, 0.48);
+  const visor = mesh(new THREE.SphereGeometry(0.162, 40, 28), mat.visor, 0, -0.015, 0.142);
+  visor.scale.set(1.12, 0.82, 0.6);
+  const seam = mesh(new THREE.BoxGeometry(0.22, 0.03, 0.018), mat.amber, 0, -0.02, 0.175);
   seam.visible = false;
   seam.castShadow = false;
+  head.add(helmet, sensor, visor, seam);
 
   const haloMat = new THREE.MeshStandardMaterial({
     color: 0xe6c56a,
     map: textures.gold,
-    roughness: 0.28,
-    metalness: 0.64,
+    normalMap: textures.goldNormal,
+    roughnessMap: textures.goldRough,
+    roughness: 1,
+    metalness: 0.82,
     emissive: 0xe6c56a,
     emissiveIntensity: 0.85,
     transparent: true,
     opacity: 0.94,
     depthWrite: false,
+    envMapIntensity: 0.7,
   });
-  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.045, 8, 28), haloMat);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.04, 12, 48), haloMat);
   halo.position.set(0, 2.22, -0.16);
-  const inner = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.018, 6, 24), haloMat);
+  const inner = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.016, 8, 36), haloMat);
   halo.add(inner);
+  const gem = mesh(new THREE.SphereGeometry(0.032, 10, 8), mat.gold, 0.58, 0, 0);
+  halo.add(gem);
 
   function raisedArm(side) {
     const pivot = new THREE.Group();
-    const sleeve = mesh(frustum(0.2, 0.16, 0.11, 0.1, 0.56), mat.cloth, 0, 0.3, 0);
-    const cuff = mesh(new THREE.BoxGeometry(0.14, 0.05, 0.12), mat.gold, 0, 0.58, 0);
-    const glove = mesh(new THREE.BoxGeometry(0.12, 0.09, 0.045), mat.pearl, 0, 0.68, 0.02);
-    const palm = mesh(new THREE.BoxGeometry(0.07, 0.05, 0.02), mat.amber, 0, 0.68, 0.05);
+    const sleeve = mesh(new THREE.CylinderGeometry(0.075, 0.13, 0.52, 14), mat.cloth, 0, 0.26, 0);
+    const cuff = mesh(new THREE.TorusGeometry(0.078, 0.016, 8, 16), mat.gold, 0, 0.5, 0);
+    cuff.rotation.x = Math.PI / 2;
+    const glove = mesh(g.hand, mat.pearl, 0, -0.06, 0.02);
+    glove.rotation.z = Math.PI;
+    const palm = mesh(new THREE.BoxGeometry(0.06, 0.045, 0.018), mat.amber, 0, 0.62, 0.08);
     palm.castShadow = false;
     pivot.add(sleeve, cuff, glove, palm);
-    pivot.position.set(side * 0.42, 1.5, 0.02);
+    pivot.position.set(side * 0.42, 1.48, 0.02);
     return { pivot, hand: palm };
   }
   const left = raisedArm(-1);
   const right = raisedArm(1);
 
-  for (const y of [1.38, 1.2, 1.0]) {
-    const chain = mesh(new THREE.BoxGeometry(0.42, 0.028, 0.028), mat.gold, 0, y, 0.22);
+  for (const y of [1.4, 1.2, 1.0]) {
+    const chain = mesh(new THREE.TorusGeometry(0.2, 0.01, 8, 22, Math.PI * 0.9), mat.gold, 0, y, 0.08);
+    chain.rotation.x = Math.PI / 2;
     group.add(chain);
   }
 
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.78, 14),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.34, depthWrite: false })
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.02;
+  const shadow = contactBlob(0.9);
 
-  group.add(
-    robe,
-    mantle,
-    cowl,
-    hem,
-    belt,
-    stole,
-    pendant,
-    helmet,
-    sensor,
-    visor,
-    visorL,
-    visorR,
-    seam,
-    halo,
-    left.pivot,
-    right.pivot,
-    shadow
-  );
+  group.add(robe, mantle, cowl, hem, belt, stole, pendant, head, halo, left.pivot, right.pivot, shadow);
   group.position.set(PRIEST_SPAWN.x, 0, PRIEST_SPAWN.z);
+  stampTangents(group);
   return {
     group,
     halo,
     haloMat,
     seam,
+    shadow,
     lArm: left.pivot,
     rArm: right.pivot,
     lHand: left.hand,
@@ -284,6 +342,19 @@ function buildPriest(textures) {
     flashMats: [mat.pearl, mat.cloth, mat.visor, mat.gold],
     flash: 0,
   };
+}
+
+function stampTangents(group) {
+  group.traverse((obj) => {
+    const geo = obj.geometry;
+    if (!obj.isMesh || !obj.material?.normalMap || !geo?.index || geo.attributes.tangent) return;
+    if (!geo.attributes.uv || !geo.attributes.normal) return;
+    try {
+      geo.computeTangents();
+    } catch {
+      /* a prop without a clean index still draws; it just skips the normal map */
+    }
+  });
 }
 
 export function createActors(scene, textures) {
@@ -366,6 +437,7 @@ export function createActors(scene, textures) {
         priestRec.group.visible = priestRec.death > 0;
         priestRec.group.rotation.x = k * 1.25;
         priestRec.group.position.set(priest.x, -k * 0.55, priest.z);
+        priestRec.shadow.visible = false;
         priestRec.halo.scale.setScalar(Math.max(0, 1 - k));
         priestRec.seam.visible = false;
         priestRec.lArm.rotation.x = 0.9;
@@ -376,8 +448,12 @@ export function createActors(scene, textures) {
       priestRec.died = false;
       priestRec.death = 0;
       priestRec.group.visible = true;
-      priestRec.group.rotation.set(0, priest.yaw || 0, 0);
-      priestRec.group.position.set(priest.x, 0, priest.z);
+      priestRec.group.rotation.set(0, priest.yaw || 0, Math.sin(time * 0.8) * 0.008);
+      const breathe = Math.sin(time * 1.15) * 0.015;
+      priestRec.group.position.set(priest.x, breathe, priest.z);
+      priestRec.shadow.visible = true;
+      priestRec.shadow.position.y = 0.025 - breathe;
+      priestRec.halo.rotation.z = time * 0.15;
       const rite = priest.phase === "rite";
       const splay = rite ? 1.05 : priest.windup > 0 ? 0.35 : 0.72;
       const reach = priest.windup > 0 ? -0.85 : rite ? -0.2 : -0.05;
@@ -414,6 +490,7 @@ export function createActors(scene, textures) {
           rec.group.visible = rec.death > 0;
           rec.group.rotation.x = k * 1.35;
           rec.group.position.set(enemy.x, -k * 0.4, enemy.z);
+          rec.shadow.visible = false;
           rec.group.scale.setScalar(1);
           rec.lArm.rotation.x = 0.5 + k * 0.6;
           rec.rArm.rotation.x = 0.3 + k * 0.9;
@@ -426,11 +503,14 @@ export function createActors(scene, textures) {
         rec.died = false;
         rec.death = 0;
         rec.group.visible = !!enemy.visible;
-        rec.group.rotation.set(0, enemy.yaw || 0, 0);
-        rec.group.position.set(enemy.x, 0, enemy.z);
         const moved = Math.hypot(enemy.x - rec.prevX, enemy.z - rec.prevZ);
         rec.prevX = enemy.x;
         rec.prevZ = enemy.z;
+        const bob = Math.sin(time * 1.4 + rec.phase) * (moved > 0.004 ? 0.02 : 0.012);
+        rec.group.rotation.set(0, enemy.yaw || 0, Math.sin(time * 1.1 + rec.phase) * 0.012);
+        rec.group.position.set(enemy.x, bob, enemy.z);
+        rec.shadow.visible = true;
+        rec.shadow.position.y = 0.025 - bob;
         const swing = moved > 0.004 ? Math.sin(time * 8 + rec.phase) : Math.sin(time * 1.6 + rec.phase) * 0.15;
         rec.lLeg.rotation.x = swing * 0.7;
         rec.rLeg.rotation.x = -swing * 0.7;

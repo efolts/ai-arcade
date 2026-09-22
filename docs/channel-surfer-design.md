@@ -2,7 +2,7 @@
 
 The FPS where changing TV channels changes combat and the level.
 
-The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 3 is the art pass on that slice. Phases 4–6 stay on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
+The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 3.1 is a realism pass on that slice. Phases 4–6 stay on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
 
 ## Promise
 
@@ -12,7 +12,7 @@ CRT Head is alone in the abandoned KRCD mall with a weaponized remote. Tessera b
 - **STATIC** is the noisy carrier. Short-range spread, cloaked things appear, visor seams open, Signal drains.
 - **DEAD AIR** is the gap between stations. Faster movement, striped shutters and rite veils stop being solid, the remote will not fire, Signal drains.
 
-Cyan is CRT Head only: the bolt, the remote lens, the HUD, and the few seconds a retuned PA horn borrows that color. Tessera and the Visor Priest stay pearl, black, amber, and gold. No logos on the bots. No cyan on the priest.
+Cyan is CRT Head only: the bolt, the remote lens, and the HUD. A retuned shot still traces cyan because it is the remote. The PA horn flares warm white when it fires. Tessera and the Visor Priest stay pearl, black, amber, and gold. No logos on the bots. No cyan on the priest.
 
 ## Controls
 
@@ -88,7 +88,7 @@ The horn is on the west wall of the nave. Aim at it and press E:
 
 - Highlight and the prompt `E  RETUNE PA` when the aim cone can see it.
 - `PA RECHARGING` if you are still inside the 16s cooldown.
-- On a hit, nearby choir Tessera are stunned for 4.5s, your shots run hot for 4.5s (about 1.45×, tracers pulled to cyan), and the horn flares cyan. That cyan is the remote's retune, not the priest's body.
+- On a hit, nearby choir Tessera are stunned for 4.5s, your shots run hot for 4.5s (about 1.45×, tracers pulled to cyan), and the horn flares warm white. The cyan stays on the shot. It is the remote's retune, not the priest's body and not the room.
 - A dry press plays the deny click.
 
 The horn does not skip a rite by itself. It buys a few seconds against the choir.
@@ -109,15 +109,16 @@ Clearing him drops the choir, pays Signal, and opens the wing-clear card. Best t
 
 ## Presentation
 
-Phase 3 is a GoldSrc / early-Source pass on the same two rooms. Hard edges, a short palette, canvas atlases, silhouettes that read at range. No Source 2 meshes and no downloaded model packs.
+Phase 3.1 pushes the same two rooms toward something you can believe in a 960×780 iframe: smooth character shells, real shadows, and canvas albedo plus roughness and normal maps. No downloaded model packs. One shadowed sun. A generated room probe so glass and gold have something to reflect.
 
-- CRT viewmodel: wood-cased remote, brushed face, button grid, trench cuffs, leather gloves with fingers. Bob follows the walk and the strafe. LIVE muzzle flash is a cyan cross at the lens. The IR lens is the only cyan light on the body.
-- Court Tessera are low-poly humanoids: faceted pearl helmet, wraparound black visor, pearl chest plates, black ball joints, worn shins, a small amber muzzle. No badges and no cyan. Choir Tessera keep that kit and add a white tabard, mantle, and gold stole so the legs stay readable.
+- CRT viewmodel: wood-cased remote with grain and roughness, plastic buttons, trench cuffs, leather gloves with round fingers. Bob follows the walk and the strafe, and a channel change kicks the remote. LIVE muzzle flash is a cyan cross at the lens. The IR lens is the only cyan light on the body.
+- Court Tessera are smooth humanoids: lathe helmet and torso, wraparound black glass visor, black joints, worn shins, a small amber muzzle. No badges and no cyan. Choir Tessera keep that kit and add a white tabard, mantle, and gold stole so the legs stay readable. A soft contact blob sits under each one, on top of the sun shadow.
 - Hit flash whites the shell out for a short beat without changing hurt time. Deaths tip the kit over, limbs go limp, and the shell flashes before it drops. Amber bolts still have a plant-and-fire tell. Impacts are sparks plus a short additive flash. Retuned shots stay the cyan exception.
-- The priest is the same language at boss scale: pearl helmet, wide black visor, white and gold robes, gold chains, raised sleeves, a double gold halo. Amber shows on the palms only while he is winding up or in a rite, and on the visor seam when LIVE can break it. The halo flares when STATIC can hit it. No cyan on the priest.
-- Hurt spheres are unchanged: Tessera head `y+1.62 r0.26` and body `y+0.98 r0.46`; priest head `2.05 r0.3`, body `1.2 r0.62`, halo `2.62 r0.42`. The kits were built to those volumes.
-- Court floor, walls, trim, and ceiling use tighter tile and panel atlases. The radio wing has a darker stone floor on top of the same slab. Signage is still original KRCD copy. Candles and the gold seal stay.
-- Grade is a CSS treatment on the canvas plus fog. The HUD stays a CRT overlay so it stays readable when the picture goes to snow.
+- The priest is the same materials at boss scale: pearl helmet, wide black glass visor, a lathe robe, gold hem and chains, raised sleeves with pearl gloves, a double gold halo. Amber shows on the palms only while he is winding up or in a rite, and on the visor seam when LIVE can break it. The halo flares when STATIC can hit it. No cyan on the priest.
+- Hurt spheres are unchanged: Tessera head `y+1.62 r0.26` and body `y+0.98 r0.46`; priest head `2.05 r0.3`, body `1.2 r0.62`, halo `2.62 r0.42`. The shells were built to those volumes.
+- Court floor, walls, trim, and ceiling keep the tile atlases, now with grout normals and roughness. The radio wing has a darker stone floor on top of the same slab. Pews keep their collision and gain a backrest inside that box. The fountain has a bowl inside the existing rim. Signage is still original KRCD copy. The altar seal is a gold ring on stone and takes light.
+- Lighting is a warm key from the skylight, a warm unshadowed fill, and a lower hemisphere so the court stays readable. Fog starts closer so the nave has depth. DEAD AIR stays dim, not black. Grade is still a CSS treatment on the canvas. The HUD stays a CRT overlay.
+- Phase 3.2, not built: a tighter reflection probe so visors read as glass from more angles, ambient occlusion or lightmaps, skinned fingers and cloth, hero pew and altar meshes, and a shadow LOD if the 2048 map shows up in frame time.
 - Audio is WebAudio: bolt, spread, dry click, channel ticks, impacts, a quiet carrier, plus a door, a rite chord, a break, a failed rite, and the PA squeal. DEAD AIR low-passes the bus. STATIC adds hiss.
 
 ## Build
@@ -145,7 +146,11 @@ Radio wing behind a door that opens when the court is clear. One PA hijack. Viso
 
 ### Phase 3 — this art pass
 
-Low-poly Tessera and priest kits, CRT viewmodel, mall and nave materials, hit flash and death poses, impact flashes. Same two rooms. Same combat numbers.
+Phase 3.1 realism on the two rooms: smooth Tessera and priest shells, glass visors, canvas normal and roughness maps, one soft shadow map plus contact blobs, warm key and fill. Same combat numbers.
+
+### Phase 3.2 — not started
+
+More realism on these rooms only: reflection detail, occlusion, skinned cloth and fingers, hero pew and altar meshes. Not weapons, not new rooms.
 
 ### Phase 4 — not started
 

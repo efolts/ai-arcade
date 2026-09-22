@@ -5,11 +5,28 @@ export function createViewmodel(camera, textures) {
   root.position.set(0.18, -0.28, -0.48);
   camera.add(root);
 
-  const leather = new THREE.MeshStandardMaterial({ map: textures.leather, roughness: 0.78, metalness: 0.04 });
-  const cuffMat = new THREE.MeshStandardMaterial({ map: textures.trench, roughness: 0.86, metalness: 0.02 });
-  const metal = new THREE.MeshStandardMaterial({ map: textures.brushed, roughness: 0.34, metalness: 0.74 });
-  const wood = new THREE.MeshStandardMaterial({ map: textures.wood, roughness: 0.62, metalness: 0.05 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.5, metalness: 0.2 });
+  const leather = new THREE.MeshStandardMaterial({
+    map: textures.leather,
+    normalMap: textures.leatherNormal,
+    roughnessMap: textures.leatherRough,
+    roughness: 1,
+    metalness: 0.06,
+    envMapIntensity: 0.35,
+  });
+  leather.normalScale.set(0.7, 0.7);
+  const cuffMat = new THREE.MeshStandardMaterial({ map: textures.trench, roughness: 0.86, metalness: 0.02, envMapIntensity: 0.2 });
+  const metal = new THREE.MeshStandardMaterial({ map: textures.brushed, roughness: 0.32, metalness: 0.78, envMapIntensity: 0.7 });
+  const wood = new THREE.MeshStandardMaterial({
+    map: textures.wood,
+    normalMap: textures.woodNormal,
+    roughnessMap: textures.woodRough,
+    roughness: 1,
+    metalness: 0.04,
+    envMapIntensity: 0.3,
+  });
+  wood.normalScale.set(0.85, 0.85);
+  const dark = new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.45, metalness: 0.18, envMapIntensity: 0.25 });
+  const plastic = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.35, metalness: 0.05, envMapIntensity: 0.3 });
   const lensMat = new THREE.MeshBasicMaterial({ color: 0x67f6ff });
 
   const caseBody = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.055, 0.38), wood);
@@ -22,7 +39,7 @@ export function createViewmodel(camera, textures) {
 
   for (let col = 0; col < 2; col++) {
     for (let row = 0; row < 4; row++) {
-      const btn = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.012, 0.03), dark);
+      const btn = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.012, 0.03), plastic);
       btn.position.set(-0.012 + col * 0.064, 0.026, 0.1 - row * 0.055);
       root.add(btn);
     }
@@ -64,20 +81,24 @@ export function createViewmodel(camera, textures) {
 
   function glove(x, z, rot) {
     const group = new THREE.Group();
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.04, 0.12), leather);
+    const palmGeo = new THREE.SphereGeometry(0.046, 14, 10);
+    palmGeo.scale(1.05, 0.48, 1.35);
+    const palm = new THREE.Mesh(palmGeo, leather);
     const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.16), cuffMat);
     sleeve.position.set(0, 0.01, 0.12);
-    const knuckle = new THREE.Mesh(new THREE.BoxGeometry(0.086, 0.028, 0.03), leather);
+    const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), leather);
+    knuckle.scale.set(2.1, 0.7, 0.8);
     knuckle.position.set(0, 0.02, -0.04);
     group.add(palm, sleeve, knuckle);
     for (let i = 0; i < 4; i++) {
-      const finger = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.02, 0.055), leather);
-      finger.position.set(-0.03 + i * 0.02, 0.012, -0.07);
+      const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.01, 0.05, 8), leather);
+      finger.rotation.x = Math.PI / 2;
+      finger.position.set(-0.03 + i * 0.02, 0.012, -0.078);
       group.add(finger);
     }
-    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.045), leather);
+    const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.011, 0.042, 8), leather);
+    thumb.rotation.z = rot > 0 ? -0.9 : 0.9;
     thumb.position.set(rot > 0 ? 0.05 : -0.05, 0.02, -0.01);
-    thumb.rotation.z = rot > 0 ? -0.5 : 0.5;
     group.add(thumb);
     group.position.set(x, -0.05, z);
     group.rotation.y = rot;
@@ -91,16 +112,23 @@ export function createViewmodel(camera, textures) {
     obj.castShadow = false;
     obj.receiveShadow = false;
     obj.frustumCulled = false;
+    const geo = obj.geometry;
+    if (!obj.isMesh || !obj.material?.normalMap || !geo?.index || geo.attributes.tangent) return;
+    if (geo.attributes.uv && geo.attributes.normal) geo.computeTangents();
   });
 
   let kick = 0;
+  let click = 0;
   let flashT = 0;
   let bob = 0;
   let channel = "LIVE";
+  let primed = false;
   const rest = { x: 0.18, y: -0.28, z: -0.48 };
 
   return {
     setChannel(next) {
+      if (primed && next !== channel) click = 0.09;
+      primed = true;
       channel = next;
       if (next === "LIVE") {
         lensMat.color.setHex(0x67f6ff);
@@ -130,6 +158,7 @@ export function createViewmodel(camera, textures) {
       const amp = moving ? 0.004 + Math.min(speed, 9) * 0.00115 : 0.0016;
       const strafe = motion.strafe || 0;
       kick += (0 - kick) * (1 - Math.exp(-12 * dt));
+      click += (0 - click) * (1 - Math.exp(-14 * dt));
       flashT -= dt;
       flash.visible = flashT > 0;
       if (flash.visible) flash.rotation.z = flashT * 18;
@@ -140,7 +169,7 @@ export function createViewmodel(camera, textures) {
       root.position.x = rest.x + Math.cos(bob) * amp * 0.7 - strafe * 0.01;
       root.position.y = rest.y + Math.sin(bob * 2) * amp + (moving ? 0 : Math.sin(bob) * 0.003);
       root.position.z = rest.z + kick * 0.62;
-      root.rotation.x = kick * 1.7 + Math.sin(bob * 2) * amp * 2.2;
+      root.rotation.x = kick * 1.7 + click * 1.5 + Math.sin(bob * 2) * amp * 2.2;
       root.rotation.y = 0.06 - kick * 0.25;
       root.rotation.z = -strafe * 0.035 + Math.sin(bob) * amp * 1.4;
     },

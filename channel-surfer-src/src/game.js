@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { stepEnemy } from "./ai.js";
 import { createActors } from "./actors.js";
 import { damagePriest, priestAnswer, resolvePriestHit, riteBanner, tickPriest, PRIEST_TUNING, createPriest } from "./boss.js";
@@ -85,11 +86,14 @@ export function createGame(canvas, audio) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.14;
+  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.06).texture;
+  pmrem.dispose();
   const camera = new THREE.PerspectiveCamera(72, 960 / 780, 0.08, 90);
   scene.add(camera);
   const fill = new THREE.PointLight(0xffe6c4, 14, 4.5, 2);
