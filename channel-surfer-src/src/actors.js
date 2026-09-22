@@ -227,10 +227,9 @@ function buildTessera(textures, options = {}) {
       pivot.add(mesh(g.upper, mat.pearl, 0, -0.16, 0));
       pivot.add(jointSphere(mat.joint, 0.042, 0, -0.3, 0));
       pivot.add(mesh(g.forearm, mat.joint, 0, -0.42, 0));
-      pivot.add(mesh(g.hand, mat.joint, 0, 0.08, 0));
-      const pad = mesh(g.joint, mat.pearl, side * 0.02, 0.02, 0.01);
-      pad.scale.set(0.09, 0.055, 0.078);
-      pivot.add(pad);
+      const glove = tesseraGlove(mat.joint, side);
+      pivot.add(glove.rig);
+      pivot.userData.digits = glove.digits;
     } else {
       pivot.add(jointSphere(mat.joint, 0.058, 0, 0, 0));
       pivot.add(mesh(g.thigh, mat.pearl, 0, -0.2, 0));
@@ -324,6 +323,8 @@ function buildTessera(textures, options = {}) {
     muzzle,
     shadow,
     cloth,
+    lDigits: lArm.userData.digits,
+    rDigits: rArm.userData.digits,
     flashMats: [mat.pearl, mat.worn, mat.joint, mat.visor, mat.cloth, mat.gold, mat.grime, mat.grimeR],
     flash: 0,
   };
@@ -338,10 +339,10 @@ function buildPriest(textures, probes) {
   const mantle = motionMesh(
     new THREE.LatheGeometry(
       [
-        new THREE.Vector2(0.22, 0),
-        new THREE.Vector2(0.5, 0.06),
-        new THREE.Vector2(0.42, 0.16),
-        new THREE.Vector2(0.2, 0.22),
+        new THREE.Vector2(0.26, 0),
+        new THREE.Vector2(0.64, 0.05),
+        new THREE.Vector2(0.5, 0.14),
+        new THREE.Vector2(0.22, 0.2),
       ],
       28
     ),
@@ -353,12 +354,13 @@ function buildPriest(textures, probes) {
   const capeMat = mat.cloth.clone();
   capeMat.side = THREE.DoubleSide;
   const cape = motionMesh(
-    new THREE.CylinderGeometry(0.3, 0.56, 1.35, 18, 1, true, Math.PI - 0.9, 1.8),
+    new THREE.CylinderGeometry(0.3, 0.98, 1.78, 18, 1, true, Math.PI - 1.25, 2.5),
     capeMat,
     0,
-    0.78,
-    -0.06
+    0.9,
+    -0.14
   );
+  cape.castShadow = false;
   const cowl = mesh(
     new THREE.LatheGeometry(
       [new THREE.Vector2(0.12, 0), new THREE.Vector2(0.22, 0.06), new THREE.Vector2(0.16, 0.16)],
@@ -369,21 +371,42 @@ function buildPriest(textures, probes) {
     1.68,
     0
   );
-  const hem = mesh(new THREE.TorusGeometry(0.48, 0.018, 8, 32), mat.gold, 0, 0.12, 0);
+  const hemRoll = mesh(new THREE.TorusGeometry(0.58, 0.05, 8, 28), mat.cloth, 0, 0.08, 0);
+  hemRoll.rotation.x = Math.PI / 2;
+  hemRoll.castShadow = false;
+  const hem = mesh(new THREE.TorusGeometry(0.63, 0.018, 8, 32), mat.gold, 0, 0.05, 0);
   hem.rotation.x = Math.PI / 2;
-  const belt = mesh(new THREE.TorusGeometry(0.35, 0.02, 8, 28), mat.gold, 0, 1.12, 0);
+  const belt = mesh(new THREE.TorusGeometry(0.38, 0.022, 8, 28), mat.gold, 0, 1.1, 0);
   belt.rotation.x = Math.PI / 2;
-  const bodiceMat = mat.cloth.clone();
-  bodiceMat.side = THREE.DoubleSide;
-  const bodice = mesh(
-    new THREE.CylinderGeometry(0.36, 0.42, 0.78, 18, 1, true, -0.55, 1.1),
-    bodiceMat,
-    0,
-    1.0,
-    0.04
-  );
-  const stole = mesh(new THREE.BoxGeometry(0.1, 0.86, 0.02), mat.gold, 0, 1.02, 0.46);
-  const pendant = mesh(new THREE.SphereGeometry(0.045, 12, 10), mat.gold, 0, 0.72, 0.48);
+  const panelMat = mat.cloth.clone();
+  panelMat.side = THREE.DoubleSide;
+  const panels = [];
+  const panelLayout = [
+    [0, 0.7, 0.06, 1.2, 0.075],
+    [0.82, 0.36, 0.08, 1.16, 0.068],
+    [-0.82, 0.36, 0.08, 1.16, 0.068],
+    [1.6, 0.4, 0.08, 1.12, 0.06],
+    [-1.6, 0.4, 0.08, 1.12, 0.06],
+    [Math.PI, 0.55, 0.1, 1.08, 0.055],
+  ];
+  for (const [ang, span, y0, y1, offset] of panelLayout) {
+    const panel = motionMesh(skirtPanel(ang, span, y0, y1, offset), panelMat);
+    panel.castShadow = false;
+    panels.push(panel);
+    group.add(panel);
+  }
+  for (const edge of [-0.36, 0.36]) {
+    const trim = mesh(skirtPanel(edge, 0.045, 0.08, 1.18, 0.09), mat.gold);
+    trim.castShadow = false;
+    group.add(trim);
+  }
+  const bodice = motionMesh(skirtPanel(0, 0.95, 1.16, 1.5, 0.055, 6), panelMat);
+  bodice.castShadow = false;
+  const underbust = mesh(skirtPanel(0, 1.05, 1.12, 1.17, 0.07, 3), mat.gold);
+  underbust.castShadow = false;
+  const stole = mesh(skirtPanel(0, 0.1, 0.42, 1.14, 0.095, 8), mat.gold);
+  stole.castShadow = false;
+  const pendant = mesh(new THREE.SphereGeometry(0.045, 12, 10), mat.gold, 0, 0.48, 0.58);
 
   const head = new THREE.Group();
   head.position.set(0, 2.05, 0);
@@ -419,28 +442,32 @@ function buildPriest(textures, probes) {
   const gem = mesh(new THREE.SphereGeometry(0.032, 10, 8), mat.gold, 0.58, 0, 0);
   halo.add(gem);
 
+  const bellMat = mat.cloth.clone();
+  bellMat.side = THREE.DoubleSide;
   function raisedArm(side) {
     const pivot = new THREE.Group();
     const sleeve = mesh(new THREE.CylinderGeometry(0.075, 0.13, 0.52, 14), mat.cloth, 0, 0.26, 0);
-    const cuff = mesh(new THREE.TorusGeometry(0.078, 0.016, 8, 16), mat.gold, 0, 0.5, 0);
+    const bell = mesh(new THREE.CylinderGeometry(0.22, 0.08, 0.46, 14, 1, true), bellMat, 0, 0.2, 0);
+    bell.castShadow = false;
+    const cuff = mesh(new THREE.TorusGeometry(0.2, 0.016, 8, 16), mat.gold, 0, 0.44, 0);
     cuff.rotation.x = Math.PI / 2;
     const glove = openGlove(mat.pearl, mat.amber, side);
-    pivot.add(sleeve, cuff, glove.rig);
+    pivot.add(sleeve, bell, cuff, glove.rig);
     pivot.position.set(side * 0.42, 1.48, 0.02);
     return { pivot, hand: glove.amber, digits: glove.digits };
   }
   const left = raisedArm(-1);
   const right = raisedArm(1);
 
-  for (const y of [1.4, 1.2, 1.0]) {
-    const chain = mesh(new THREE.TorusGeometry(0.2, 0.01, 8, 22, Math.PI * 0.9), mat.gold, 0, y, 0.4);
+  for (const y of [1.42, 1.28, 1.14]) {
+    const chain = mesh(new THREE.TorusGeometry(0.16, 0.01, 8, 22, Math.PI * 0.85), mat.gold, 0, y, 0.42);
     chain.rotation.x = Math.PI / 2;
     group.add(chain);
   }
 
   const shadow = contactBlob(0.9);
 
-  group.add(robe, cape, mantle, cowl, hem, belt, bodice, stole, pendant, head, halo, left.pivot, right.pivot, shadow);
+  group.add(robe, cape, mantle, cowl, hemRoll, hem, belt, bodice, underbust, stole, pendant, head, halo, left.pivot, right.pivot, shadow);
   group.position.set(PRIEST_SPAWN.x, 0, PRIEST_SPAWN.z);
   stampTangents(group);
   return {
@@ -455,10 +482,124 @@ function buildPriest(textures, probes) {
     rHand: right.hand,
     lDigits: left.digits,
     rDigits: right.digits,
-    cloths: [robe, cape, mantle],
-    flashMats: [mat.pearl, mat.cloth, bodiceMat, mat.visor, mat.gold],
+    cloths: [robe, cape, mantle, bodice, ...panels],
+    flashMats: [mat.pearl, mat.cloth, capeMat, bellMat, panelMat, mat.visor, mat.gold],
     flash: 0,
   };
+}
+
+const gloveGeo = new Map();
+function gloveCylinder(r0, r1, len) {
+  const key = `${r0}:${r1}:${len}`;
+  let geo = gloveGeo.get(key);
+  if (!geo) {
+    geo = new THREE.CylinderGeometry(r0, r1, len, 6);
+    gloveGeo.set(key, geo);
+  }
+  return geo;
+}
+
+/** Segmented Tessera hand. Palm turns toward +Z so the digits fan in front of the forearm. No shadow, no cyan. */
+function tesseraGlove(material, side) {
+  const rig = new THREE.Group();
+  const open = side < 0;
+  rig.position.set(side * 0.012, -0.5, open ? 0.09 : 0.045);
+  rig.rotation.x = open ? -0.62 : -0.22;
+  const palmGeo = new THREE.SphereGeometry(0.036, 10, 8);
+  palmGeo.scale(2.35, 0.55, 0.72);
+  const palm = mesh(palmGeo, material);
+  palm.castShadow = false;
+  rig.add(palm);
+  const digits = [];
+  const spreads = [-0.074, -0.025, 0.025, 0.074];
+  const lengths = [0.09, 0.118, 0.106, 0.08];
+  for (let i = 0; i < 4; i++) {
+    const knuckle = new THREE.Group();
+    knuckle.position.set(spreads[i], -0.02, 0.02);
+    const len = lengths[i];
+    const base = mesh(gloveCylinder(0.009, 0.0125, len), material, 0, -len * 0.48, 0);
+    base.castShadow = false;
+    const joint = mesh(new THREE.SphereGeometry(0.012, 8, 6), material, 0, -len * 0.92, 0);
+    joint.castShadow = false;
+    const tipPivot = new THREE.Group();
+    tipPivot.position.y = -len * 0.96;
+    const tipLen = len * 0.72;
+    const tip = mesh(gloveCylinder(0.0065, 0.0095, tipLen), material, 0, -tipLen * 0.46, 0);
+    tip.castShadow = false;
+    tipPivot.add(tip);
+    knuckle.add(base, joint, tipPivot);
+    rig.add(knuckle);
+    digits.push({ knuckle, tip: tipPivot });
+  }
+  const thumb = new THREE.Group();
+  thumb.position.set(side * 0.082, 0.004, 0.028);
+  thumb.rotation.z = -side * 1.15;
+  const thumbBase = mesh(gloveCylinder(0.0085, 0.011, 0.052), material, 0, -0.028, 0);
+  thumbBase.castShadow = false;
+  const thumbTip = new THREE.Group();
+  thumbTip.position.y = -0.05;
+  const thumbTipMesh = mesh(gloveCylinder(0.006, 0.0085, 0.038), material, 0, -0.02, 0);
+  thumbTipMesh.castShadow = false;
+  thumbTip.add(thumbTipMesh);
+  thumb.add(thumbBase, thumbTip);
+  rig.add(thumb);
+  digits.push({ knuckle: thumb, tip: thumbTip });
+  return { rig, digits };
+}
+
+const ROBE_PROFILE = [
+  [0.42, 0.02],
+  [0.52, 0.16],
+  [0.5, 0.36],
+  [0.42, 0.62],
+  [0.36, 0.9],
+  [0.39, 1.12],
+  [0.3, 1.38],
+  [0.22, 1.56],
+  [0.15, 1.68],
+];
+
+function profileRadius(y) {
+  const profile = ROBE_PROFILE;
+  if (y <= profile[0][1]) return profile[0][0];
+  for (let i = 1; i < profile.length; i++) {
+    if (y <= profile[i][1]) {
+      const t = (y - profile[i - 1][1]) / (profile[i][1] - profile[i - 1][1]);
+      return profile[i - 1][0] + (profile[i][0] - profile[i - 1][0]) * t;
+    }
+  }
+  return profile[profile.length - 1][0];
+}
+
+/** Cloth gore that sits just outside the robe lathe so the skirt reads as cut panels. */
+function skirtPanel(center, span, y0, y1, offset, rows = 8) {
+  const geo = new THREE.BufferGeometry();
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  const cols = 2;
+  for (let r = 0; r <= rows; r++) {
+    const t = r / rows;
+    const y = y0 + (y1 - y0) * t;
+    const radius = profileRadius(y) + offset;
+    for (let c = 0; c <= cols; c++) {
+      const ang = center - span / 2 + (span * c) / cols;
+      positions.push(Math.sin(ang) * radius, y, Math.cos(ang) * radius);
+      uvs.push(c / cols, t);
+    }
+  }
+  const stride = cols + 1;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const a = r * stride + c;
+      indices.push(a, a + stride, a + 1, a + 1, a + stride, a + stride + 1);
+    }
+  }
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
 }
 
 function openGlove(pearl, amber, side) {
@@ -741,6 +882,8 @@ export function createActors(scene, textures, probes) {
           rec.group.scale.setScalar(1);
           rec.lArm.rotation.x = 0.5 + k * 0.6;
           rec.rArm.rotation.x = 0.3 + k * 0.9;
+          flexHand(rec.lDigits, 0.8);
+          flexHand(rec.rDigits, 0.9);
           rec.lLeg.rotation.x = -0.25 * k;
           rec.rLeg.rotation.x = 0.4 * k;
           rec.weak.visible = false;
@@ -778,6 +921,9 @@ export function createActors(scene, textures, probes) {
           rec.group.scale.setScalar(1);
         }
         rec.muzzle.scale.setScalar(enemy.windup > 0 ? 1.8 : 1);
+        const idleCurl = 0.16 + Math.sin(time * 1.35 + rec.phase) * 0.05;
+        flexHand(rec.lDigits, idleCurl);
+        flexHand(rec.rDigits, enemy.windup > 0 ? 0.8 : 0.4);
         if (rec.cloth) swayCloth(rec.cloth, time, rec.phase, 0.85);
         if (enemy.cloaked && enemy.visible && channel !== "STATIC" && enemy.reveal < 0.5) {
           rec.group.visible = Math.sin(time * 46) > -0.2;
