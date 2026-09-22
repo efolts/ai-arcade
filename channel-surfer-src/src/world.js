@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { BLOCKS, PICKUPS, courtColliders } from "./level.js";
+import { BLOCKS, HIJACK_SPAWNS, PICKUPS, VEIL_Z, activeColliders } from "./level.js";
 import { makeSign, makeTextures } from "./textures.js";
 
 function std(params) {
@@ -49,7 +49,47 @@ export function createWorld(scene) {
   }
 
   const gates = [];
+  let doorGroup = null;
+  const doorBaseY = 3.6;
+  let veilMesh = null;
+  const veilMat = std({
+    color: 0xf4efe4,
+    roughness: 0.42,
+    metalness: 0.18,
+    transparent: true,
+    opacity: 0.94,
+    emissive: 0xd4b15a,
+    emissiveIntensity: 0.32,
+  });
+  veilMat.side = THREE.DoubleSide;
+
   for (const block of BLOCKS) {
+    if (block.veil) {
+      veilMesh = new THREE.Mesh(new THREE.BoxGeometry(block.w, block.h, block.d), veilMat);
+      veilMesh.position.set(block.x, block.y, block.z);
+      veilMesh.visible = false;
+      scene.add(veilMesh);
+      continue;
+    }
+    if (block.door) {
+      doorGroup = new THREE.Group();
+      const slab = new THREE.Mesh(
+        new THREE.BoxGeometry(block.w * 0.92, block.h * 0.98, block.d * 0.62),
+        std({ color: 0xe7e0d2, roughness: 0.62, metalness: 0.06 })
+      );
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(block.w, 0.16, block.d * 0.8), materials.brass);
+      frame.position.y = block.h * 0.42;
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.14, block.h * 0.72, block.d * 0.78), materials.brass);
+      const plaque = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.7, 0.5),
+        new THREE.MeshBasicMaterial({ map: makeSign("RADIO", "WING", "#1c140c", "#f0d48a") })
+      );
+      plaque.position.set(0, 0.35, block.d * 0.42);
+      doorGroup.add(slab, frame, stripe, plaque);
+      doorGroup.position.set(block.x, block.y, block.z);
+      scene.add(doorGroup);
+      continue;
+    }
     if (block.phaseGate) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(block.w, block.h, block.d), materials.hazard);
       mesh.position.set(block.x, block.y, block.z);
@@ -64,8 +104,10 @@ export function createWorld(scene) {
 
   addBox("runner", 0, 0.02, -1.2, 2.6, 0.02, 18);
   addBox("dark", -7.4, 1.3, -13.15, 6.4, 2.6, 0.4);
-  addBox("dark", 0.4, 1.3, -13.15, 6.2, 2.6, 0.4);
+  addBox("dark", -5.2, 1.3, -13.15, 2.4, 2.6, 0.4);
+  addBox("dark", 5.4, 1.3, -13.15, 2.4, 2.6, 0.4);
   addBox("dark", 8.6, 1.3, -13.15, 6.4, 2.6, 0.4);
+  addBox("runner", 0, 0.025, -21.4, 1.5, 0.02, 12);
   addBox("brass", 0, 2.55, -2.15, 0.12, 3.5, 0.12);
   addBox("brass", 0, 4.15, -2.15, 1.35, 0.08, 1.35);
   addBox("plant", -3.3, 0.28, -2.5, 0.7, 0.45, 0.7);
@@ -155,7 +197,8 @@ export function createWorld(scene) {
 
   addSign("KRCD 7", "MALL COURT", 0, 5.55, -6.4, 3.6, 1.05, 0);
   addSign("RECORDS", "CLOSED", -7.4, 2.85, -12.55, 2.3, 0.62, 0);
-  addSign("OPTICAL", "DARK", 0.4, 2.85, -12.55, 2.2, 0.62, 0);
+  addSign("OPTICAL", "DARK", -5.2, 2.85, -12.55, 2.1, 0.62, 0);
+  addSign("RADIO WING", "NORTH DOOR", 0, 3.42, -10.7, 2.5, 0.64, 0, "#1c140c", "#f0d48a");
   addSign("WE'LL BE RIGHT BACK", "", 8.4, 2.8, -12.55, 3.3, 0.55, 0);
   addSign("FOOD HALL", "", -10.2, 1.85, 8.48, 2.6, 0.48, Math.PI);
   addSign("KRCD BOOTH", "OFF AIR", 9.4, 2.55, 8.62, 2.5, 0.7, Math.PI);
@@ -163,6 +206,62 @@ export function createWorld(scene) {
   addSign("DEAD AIR", "SHUTTER", 9.15, 2.05, 0.02, 1.8, 0.78, -Math.PI / 2);
   addSign("ANCHOR DARK", "", -15.85, 3.1, 0.2, 2.4, 0.55, Math.PI / 2);
   addSign("SERVICE", "NORTH END OPEN", 13.6, 2.6, -9.2, 2.2, 0.6, Math.PI);
+  addSign("RADIO", "SERVICE", 7.95, 2.7, -18.2, 1.8, 0.55, -Math.PI / 2, "#1c140c", "#f0d48a");
+  addSign("PA", "HORN", -7.35, 3.2, -17.35, 0.95, 0.42, Math.PI / 2, "#1c140c", "#f0d48a");
+
+  const seal = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.15, 0.34),
+    new THREE.MeshBasicMaterial({ color: 0xe6c56a })
+  );
+  seal.rotation.x = -Math.PI / 2;
+  seal.position.set(0, 0.045, VEIL_Z);
+  scene.add(seal);
+
+  const hornDef = HIJACK_SPAWNS[0];
+  const hornMat = std({
+    color: 0xc6a15a,
+    roughness: 0.32,
+    metalness: 0.7,
+    emissive: 0xd4b15a,
+    emissiveIntensity: 0.12,
+  });
+  const horn = new THREE.Group();
+  const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.34, 0.62, 10), hornMat);
+  bell.rotation.z = Math.PI / 2;
+  bell.castShadow = true;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.45, 8), materials.brass);
+  neck.rotation.z = Math.PI / 2;
+  neck.position.x = -0.42;
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffb14a }));
+  bulb.position.x = 0.28;
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.55, 0.03, 6, 18),
+    new THREE.MeshBasicMaterial({ color: 0x67f6ff, transparent: true, opacity: 0, depthWrite: false })
+  );
+  ring.rotation.y = Math.PI / 2;
+  horn.add(bell, neck, bulb, ring);
+  horn.position.set(hornDef.x, hornDef.y, hornDef.z);
+  scene.add(horn);
+  const hornLight = new THREE.PointLight(0xffb15a, 7, 5.5, 2);
+  hornLight.position.set(hornDef.x + 0.4, hornDef.y, hornDef.z);
+  scene.add(hornLight);
+
+  function candle(x, z) {
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.46, 6), materials.brass);
+    stick.position.set(x, 0.28, z);
+    const flame = new THREE.Mesh(
+      new THREE.SphereGeometry(0.045, 6, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffb14a })
+    );
+    flame.position.set(x, 0.54, z);
+    scene.add(stick, flame);
+  }
+  candle(-4.9, -18.2);
+  candle(4.9, -18.2);
+  candle(-4.9, -20.45);
+  candle(4.9, -20.45);
+  candle(-1.35, -27.15);
+  candle(1.35, -27.15);
 
   const cacheDef = PICKUPS.find((p) => p.kind === "signal");
   const aidDef = PICKUPS.find((p) => p.kind === "health");
@@ -192,14 +291,14 @@ export function createWorld(scene) {
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 42;
-  sun.shadow.camera.left = -22;
-  sun.shadow.camera.right = 22;
-  sun.shadow.camera.top = 22;
-  sun.shadow.camera.bottom = -22;
+  sun.shadow.camera.far = 70;
+  sun.shadow.camera.left = -30;
+  sun.shadow.camera.right = 30;
+  sun.shadow.camera.top = 30;
+  sun.shadow.camera.bottom = -30;
   sun.shadow.bias = -0.00035;
   sun.shadow.normalBias = 0.04;
-  sun.target.position.set(0, 0, 0);
+  sun.target.position.set(0, 0, -8);
   scene.add(sun, sun.target);
 
   const practicals = [];
@@ -217,17 +316,48 @@ export function createWorld(scene) {
   practical(-6, 3.4, -8, 22, 8);
   practical(4, 3.4, -8, 20, 8);
   practical(0, 5.2, 2, 30, 14);
+  practical(0, 4.4, -21.5, 34, 16);
+  practical(0, 3.3, -26.4, 16, 7);
   const flicker = practical(13.4, 2.6, 1.2, 24, 6);
+
+  let doorLift = 0;
+  let doorGoal = 0;
+  let hornAimed = false;
+  let hornHot = false;
+  let pulse = 0;
+  let lastTime = 0;
 
   scene.background = new THREE.Color(0xc4bdb2);
   scene.fog = new THREE.Fog(0xc4bdb2, 18, 48);
 
   return {
-    colliders: courtColliders(),
+    colliders: activeColliders(),
     gates,
     cache,
     aid,
     textures,
+    setDoor(open, instant = false) {
+      doorGoal = open ? 1 : 0;
+      if (!instant) return;
+      doorLift = doorGoal;
+      if (doorGroup) doorGroup.position.y = doorBaseY + doorLift * 6.4;
+    },
+    setVeil(up, channel) {
+      if (!veilMesh) return;
+      veilMesh.visible = !!up;
+      if (!up) return;
+      const ghost = channel === "DEAD_AIR";
+      veilMat.opacity = ghost ? 0.16 : 0.94;
+      veilMat.depthWrite = !ghost;
+      veilMat.emissiveIntensity = ghost ? 0.62 : 0.3;
+    },
+    setHijack({ aimed, hot }) {
+      hornAimed = !!aimed;
+      hornHot = !!hot;
+    },
+    pulseHijack() {
+      pulse = 0.48;
+    },
     setChannel(channel) {
       const fog = scene.fog;
       if (channel === "STATIC") {
@@ -257,6 +387,18 @@ export function createWorld(scene) {
       if (which === "aid") aid.visible = visible;
     },
     update(time, channel) {
+      const dt = Math.min(0.05, Math.max(0, time - lastTime || 0));
+      lastTime = time;
+      doorLift += (doorGoal - doorLift) * Math.min(1, dt * 4.2);
+      if (doorGroup) doorGroup.position.y = doorBaseY + doorLift * 6.4;
+      if (pulse > 0) pulse = Math.max(0, pulse - dt);
+      ring.material.opacity = pulse > 0 ? pulse / 0.48 : 0;
+      ring.scale.setScalar(pulse > 0 ? 1 + (1 - pulse / 0.48) * 2.4 : 1);
+      hornMat.emissive.setHex(hornHot ? 0x67f6ff : 0xd4b15a);
+      hornMat.emissiveIntensity = hornHot ? 1.15 : hornAimed ? 0.85 : 0.12;
+      bulb.material.color.setHex(hornHot ? 0x67f6ff : 0xffb14a);
+      hornLight.color.setHex(hornHot ? 0x67f6ff : 0xffb15a);
+      hornLight.intensity = hornHot ? 22 : hornAimed ? 14 : 7;
       flicker.intensity = 18 + Math.sin(time * 28) * 10 + (Math.random() < 0.04 ? -12 : 0);
       if (channel === "STATIC") {
         const s = 1 + Math.sin(time * 6) * 0.08;

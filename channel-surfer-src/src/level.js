@@ -1,10 +1,19 @@
-/** Phase 1 court. Gameplay collision and encounters live here so tests and the mesh share one layout. */
+/** Phase 2: mall court plus the radio wing. Collision and encounters are shared by tests and meshes. */
 
-export const PHASE = 1;
+export const PHASE = 2;
 
-export const BOUNDS = { minX: -15.55, maxX: 15.55, minZ: -13.55, maxZ: 13.55 };
+export const BOUNDS = { minX: -15.55, maxX: 15.55, minZ: -28.15, maxZ: 13.55 };
 
 export const PLAYER_SPAWN = { x: 0, y: 1.58, z: 10.55, yaw: 0, pitch: 0 };
+
+export const CHAPEL_ENTRY = { x: 0, y: 1.58, z: -16.35, yaw: 0, pitch: 0 };
+
+export const VEIL_Z = -24.2;
+export const VEIL_CROSS_Z = VEIL_Z - 0.35;
+
+export const PRIEST_SPAWN = { x: 0, y: 0, z: -26.55 };
+
+export const HIJACK_SPAWNS = [{ id: "pa-horn", x: -7.05, y: 2.42, z: -17.35 }];
 
 export const ENEMIES = [
   { id: "north-l", x: -10.6, z: -8.2, cloak: false, hp: 72 },
@@ -15,19 +24,27 @@ export const ENEMIES = [
   { id: "alley", x: 13.65, z: -2.4, cloak: false, hp: 78 },
 ];
 
+export const CHAPEL_ENEMIES = [
+  { id: "choir-l", x: -6.2, z: -19.15, cloak: false, hp: 56 },
+  { id: "choir-r", x: 6.2, z: -19.35, cloak: false, hp: 56 },
+  { id: "choir-ghost", x: 0.15, z: -22.25, cloak: true, hp: 68 },
+];
+
 export const PICKUPS = [
   { id: "signal-cache", kind: "signal", x: 13.7, z: 1.6, amount: 48, cloaked: true },
   { id: "aid-kit", kind: "health", x: 13.7, z: -6.4, amount: 36, cloaked: false },
 ];
 
+const CHAPEL_LEASH = { minX: -7.2, maxX: 7.2, minZ: -23.35, maxZ: -15.9 };
+
 export const LEASHES = {
   alley: { minX: 12.15, maxX: 15.35, minZ: -11.6, maxZ: 3.5 },
+  "choir-l": CHAPEL_LEASH,
+  "choir-r": CHAPEL_LEASH,
+  "choir-ghost": CHAPEL_LEASH,
 };
 
 export const RESERVED_CONTENT = [
-  { id: "visor-priest", phase: 2, kind: "boss" },
-  { id: "remote-hijack", phase: 2, kind: "system" },
-  { id: "extra-rooms", phase: 2, kind: "map" },
   { id: "directory", phase: 3, kind: "boss" },
   { id: "upgrades", phase: 3, kind: "system" },
   { id: "broadcast-echo", phase: 3, kind: "system" },
@@ -42,7 +59,9 @@ const WALL_H = 7.2;
 export const BLOCKS = [
   box("floor", "floor", 0, -0.2, 0, 34, 0.4, 30, { floor: true }),
   box("ceiling", "ceiling", 0, 7.35, 0, 34, 0.3, 30),
-  box("wall-n", "wall", 0, WALL_H / 2, -14.3, 33.2, WALL_H, 0.6),
+  box("wall-n-l", "wall", -9.23, WALL_H / 2, -14.3, 14.74, WALL_H, 0.6),
+  box("wall-n-r", "wall", 9.23, WALL_H / 2, -14.3, 14.74, WALL_H, 0.6),
+  box("chapel-door", "trim", 0, WALL_H / 2, -14.3, 3.76, WALL_H, 0.66, { door: true }),
   box("wall-s", "wall", 0, WALL_H / 2, 14.3, 33.2, WALL_H, 0.6),
   box("wall-w", "wall", -16.3, WALL_H / 2, 0, 0.6, WALL_H, 29.2),
   box("wall-e", "wall", 16.3, WALL_H / 2, 0, 0.6, WALL_H, 29.2),
@@ -74,6 +93,22 @@ export const BLOCKS = [
   box("kiosk", "metal", -3.35, 0.75, 7.35, 0.85, 1.5, 0.7),
   box("bench-w", "wood", -4.4, 0.32, 3.35, 1.7, 0.5, 0.48),
   box("bench-e", "wood", 4.15, 0.32, -3.15, 1.7, 0.5, 0.48),
+
+  box("chapel-floor", "floor", 0, -0.2, -21.75, 16.7, 0.4, 14.7, { floor: true }),
+  box("chapel-ceiling", "ceiling", 0, 7.35, -21.75, 16.7, 0.3, 14.7),
+  box("chapel-w", "wall", -8.35, WALL_H / 2, -21.75, 0.5, WALL_H, 14.9),
+  box("chapel-e", "wall", 8.35, WALL_H / 2, -21.75, 0.5, WALL_H, 14.9),
+  box("chapel-n", "wall", 0, WALL_H / 2, -29.05, 17.2, WALL_H, 0.5),
+
+  box("pew-1", "wood", -3.15, 0.48, -18.2, 3.05, 0.96, 0.58),
+  box("pew-2", "wood", -3.15, 0.48, -20.45, 3.05, 0.96, 0.58),
+  box("pew-3", "wood", 3.15, 0.48, -18.2, 3.05, 0.96, 0.58),
+  box("pew-4", "wood", 3.15, 0.48, -20.45, 3.05, 0.96, 0.58),
+
+  box("altar-l", "trim", -4.85, 1.8, VEIL_Z, 6.5, 3.6, 0.48),
+  box("altar-r", "trim", 4.85, 1.8, VEIL_Z, 6.5, 3.6, 0.48),
+  box("rite-veil", "trim", 0, 1.8, VEIL_Z, 3.36, 3.6, 0.42, { phaseGate: true, veil: true }),
+  box("altar", "brass", 0, 0.55, -27.55, 2.4, 1.1, 0.7),
 ];
 
 export function toCollider(block) {
@@ -90,36 +125,55 @@ export function toCollider(block) {
   };
 }
 
+export function activeColliders({ doorOpen = false, veilUp = false } = {}) {
+  return BLOCKS.filter((block) => {
+    if (block.door && doorOpen) return false;
+    if (block.veil && !veilUp) return false;
+    return true;
+  }).map(toCollider);
+}
+
 export function courtColliders() {
-  return BLOCKS.map(toCollider);
+  return activeColliders();
+}
+
+function spawnEnemy(enemy, index, room) {
+  return {
+    id: enemy.id,
+    x: enemy.x,
+    y: 0,
+    z: enemy.z,
+    yaw: 0,
+    hp: enemy.hp,
+    maxHp: enemy.hp,
+    alive: true,
+    cloaked: !!enemy.cloak,
+    reveal: 0,
+    visible: !enemy.cloak,
+    exposed: false,
+    hittable: !enemy.cloak,
+    hits: 0,
+    lastHitAt: null,
+    aggro: room === "court" && !enemy.cloak,
+    cooldown: room === "chapel" ? 1.35 + (index % 3) * 0.25 : 0.95 + (index % 4) * 0.28,
+    windup: 0,
+    strafeSign: index % 2 === 0 ? 1 : -1,
+    strafeT: 0.8 + (index % 3) * 0.25,
+    hurt: 0,
+    stun: 0,
+    room,
+    dormant: room !== "court",
+  };
 }
 
 export function createEnemies() {
-  return ENEMIES.map((e, i) => ({
-    id: e.id,
-    x: e.x,
-    y: 0,
-    z: e.z,
-    yaw: 0,
-    hp: e.hp,
-    maxHp: e.hp,
-    alive: true,
-    cloaked: !!e.cloak,
-    reveal: 0,
-    visible: !e.cloak,
-    exposed: false,
-    hittable: !e.cloak,
-    hits: 0,
-    lastHitAt: null,
-    aggro: !e.cloak,
-    cooldown: 0.95 + (i % 4) * 0.28,
-    windup: 0,
-    strafeSign: i % 2 === 0 ? 1 : -1,
-    strafeT: 0.8 + (i % 3) * 0.25,
-    hurt: 0,
-  }));
+  return ENEMIES.map((enemy, index) => spawnEnemy(enemy, index, "court"));
+}
+
+export function createChapelEnemies() {
+  return CHAPEL_ENEMIES.map((enemy, index) => spawnEnemy(enemy, index, "chapel"));
 }
 
 export function createPickups() {
-  return PICKUPS.map((p) => ({ ...p, taken: false }));
+  return PICKUPS.map((pickup) => ({ ...pickup, taken: false }));
 }

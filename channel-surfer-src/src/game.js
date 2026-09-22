@@ -1,7 +1,19 @@
 import * as THREE from "three";
 import { stepEnemy } from "./ai.js";
 import { createActors } from "./actors.js";
-import { BOUNDS, PLAYER_SPAWN, createEnemies, createPickups } from "./level.js";
+import { damagePriest, priestAnswer, resolvePriestHit, riteBanner, tickPriest, PRIEST_TUNING, createPriest } from "./boss.js";
+import { HIJACK_TUNING, aimHijack, applyRetune, tryHijack } from "./hijack.js";
+import {
+  BOUNDS,
+  CHAPEL_ENTRY,
+  HIJACK_SPAWNS,
+  PLAYER_SPAWN,
+  VEIL_CROSS_Z,
+  activeColliders,
+  createChapelEnemies,
+  createEnemies,
+  createPickups,
+} from "./level.js";
 import {
   TUNING,
   applyEnemyHit,
@@ -11,11 +23,13 @@ import {
   clamp,
   cycleChannel,
   damageAtRange,
+  grantSignal,
   hurtPlayer,
   noteHit,
   pickupVisible,
   resolveShot,
   rewardForKill,
+  segmentClear,
   spreadDirs,
   switchChannel,
   tickResources,
@@ -120,8 +134,19 @@ export function createGame(canvas, audio) {
   let mode = "title";
   let state = null;
   let enemies = [];
+  let priest = null;
   let pickups = [];
   let bolts = [];
+  let doorOpen = false;
+  let diedInChapel = false;
+  let choirSilenced = false;
+  let wingDelay = 1.25;
+  let retuneUntil = 0;
+  let hijackCooldownUntil = 0;
+  let hijackAimed = false;
+  let prompt = "";
+  let promptKind = "";
+  let riteText = "";
   let sparks = [];
   let tracers = [];
   let player = { x: 0, y: 1.58, z: 8, yaw: 0, pitch: 0, vx: 0, vz: 0 };
@@ -186,22 +211,41 @@ export function createGame(canvas, audio) {
     audio.setChannel(channel);
   }
 
-  function resetRun() {
-    state = createRunState();
-    enemies = createEnemies();
-    pickups = createPickups();
-    bolts = [];
-    sparks = [];
-    tracers = [];
-    player = {
-      x: PLAYER_SPAWN.x,
-      y: PLAYER_SPAWN.y,
-      z: PLAYER_SPAWN.z,
-      yaw: PLAYER_SPAWN.yaw,
+  function liveColliders() {
+    return activeColliders({ doorOpen, veilUp: !!(priest && priest.alive && priest.veilUp) });
+  }
+
+  function freshPlayer(spawn) {
+    return {
+      x: spawn.x,
+      y: spawn.y,
+      z: spawn.z,
+      yaw: spawn.yaw || 0,
       pitch: 0,
       vx: 0,
       vz: 0,
     };
+  }
+
+  function resetRun() {
+    state = createRunState();
+    enemies = [...createEnemies(), ...createChapelEnemies()];
+    priest = createPriest();
+    pickups = createPickups();
+    doorOpen = false;
+    diedInChapel = false;
+    choirSilenced = false;
+    wingDelay = 1.25;
+    retuneUntil = 0;
+    hijackCooldownUntil = 0;
+    hijackAimed = false;
+    prompt = "";
+    promptKind = "";
+    riteText = "";
+    bolts = [];
+    sparks = [];
+    tracers = [];
+    player = freshPlayer(PLAYER_SPAWN);
     rng = mulberry32((Date.now() & 0xffff) + 3);
     time = 0;
     swaps = 0;
@@ -218,7 +262,44 @@ export function createGame(canvas, audio) {
     tipQueue.length = 0;
     tipsShown.clear();
     actors.reset(enemies);
+    actors.resetPriest(priest);
+    world.setDoor(false, true);
+    world.setVeil(false, "LIVE");
     present("LIVE");
+  }
+
+  function retryChapel() {
+    state = { ...createRunState(), signal: 80 };
+    enemies = [
+      ...enemies.filter((enemy) => enemy.room !== "chapel"),
+      ...createChapelEnemies().map((enemy) => ({ ...enemy, dormant: false })),
+    ];
+    priest = { ...createPriest(), active: true };
+    doorOpen = true;
+    choirSilenced = false;
+    wingDelay = 1.25;
+    retuneUntil = 0;
+    hijackCooldownUntil = 0;
+    hijackAimed = false;
+    prompt = "";
+    promptKind = "";
+    riteText = "";
+    bolts = [];
+    sparks = [];
+    tracers = [];
+    player = freshPlayer(CHAPEL_ENTRY);
+    arm = 0.45;
+    denyLatch = false;
+    diedInChapel = false;
+    flash = 0;
+    shake = 0;
+    recoil = 0;
+    actors.reset(enemies);
+    actors.resetPriest(priest);
+    world.setDoor(true, true);
+    world.setVeil(false, "LIVE");
+    present("LIVE");
+    banner("RADIO WING");
   }
 
   resetRun();
@@ -261,18 +342,46 @@ export function createGame(canvas, audio) {
       y: origin.y + forward.y * 0.42 + right.y * 0.14 - up.y * 0.1,
       z: origin.z + forward.z * 0.42 + right.z * 0.14 - up.z * 0.1,
     };
-    const tracerColor = begun.profile.kind === "hitscan" ? [0.45, 0.97, 1] : [0.82, 0.82, 0.82];
+    const retuned = time < retuneUntil;
+    const tracerColor = begun.profile.kind === "hitscan" || retuned ? [0.45, 0.97, 1] : [0.82, 0.82, 0.82];
+    const cols = liveColliders();
     let connected = false;
+    let riteBroken = false;
     recoil = Math.min(0.07, recoil + (begun.profile.kind === "spread" ? 0.05 : 0.014));
     viewmodel.fire(begun.profile.kind);
     audio.play(begun.profile.kind === "spread" ? "static" : "live");
     for (const dir of dirs) {
-      const hit = resolveShot(origin, dir, begun.profile.range, enemies, world.colliders);
+      const hit = resolveShot(origin, dir, begun.profile.range, enemies, cols);
+      const priestHit = priest.alive ? resolvePriestHit(origin, dir, begun.profile.range, priest, state.channel) : null;
+      const usePriest = !!(priestHit && (!hit || priestHit.t < hit.t));
+      const chosen = usePriest ? priestHit : hit;
       const reach = Math.min(begun.profile.range, 22);
-      const end = hit
-        ? { x: hit.x, y: hit.y, z: hit.z }
+      const end = chosen
+        ? { x: chosen.x, y: chosen.y, z: chosen.z }
         : { x: origin.x + dir.x * reach, y: origin.y + dir.y * reach, z: origin.z + dir.z * reach };
-      if (!hit || hit.t > 0.45) tracers.push({ a: muzzle, b: end, color: tracerColor, life: 0.11 });
+      if (!chosen || chosen.t > 0.45) tracers.push({ a: muzzle, b: end, color: tracerColor, life: 0.11 });
+      if (usePriest) {
+        const amount =
+          damageAtRange(begun.profile.damage, priestHit.t, begun.profile.range, begun.profile.falloff) *
+          (retuned ? HIJACK_TUNING.retuneMult : 1);
+        const chipped = damagePriest(priest, amount);
+        priest = chipped.priest;
+        if (chipped.dealt > 0) connected = true;
+        burst(priestHit.x, priestHit.y, priestHit.z, retuned ? [0.45, 0.97, 1] : [0.96, 0.94, 0.88], 5);
+        if (!chipped.killed) {
+          const answered = priestAnswer(priest, {
+            channel: state.channel,
+            weak: priestHit.weak,
+            halo: priestHit.halo,
+            crossed: false,
+          });
+          if (answered.broken) {
+            noteBreak(answered);
+            riteBroken = true;
+          } else priest = answered.priest;
+        }
+        continue;
+      }
       if (!hit) continue;
       if (hit.kind === "world") {
         burst(hit.x, hit.y, hit.z, [0.75, 0.68, 0.55], 3);
@@ -281,7 +390,9 @@ export function createGame(canvas, audio) {
       const index = enemies.findIndex((enemy) => enemy.id === hit.id);
       if (index < 0 || !enemies[index].alive) continue;
       const noted = noteHit(enemies[index], time);
-      const amount = damageAtRange(begun.profile.damage, hit.t, begun.profile.range, begun.profile.falloff);
+      const amount =
+        damageAtRange(begun.profile.damage, hit.t, begun.profile.range, begun.profile.falloff) *
+        (retuned ? HIJACK_TUNING.retuneMult : 1);
       const applied = applyEnemyHit(noted.enemy, { weak: hit.weak, damage: amount });
       applied.enemy.hurt = 0.1;
       enemies[index] = applied.enemy;
@@ -299,8 +410,38 @@ export function createGame(canvas, audio) {
         banner(reward.aggressive ? "AGGRESSIVE +" + reward.amount : "SIGNAL +" + reward.amount);
       }
     }
-    if (connected) audio.play("hit");
+    if (connected && !riteBroken) audio.play("hit");
     if (tracers.length > TR) tracers.splice(0, tracers.length - TR);
+  }
+
+  function noteBreak(answered) {
+    priest = answered.priest;
+    if (!answered.broken) return;
+    audio.play("rite-break");
+    burst(priest.x, 2.15, priest.z, [0.96, 0.78, 0.32], 20);
+    flash = Math.max(flash, 0.34);
+    if (priest.alive) banner("RITE BROKEN");
+  }
+
+  function priestBolt() {
+    const ox = priest.x;
+    const oy = 1.72;
+    const oz = priest.z;
+    const tx = player.x - ox + (rng() - 0.5) * 0.22;
+    const ty = 1.15 - oy + (rng() - 0.5) * 0.12;
+    const tz = player.z - oz + (rng() - 0.5) * 0.22;
+    const len = Math.hypot(tx, ty, tz) || 1;
+    const speed = PRIEST_TUNING.boltSpeed;
+    return {
+      x: ox,
+      y: oy,
+      z: oz,
+      vx: (tx / len) * speed,
+      vy: (ty / len) * speed,
+      vz: (tz / len) * speed,
+      damage: PRIEST_TUNING.boltDamage,
+      life: 2.6,
+    };
   }
 
   function simulate(dt, input) {
@@ -323,12 +464,89 @@ export function createGame(canvas, audio) {
     player.yaw -= input.lookX * 0.00215;
     player.pitch = clamp(player.pitch - input.lookY * 0.00215, -1.35, 1.35);
 
+    const courtLeft = enemies.some((enemy) => enemy.alive && enemy.room !== "chapel");
+    if (!doorOpen && !courtLeft) {
+      doorOpen = true;
+      banner("RADIO WING");
+      audio.play("door");
+      queueTip("wing", "North door is open. The radio wing is still on the air.");
+    }
+    if (doorOpen && player.z < -15.05) {
+      for (let i = 0; i < enemies.length; i++) {
+        if (enemies[i].room === "chapel" && enemies[i].dormant) {
+          enemies[i] = { ...enemies[i], dormant: false };
+        }
+      }
+      if (!priest.active) {
+        priest = { ...priest, active: true };
+        queueTip("priest", "Three rites. LIVE the seam. STATIC the halo. DEAD AIR through the veil.");
+      }
+    }
+
+    const horn = HIJACK_SPAWNS[0];
+    const { forward } = aim(player.yaw, player.pitch);
+    const blocked = !segmentClear(player.x, player.y, player.z, horn.x, horn.y, horn.z, liveColliders());
+    const look = aimHijack({
+      origin: { x: player.x, y: player.y, z: player.z },
+      dir: forward,
+      point: horn,
+      maxDist: HIJACK_TUNING.maxDist,
+      cone: HIJACK_TUNING.cone,
+      blocked,
+    });
+    hijackAimed = look.aimed;
+    const hot = time < retuneUntil;
+    const cooling = hijackCooldownUntil > time;
+    if (hijackAimed) prompt = hot ? "PA RETUNED" : cooling ? "PA RECHARGING" : "E  RETUNE PA";
+    else prompt = hot ? "PA RETUNED" : "";
+    promptKind = hot ? "hot" : hijackAimed && cooling ? "cool" : hijackAimed ? "ready" : "";
+    if (input.use && hijackAimed) {
+      const tried = tryHijack({ cooldownUntil: hijackCooldownUntil }, time);
+      if (!tried.ok) audio.play("deny");
+      else {
+        hijackCooldownUntil = tried.cooldownUntil;
+        retuneUntil = time + HIJACK_TUNING.retune;
+        enemies = applyRetune(enemies, horn, HIJACK_TUNING.radius, HIJACK_TUNING.stun);
+        banner("PA RETUNE");
+        audio.play("hijack");
+        burst(horn.x, horn.y, horn.z, [0.45, 0.97, 1], 28);
+        flash = Math.max(flash, 0.28);
+        shake = Math.max(shake, 0.035);
+        world.pulseHijack();
+      }
+    }
+    if (doorOpen && Math.hypot(player.x - horn.x, player.z - horn.z) < 8) {
+      queueTip("pa", "Aim at the wall horn and press E. It retunes Tessera nearby.");
+    }
+
+    const steppedPriest = tickPriest(priest, dt, { player: { x: player.x, z: player.z } });
+    priest = steppedPriest.priest;
+    for (const event of steppedPriest.events) {
+      if (event.type === "announce") {
+        banner(riteBanner(event.rite));
+        audio.play("rite");
+      } else if (event.type === "fail") {
+        const hurt = hurtPlayer(state, event.damage);
+        state = hurt.state;
+        if (hurt.hit) {
+          audio.play("rite-fail");
+          shake = Math.max(shake, 0.045);
+        }
+        banner("RITE HOLDS");
+      } else if (event.type === "shot" && bolts.length < 16) {
+        bolts.push(priestBolt());
+        audio.play("bolt");
+      }
+    }
+    riteText = priest.alive && priest.phase === "rite" ? riteBanner(priest.rite) : "";
+
+    const cols = liveColliders();
     for (let i = 0; i < enemies.length; i++) {
       if (!enemies[i].alive) continue;
       const step = stepEnemy(enemies[i], dt, {
         channel: state.channel,
         player: { x: player.x, y: 1.2, z: player.z },
-        colliders: world.colliders,
+        colliders: cols,
         allies: enemies,
         rng,
       });
@@ -375,12 +593,23 @@ export function createGame(canvas, audio) {
       player.vx * dt,
       player.vz * dt,
       TUNING.playerRadius,
-      world.colliders,
+      cols,
       state.channel,
       BOUNDS
     );
     player.x = moved.x;
     player.z = moved.z;
+
+    if (
+      priest.alive &&
+      priest.phase === "rite" &&
+      priest.rite === "veil" &&
+      state.channel === "DEAD_AIR" &&
+      player.z < VEIL_CROSS_Z
+    ) {
+      const answered = priestAnswer(priest, { channel: "DEAD_AIR", weak: false, halo: false, crossed: true });
+      if (answered.broken) noteBreak(answered);
+    }
 
     if (arm > 0) arm -= dt;
     else if (input.fireDown) {
@@ -408,7 +637,7 @@ export function createGame(canvas, audio) {
         bolt.vy / len,
         bolt.vz / len,
         dist,
-        world.colliders
+        liveColliders()
       );
       if (worldHit) {
         burst(worldHit.x, worldHit.y, worldHit.z, [1, 0.62, 0.22], 3);
@@ -457,8 +686,8 @@ export function createGame(canvas, audio) {
     if (player.x > 12.1 && pickups.some((pickup) => pickup.cloaked && !pickup.taken)) {
       queueTip("cache", "Something in the alley is off-channel. STATIC reveals a signal cache.");
     }
-    const living = enemies.filter((enemy) => enemy.alive);
-    if (living.length === 1 && living[0].id === "alley") {
+    const courtLiving = enemies.filter((enemy) => enemy.alive && enemy.room !== "chapel");
+    if (courtLiving.length === 1 && courtLiving[0].id === "alley") {
       queueTip("last", "Last Tessera is in the east service alley. Phase the shutter or walk the north end.");
     }
     if (tipT > 0) {
@@ -470,19 +699,32 @@ export function createGame(canvas, audio) {
     }
 
     if (state.health <= 0) {
+      diedInChapel = doorOpen;
       mode = "dead";
       audio.play("ui");
       return;
     }
-    if (living.length === 0) {
-      clearDelay -= dt;
-      if (clearDelay <= 0) {
+    if (!priest.alive && doorOpen) {
+      if (!choirSilenced) {
+        choirSilenced = true;
+        enemies = enemies.map((enemy) =>
+          enemy.room === "chapel" && enemy.alive ? { ...enemy, alive: false, hittable: false } : enemy
+        );
+        state = grantSignal(state, 40);
+        banner("OFF THE AIR");
+        audio.play("death");
+        burst(priest.x, 2.1, priest.z, [0.96, 0.8, 0.38], 34);
+        burst(priest.x, 2.75, priest.z, [0.9, 0.72, 0.28], 16);
+        wingDelay = 1.25;
+      }
+      wingDelay -= dt;
+      if (wingDelay <= 0) {
         mode = "clear";
         rememberBest();
         audio.play("pickup");
       }
     } else {
-      clearDelay = 0.6;
+      wingDelay = 1.25;
     }
   }
 
@@ -577,7 +819,8 @@ export function createGame(canvas, audio) {
       if (mode === "play") mode = "pause";
     },
     replay() {
-      resetRun();
+      if (diedInChapel) retryChapel();
+      else resetRun();
       mode = "play";
       audio.play("ui");
     },
@@ -602,21 +845,34 @@ export function createGame(canvas, audio) {
       const aid = pickups.find((pickup) => pickup.kind === "health");
       world.setPickup("cache", !!(cache && !cache.taken && state.channel === "STATIC" && mode !== "title"));
       world.setPickup("aid", !!(aid && !aid.taken));
+      world.setDoor(doorOpen);
+      world.setVeil(!!(priest.alive && priest.veilUp), mode === "title" ? "LIVE" : state.channel);
+      world.setHijack({
+        aimed: mode === "play" && hijackAimed,
+        hot: mode === "play" && time < retuneUntil,
+      });
       world.update(clock, state.channel);
       actors.sync(enemies, step, clock, state.channel);
+      actors.syncPriest(priest, step, clock, mode === "title" ? "LIVE" : state.channel);
       actors.syncBolts(bolts);
       paintFx(step);
       frameCamera(step);
       renderer.render(scene, camera);
     },
     hud() {
-      const alive = enemies.filter((enemy) => enemy.alive).length;
+      const inWing = player.z < -14.85;
+      const courtCount = enemies.filter((enemy) => enemy.alive && enemy.room !== "chapel").length;
+      const wingCount =
+        enemies.filter((enemy) => enemy.alive && enemy.room === "chapel").length + (priest.alive ? 1 : 0);
+      const playing = mode === "play";
       return {
         mode,
         health: state.health,
         signal: state.signal,
         channel: state.channel,
-        enemies: alive,
+        enemies: inWing ? wingCount : courtCount,
+        roomLabel: inWing ? "RADIO" : "COURT",
+        countLabel: inWing ? "ON AIR" : "TESSERA",
         tip,
         banner: bannerText,
         bannerSerial,
@@ -626,6 +882,11 @@ export function createGame(canvas, audio) {
         best,
         swaps,
         muted: audio.muted,
+        prompt: playing ? prompt : "",
+        promptKind: playing ? promptKind : "",
+        rite: playing ? riteText : "",
+        boss: inWing && priest.alive ? priest.hp / priest.maxHp : null,
+        checkpoint: diedInChapel,
       };
     },
   };

@@ -39,11 +39,14 @@
             <strong id="ch-name">LIVE</strong>
           </div>
           <div id="wave-readout">
-            <span>WAVE 1</span>
+            <span id="room-label">COURT</span>
             <strong id="enemy-count">6</strong>
-            <em>TESSERA</em>
+            <em id="count-label">TESSERA</em>
           </div>
+          <div id="boss-wrap"><i id="boss-fill"></i></div>
+          <div id="rite"></div>
           <div id="crosshair" aria-hidden="true"><b></b><b></b><b></b><b></b></div>
+          <div id="prompt"></div>
           <div id="tip"></div>
           <div id="banner"></div>
           <div id="hint">WASD move · click fire · 1 2 3 · wheel / Q · esc pause</div>
@@ -59,7 +62,7 @@
             <div><b>2 STATIC</b><span>Spread shot. Reveals cloaks and visor seams. Drains Signal.</span></div>
             <div><b>3 DEAD AIR</b><span>Faster. Phase striped shutters. Cannot fire. Drains Signal.</span></div>
           </div>
-          <p class="controls">WASD move · mouse look · click fire · wheel or Q cycles · Esc pause · M mute</p>
+          <p class="controls">WASD move · mouse look · click fire · wheel or Q cycles · E retune · Esc pause · M mute</p>
           <button id="start" type="button">Click or press Enter</button>
         </div>
 
@@ -73,6 +76,8 @@
               <li><b>STATIC</b> Short spread. Reveals the fountain cloak, the alley cache, and visor seams.</li>
               <li><b>DEAD AIR</b> Phase the east shutter. No firing. Faster drain.</li>
               <li>Kills restore Signal. Close, burst, and STATIC kills restore more.</li>
+              <li><b>E</b> Aim at the PA horn. Retune stuns the choir and heats your shots.</li>
+              <li>Clear the court. The north door opens onto the radio wing.</li>
             </ul>
             <p id="panel-meta"></p>
             <div class="row">

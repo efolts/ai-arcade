@@ -12,6 +12,14 @@ function normalize(x, z) {
  * Returns a shot record when the windup completes with line of sight.
  */
 export function stepEnemy(input, dt, ctx) {
+  if (!input.alive) return { enemy: input, shot: null };
+  if (input.dormant) {
+    return {
+      enemy: { ...input, hurt: Math.max(0, (input.hurt || 0) - dt) },
+      shot: null,
+    };
+  }
+
   let e = tickReveal(input, dt, ctx.channel);
   if (!e.alive) return { enemy: e, shot: null };
 
@@ -22,6 +30,14 @@ export function stepEnemy(input, dt, ctx) {
 
   if (e.cloaked && dist < 3.05) e.reveal = Math.max(e.reveal || 0, 1.25);
   e = tickReveal(e, 0, ctx.channel);
+
+  if ((e.stun || 0) > 0) {
+    e.stun -= dt;
+    e.windup = 0;
+    e.hurt = Math.max(0, (e.hurt || 0) - dt);
+    if (dist > 0.001 && e.aggro) e.yaw = Math.atan2(px, pz);
+    return { enemy: e, shot: null };
+  }
 
   const hidden = e.cloaked && !e.visible;
   if (!e.aggro || hidden) {

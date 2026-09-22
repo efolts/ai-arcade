@@ -18,12 +18,14 @@ Open `index.html` (or the Pages URL ending in `/channel-surfer/`). The playfield
 | Click | Fire |
 | 1 / 2 / 3 | LIVE / STATIC / DEAD AIR |
 | Wheel or Q | Cycle channels |
+| E | Retune the PA horn you are aiming at |
 | Esc | Pause and release the mouse |
 | M | Mute |
+| R | Restart. From a radio-wing death, retry that wing |
 
-**LIVE** — precise cyan bolt, normal mall. **STATIC** — drains Signal, spread shot, reveals cloaks and visor seams. **DEAD AIR** — drains Signal, faster, phases through striped shutters, cannot fire.
+**LIVE** — precise cyan bolt, normal mall. **STATIC** — drains Signal, spread shot, reveals cloaks and visor seams. **DEAD AIR** — drains Signal, faster, phases through striped shutters and the priest's veil, cannot fire.
 
-Cyan is CRT Head only. Tessera are pearl, black, and amber.
+Clear the court and the north door opens into the radio wing. The Visor Priest broadcasts three rites. Each one wants a different channel. Cyan stays on CRT Head and on a retuned horn. The priest is pearl, black, and gold. His attacks are amber.
 
 ## Rebuild
 

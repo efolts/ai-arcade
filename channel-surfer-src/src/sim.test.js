@@ -2,14 +2,30 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { stepEnemy } from "./ai.js";
 import {
+  PRIEST_TUNING,
+  createPriest,
+  damagePriest,
+  priestAnswer,
+  resolvePriestHit,
+  tickPriest,
+} from "./boss.js";
+import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyRetune, tryHijack } from "./hijack.js";
+import {
   BLOCKS,
   BOUNDS,
+  CHAPEL_ENEMIES,
   ENEMIES,
+  HIJACK_SPAWNS,
   LEASHES,
+  PHASE,
   PICKUPS,
   PLAYER_SPAWN,
+  PRIEST_SPAWN,
   RESERVED_CONTENT,
+  VEIL_CROSS_Z,
+  activeColliders,
   courtColliders,
+  createChapelEnemies,
   createEnemies,
 } from "./level.js";
 import {
@@ -200,14 +216,25 @@ describe("weapons", () => {
 });
 
 describe("court layout", () => {
-  it("ships one cloak, one cloaked cache, and no reserved bosses", () => {
+  it("ships one court cloak, one cloaked cache, and no phase-3 bosses", () => {
+    assert.equal(PHASE, 2);
     assert.equal(ENEMIES.filter((e) => e.cloak).length, 1);
     assert.equal(ENEMIES.find((e) => e.cloak).id, "fountain");
     assert.equal(PICKUPS.filter((p) => p.cloaked).length, 1);
-    assert.equal(BLOCKS.filter((b) => b.phaseGate).length, 1);
-    assert.equal(BLOCKS.find((b) => b.phaseGate).id, "phase-gate");
-    const ids = new Set(ENEMIES.map((e) => e.id));
-    for (const reserved of RESERVED_CONTENT) assert.equal(ids.has(reserved.id), false);
+    const gates = BLOCKS.filter((b) => b.phaseGate);
+    assert.equal(gates.length, 2);
+    assert.equal(BLOCKS.find((b) => b.id === "phase-gate").veil, undefined);
+    assert.equal(BLOCKS.find((b) => b.id === "rite-veil").veil, true);
+    assert.deepEqual(
+      courtColliders()
+        .filter((c) => c.phaseGate)
+        .map((c) => c.id),
+      ["phase-gate"]
+    );
+    const reserved = new Set(RESERVED_CONTENT.map((item) => item.id));
+    assert.equal(reserved.has("directory"), true);
+    assert.equal(reserved.has("visor-priest"), false);
+    for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES]) assert.equal(reserved.has(enemy.id), false);
     assert.ok(LEASHES.alley);
     assert.equal(PICKUPS.find((p) => p.cloaked).kind, "signal");
   });
@@ -314,6 +341,266 @@ describe("tessera", () => {
     }
     assert.ok(enemy.x > LEASHES.alley.minX);
     assert.ok(enemy.z > LEASHES.alley.minZ - 0.01);
+  });
+});
+
+describe("radio wing", () => {
+  it("keeps the north door shut until the court is cleared", () => {
+    const closed = walk(0, -12.2, 0, -0.22, "LIVE", 24);
+    assert.ok(closed.z > -14.05, `closed z ${closed.z}`);
+    let x = 0;
+    let z = -12.2;
+    const openCols = activeColliders({ doorOpen: true });
+    for (let i = 0; i < 24; i++) {
+      const moved = tryMove(x, z, 0, -0.22, TUNING.playerRadius, openCols, "LIVE", BOUNDS);
+      x = moved.x;
+      z = moved.z;
+    }
+    assert.ok(z < -16.4, `open z ${z}`);
+  });
+
+  it("lets DEAD AIR through the rite veil and stops LIVE", () => {
+    const veilCols = activeColliders({ doorOpen: true, veilUp: true });
+    let live = { x: 0, z: -22.2 };
+    let dead = { x: 0, z: -22.2 };
+    for (let i = 0; i < 28; i++) {
+      live = tryMove(live.x, live.z, 0, -0.22, TUNING.playerRadius, veilCols, "LIVE", BOUNDS);
+      dead = tryMove(dead.x, dead.z, 0, -0.22, TUNING.playerRadius, veilCols, "DEAD_AIR", BOUNDS);
+    }
+    assert.ok(live.z > -23.9, `live z ${live.z}`);
+    assert.ok(dead.z < VEIL_CROSS_Z, `dead z ${dead.z}`);
+    assert.ok(dead.z > -28.2, `dead z ${dead.z}`);
+  });
+
+  it("spawns the choir and the priest on open floor", () => {
+    const open = activeColliders({ doorOpen: true, veilUp: false });
+    for (const enemy of createChapelEnemies()) {
+      assert.equal(overlapsCircle(enemy.x, enemy.z, 0.42, open, "LIVE"), null, enemy.id);
+      assert.equal(enemy.dormant, true);
+      assert.equal(enemy.room, "chapel");
+    }
+    assert.equal(overlapsCircle(PRIEST_SPAWN.x, PRIEST_SPAWN.z, 0.5, open, "LIVE"), null);
+    assert.equal(CHAPEL_ENEMIES.filter((enemy) => enemy.cloak).length, 1);
+  });
+
+  it("blocks a court shot on the closed radio door", () => {
+    const choir = createChapelEnemies().map((enemy) => ({ ...enemy, hittable: true, cloaked: false, visible: true }));
+    const hit = resolveShot({ x: 0, y: 1.5, z: -12 }, { x: 0, y: 0, z: -1 }, 30, choir, cols);
+    assert.equal(hit.kind, "world");
+    assert.equal(hit.id, "chapel-door");
+  });
+});
+
+describe("pa horn", () => {
+  it("keeps one playable hijack and reserves the rest", () => {
+    assert.deepEqual(
+      HIJACK_CATALOG.filter((item) => item.status === "playable").map((item) => item.id),
+      ["pa-horn"]
+    );
+    assert.ok(HIJACK_CATALOG.filter((item) => item.status === "reserved").length >= 3);
+    assert.equal(HIJACK_SPAWNS[0].id, "pa-horn");
+  });
+
+  it("aims only while looking at the horn and in range", () => {
+    const point = HIJACK_SPAWNS[0];
+    const origin = { x: 0, y: 1.6, z: -20 };
+    const dx = point.x - origin.x;
+    const dy = point.y - origin.y;
+    const dz = point.z - origin.z;
+    const len = Math.hypot(dx, dy, dz);
+    const aimed = aimHijack({
+      origin,
+      dir: { x: dx / len, y: dy / len, z: dz / len },
+      point,
+      maxDist: HIJACK_TUNING.maxDist,
+      cone: HIJACK_TUNING.cone,
+    });
+    assert.equal(aimed.aimed, true);
+    const away = aimHijack({
+      origin,
+      dir: { x: 0, y: 0, z: -1 },
+      point,
+      maxDist: HIJACK_TUNING.maxDist,
+      cone: HIJACK_TUNING.cone,
+    });
+    assert.equal(away.aimed, false);
+    const blocked = aimHijack({
+      origin,
+      dir: { x: dx / len, y: dy / len, z: dz / len },
+      point,
+      maxDist: HIJACK_TUNING.maxDist,
+      cone: HIJACK_TUNING.cone,
+      blocked: true,
+    });
+    assert.equal(blocked.aimed, false);
+  });
+
+  it("stuns the choir and then waits out the cooldown", () => {
+    const point = HIJACK_SPAWNS[0];
+    const stunned = applyRetune([...createEnemies(), ...createChapelEnemies()], point, HIJACK_TUNING.radius, HIJACK_TUNING.stun);
+    assert.equal(stunned.find((enemy) => enemy.id === "north-l").stun, 0);
+    assert.ok(stunned.find((enemy) => enemy.id === "choir-l").stun >= HIJACK_TUNING.stun);
+    assert.ok(stunned.find((enemy) => enemy.id === "choir-ghost").stun >= HIJACK_TUNING.stun);
+    const first = tryHijack({ cooldownUntil: 0 }, 10);
+    assert.equal(first.ok, true);
+    const early = tryHijack({ cooldownUntil: first.cooldownUntil }, 12);
+    assert.equal(early.ok, false);
+    const later = tryHijack({ cooldownUntil: first.cooldownUntil }, first.cooldownUntil + 0.01);
+    assert.equal(later.ok, true);
+  });
+});
+
+describe("visor priest", () => {
+  const ctx = { player: { x: 0, z: -20 } };
+
+  it("announces LIVE, then STATIC, then DEAD AIR", () => {
+    let priest = { ...createPriest(), active: true };
+    const rites = [];
+    for (let i = 0; i < 3; i++) {
+      priest.timer = 0.01;
+      priest.phase = "idle";
+      const step = tickPriest(priest, 0.05, ctx);
+      assert.equal(step.events[0].type, "announce");
+      rites.push(step.events[0].rite);
+      const answer =
+        step.priest.rite === "seam"
+          ? { channel: "LIVE", weak: true, halo: false, crossed: false }
+          : step.priest.rite === "choir"
+            ? { channel: "STATIC", weak: false, halo: true, crossed: false }
+            : { channel: "DEAD_AIR", weak: false, halo: false, crossed: true };
+      const broken = priestAnswer(step.priest, answer);
+      assert.equal(broken.broken, true);
+      priest = broken.priest;
+      priest.timer = 0.01;
+      priest = tickPriest(priest, 0.05, ctx).priest;
+      assert.equal(priest.phase, "idle");
+    }
+    assert.deepEqual(rites, ["seam", "choir", "veil"]);
+    assert.equal(priest.alive, true);
+    assert.ok(priest.hp > 0);
+    assert.ok(priest.hp <= PRIEST_TUNING.hp - PRIEST_TUNING.breakDamage * 3);
+  });
+
+  it("rejects the wrong channel for each rite", () => {
+    const seam = priestAnswer(
+      { ...createPriest(), phase: "rite", rite: "seam", exposed: true },
+      { channel: "STATIC", weak: true, halo: false, crossed: false }
+    );
+    assert.equal(seam.broken, false);
+    assert.equal(seam.priest.hp, PRIEST_TUNING.hp);
+    const choir = priestAnswer(
+      { ...createPriest(), phase: "rite", rite: "choir", haloVisible: true },
+      { channel: "LIVE", weak: true, halo: false, crossed: false }
+    );
+    assert.equal(choir.broken, false);
+    const veil = priestAnswer(
+      { ...createPriest(), phase: "rite", rite: "veil", veilUp: true },
+      { channel: "DEAD_AIR", weak: false, halo: false, crossed: false }
+    );
+    assert.equal(veil.broken, false);
+    const idle = priestAnswer(createPriest(), { channel: "LIVE", weak: true, halo: false, crossed: false });
+    assert.equal(idle.broken, false);
+  });
+
+  it("chips on body shots and stays up through three rite breaks", () => {
+    const priest = createPriest();
+    const chip = damagePriest(priest, TUNING.liveDamage);
+    assert.equal(chip.killed, false);
+    assert.ok(chip.priest.hp > priest.hp - 12);
+    assert.ok(chip.dealt < 8);
+  });
+
+  it("hits the halo only on STATIC during the choir rite", () => {
+    const priest = {
+      ...createPriest(),
+      phase: "rite",
+      rite: "choir",
+      haloVisible: true,
+      exposed: false,
+    };
+    const origin = { x: 0, y: 2.78, z: -20 };
+    const dir = { x: 0, y: 0, z: -1 };
+    const hidden = resolvePriestHit(origin, dir, 30, priest, "LIVE");
+    assert.ok(!hidden || hidden.halo === false);
+    const shown = resolvePriestHit(origin, dir, 30, priest, "STATIC");
+    assert.equal(shown.halo, true);
+    const body = resolvePriestHit({ x: 0, y: 1.2, z: -20 }, dir, 30, priest, "STATIC");
+    assert.equal(body.weak, false);
+    assert.equal(body.halo, false);
+    const seam = {
+      ...createPriest(),
+      phase: "rite",
+      rite: "seam",
+      exposed: true,
+    };
+    const head = resolvePriestHit({ x: 0, y: 2.05, z: -20 }, dir, 30, seam, "LIVE");
+    assert.equal(head.weak, true);
+    assert.equal(priestAnswer(seam, { channel: "LIVE", weak: head.weak, halo: head.halo, crossed: false }).broken, true);
+  });
+
+  it("fails a rite for chip damage, not a one-shot, and telegraphs bolts", () => {
+    let priest = { ...createPriest(), active: true, phase: "rite", rite: "seam", timer: 0.05, exposed: true };
+    const failed = tickPriest(priest, 0.1, ctx);
+    assert.equal(failed.events[0].type, "fail");
+    assert.equal(failed.events[0].damage, PRIEST_TUNING.failDamage);
+    assert.ok(failed.events[0].damage < 25);
+    assert.equal(failed.priest.phase, "recover");
+    assert.equal(failed.priest.veilUp, false);
+
+    priest = { ...createPriest(), active: true, phase: "idle", timer: 10, shotCooldown: 0, windup: 0 };
+    let step = tickPriest(priest, 0.05, ctx);
+    assert.equal(step.events.length, 0);
+    assert.ok(step.priest.windup > 0.4);
+    step = tickPriest(step.priest, PRIEST_TUNING.shotWindup + 0.02, ctx);
+    assert.equal(step.events.some((event) => event.type === "shot"), true);
+
+    const stunned = tickPriest({ ...priest, windup: 0.4, stun: 1, shotCooldown: 0 }, 0.1, ctx);
+    assert.equal(stunned.priest.windup, 0);
+    assert.equal(stunned.events.some((event) => event.type === "shot"), false);
+
+    const quiet = tickPriest(createPriest(), 1, ctx);
+    assert.equal(quiet.events.length, 0);
+    assert.equal(quiet.priest.timer, PRIEST_TUNING.idleFirst);
+  });
+
+  it("puts the veil in front of a shot from the nave", () => {
+    const veilCols = activeColliders({ doorOpen: true, veilUp: true });
+    const worldHit = resolveShot({ x: 0, y: 1.5, z: -22 }, { x: 0, y: 0, z: -1 }, 20, [], veilCols);
+    const priestHit = resolvePriestHit({ x: 0, y: 1.5, z: -22 }, { x: 0, y: 0, z: -1 }, 20, createPriest(), "LIVE");
+    assert.equal(worldHit.id, "rite-veil");
+    assert.ok(worldHit.t < priestHit.t);
+  });
+});
+
+describe("choir", () => {
+  it("does not wake, reveal, or shoot while the wing is sealed", () => {
+    const ghost = createChapelEnemies().find((enemy) => enemy.cloaked);
+    const step = stepEnemy(ghost, 0.2, {
+      channel: "STATIC",
+      player: { x: 0, y: 1.2, z: -16, forceAggro: true },
+      colliders: cols,
+      allies: [],
+      rng: () => 0.4,
+    });
+    assert.equal(step.shot, null);
+    assert.equal(step.enemy.visible, false);
+    assert.equal(step.enemy.x, ghost.x);
+  });
+
+  it("holds a stunned Tessera in place", () => {
+    let enemy = createEnemies().find((item) => item.id === "north-l");
+    enemy = { ...enemy, stun: 0.5, cooldown: 0, windup: 0.2 };
+    const step = stepEnemy(enemy, 0.1, {
+      channel: "LIVE",
+      player: { x: enemy.x, y: 1.2, z: enemy.z + 3, forceAggro: true },
+      colliders: cols,
+      allies: [],
+      rng: () => 0.4,
+    });
+    assert.equal(step.shot, null);
+    assert.equal(step.enemy.windup, 0);
+    assert.ok(step.enemy.stun < 0.5);
+    assert.equal(step.enemy.x, enemy.x);
   });
 });
 

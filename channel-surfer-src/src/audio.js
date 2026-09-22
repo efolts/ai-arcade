@@ -173,6 +173,29 @@ export function createAudio() {
         case "nosignal":
           noiseBurst(0.16, 0.12, 180);
           break;
+        case "hijack":
+          noiseBurst(0.18, 0.2, 1800);
+          tone(680, 0.16, "sawtooth", 0.05, 1400);
+          tone(220, 0.22, "square", 0.04, 90);
+          break;
+        case "rite":
+          tone(196, 0.28, "sine", 0.05);
+          tone(247, 0.32, "sine", 0.035);
+          tone(392, 0.22, "triangle", 0.03);
+          break;
+        case "rite-break":
+          noiseBurst(0.08, 0.16, 1400);
+          tone(880, 0.12, "square", 0.05, 420);
+          tone(1320, 0.16, "triangle", 0.04, 700);
+          break;
+        case "rite-fail":
+          tone(98, 0.22, "sawtooth", 0.06, 50);
+          noiseBurst(0.14, 0.12, 200);
+          break;
+        case "door":
+          tone(140, 0.18, "square", 0.04, 70);
+          tone(420, 0.14, "sine", 0.04);
+          break;
         default:
           break;
       }

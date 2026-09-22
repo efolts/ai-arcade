@@ -19,7 +19,7 @@ try {
 }
 
 const held = new Set();
-const mouse = { lookX: 0, lookY: 0, fire: false, channel: null, cycle: 0 };
+const mouse = { lookX: 0, lookY: 0, fire: false, channel: null, cycle: 0, use: false };
 let bannerSerial = -1;
 
 const healthFill = document.getElementById("health-fill");
@@ -28,6 +28,12 @@ const signalFill = document.getElementById("signal-fill");
 const signalNum = document.getElementById("signal-num");
 const chName = document.getElementById("ch-name");
 const enemyCount = document.getElementById("enemy-count");
+const roomLabel = document.getElementById("room-label");
+const countLabel = document.getElementById("count-label");
+const riteEl = document.getElementById("rite");
+const promptEl = document.getElementById("prompt");
+const bossWrap = document.getElementById("boss-wrap");
+const bossFill = document.getElementById("boss-fill");
 const tipEl = document.getElementById("tip");
 const bannerEl = document.getElementById("banner");
 const hurtEl = document.getElementById("hurt");
@@ -91,6 +97,7 @@ window.addEventListener("keydown", (event) => {
   const channel = channelFromCode(event.code);
   if (channel && game.mode === "play") mouse.channel = channel;
   if (event.code === "KeyQ" && game.mode === "play") mouse.cycle += 1;
+  if (event.code === "KeyE" && game.mode === "play") mouse.use = true;
   if (event.code === "KeyM") audio.toggle();
   if (event.code === "Escape" && game.mode === "play") game.pause();
   if (event.code === "Enter") confirm();
@@ -162,6 +169,16 @@ function paint(hud) {
   signalNum.textContent = String(Math.ceil(hud.signal));
   chName.textContent = hud.channel === "DEAD_AIR" ? "DEAD AIR" : hud.channel;
   enemyCount.textContent = String(hud.enemies);
+  roomLabel.textContent = hud.roomLabel || "COURT";
+  countLabel.textContent = hud.countLabel || "TESSERA";
+  riteEl.textContent = hud.rite || "";
+  promptEl.textContent = hud.prompt || "";
+  promptEl.className = hud.promptKind || "";
+  if (hud.boss == null) bossWrap.classList.remove("on");
+  else {
+    bossWrap.classList.add("on");
+    bossFill.style.width = Math.max(0, Math.min(100, hud.boss * 100)) + "%";
+  }
   tipEl.textContent = hud.tip || "";
   hurtEl.style.opacity = hud.health < 35 ? "0.28" : "0";
   if (hud.hurt > 0.2) hurtEl.style.opacity = "0.55";
@@ -186,11 +203,18 @@ function paint(hud) {
     primary.textContent = "Resume";
     secondary.textContent = "Restart";
   } else if (hud.mode === "clear") {
-    panelKicker.textContent = "KRCD 7 · COURT";
-    panelTitle.textContent = "COURT CLEAR";
-    panelBody.textContent = "The mall is still broadcasting. This was only the court.";
+    panelKicker.textContent = "KRCD 7 · RADIO";
+    panelTitle.textContent = "WING CLEAR";
+    panelBody.textContent = "The Visor Priest is off the air. The mall is still broadcasting.";
     panelMeta.textContent = `TIME ${fmt(hud.time)} · BEST ${fmt(hud.best)} · ${hud.swaps} CHANNEL CHANGES`;
     primary.textContent = "Replay";
+    secondary.textContent = "Title";
+  } else if (hud.checkpoint) {
+    panelKicker.textContent = "KRCD 7 · RADIO";
+    panelTitle.textContent = "WING LOST";
+    panelBody.textContent = "The court stays clear. Retry from the radio door.";
+    panelMeta.textContent = `TIME ${fmt(hud.time)} · BEST ${fmt(hud.best)}`;
+    primary.textContent = "Retry wing";
     secondary.textContent = "Title";
   } else {
     panelKicker.textContent = "KRCD 7 · NO CARRIER";
@@ -217,6 +241,7 @@ function frame(now) {
       fireDown: mouse.fire && game.mode === "play",
       channel: mouse.channel,
       cycle: mouse.cycle,
+      use: mouse.use,
     });
     paint(game.hud());
   }
@@ -224,6 +249,7 @@ function frame(now) {
   mouse.lookY = 0;
   mouse.channel = null;
   mouse.cycle = 0;
+  mouse.use = false;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
