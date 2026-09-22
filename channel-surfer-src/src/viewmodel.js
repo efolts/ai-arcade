@@ -90,16 +90,27 @@ export function createViewmodel(camera, textures) {
     knuckle.scale.set(2.1, 0.7, 0.8);
     knuckle.position.set(0, 0.02, -0.04);
     group.add(palm, sleeve, knuckle);
+    const lengths = [0.03, 0.038, 0.036, 0.028];
     for (let i = 0; i < 4; i++) {
-      const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.01, 0.05, 8), leather);
-      finger.rotation.x = Math.PI / 2;
-      finger.position.set(-0.03 + i * 0.02, 0.012, -0.078);
-      group.add(finger);
+      const x = -0.034 + i * 0.022;
+      const len = lengths[i];
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.0075, 0.0095, len, 8), leather);
+      base.rotation.x = Math.PI / 2;
+      base.position.set(x, 0.016, -0.05 - len * 0.45);
+      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.0055, 0.0075, len * 0.82, 8), leather);
+      tip.rotation.x = Math.PI / 2 + 0.28;
+      tip.position.set(x, 0.006, -0.05 - len * 1.15);
+      group.add(base, tip);
     }
-    const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.011, 0.042, 8), leather);
-    thumb.rotation.z = rot > 0 ? -0.9 : 0.9;
-    thumb.position.set(rot > 0 ? 0.05 : -0.05, 0.02, -0.01);
-    group.add(thumb);
+    const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.011, 0.034, 8), leather);
+    thumb.rotation.z = rot > 0 ? -0.7 : 0.7;
+    thumb.rotation.x = 0.35;
+    thumb.position.set(rot > 0 ? 0.046 : -0.046, 0.02, -0.012);
+    const thumbTip = new THREE.Mesh(new THREE.CylinderGeometry(0.0065, 0.0085, 0.026, 8), leather);
+    thumbTip.rotation.z = rot > 0 ? -1.15 : 1.15;
+    thumbTip.rotation.x = 0.2;
+    thumbTip.position.set(rot > 0 ? 0.068 : -0.068, 0.012, -0.028);
+    group.add(thumb, thumbTip);
     group.position.set(x, -0.05, z);
     group.rotation.y = rot;
     group.rotation.z = rot > 0 ? 0.22 : -0.18;

@@ -37,27 +37,29 @@ function mark(material, rest = 0x000000, restI = 0) {
 
 function palette(textures) {
   const pearl = mark(
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshPhysicalMaterial({
       map: textures.pearl,
       normalMap: textures.pearlNormal,
       roughnessMap: textures.pearlRough,
-      roughness: 1,
-      metalness: 0.14,
-      envMapIntensity: 0.55,
+      roughness: 0.85,
+      metalness: 0.02,
+      clearcoat: 0.58,
+      clearcoatRoughness: 0.24,
+      envMapIntensity: 0.36,
     })
   );
-  pearl.normalScale.set(0.55, 0.55);
+  pearl.normalScale.set(0.45, 0.45);
   const worn = mark(
     new THREE.MeshStandardMaterial({
       map: textures.pearlWorn,
       normalMap: textures.pearlNormal,
       roughnessMap: textures.pearlRough,
       roughness: 1,
-      metalness: 0.08,
-      envMapIntensity: 0.4,
+      metalness: 0.02,
+      envMapIntensity: 0.22,
     })
   );
-  worn.normalScale.set(0.7, 0.7);
+  worn.normalScale.set(0.65, 0.65);
   const joint = mark(
     new THREE.MeshStandardMaterial({
       map: textures.joint,
@@ -69,13 +71,15 @@ function palette(textures) {
   );
   const visor = mark(
     new THREE.MeshPhysicalMaterial({
-      color: 0x07080c,
-      roughness: 0.08,
-      metalness: 0.58,
+      color: 0x07090e,
+      roughness: 0.035,
+      metalness: 0.12,
       clearcoat: 1,
-      clearcoatRoughness: 0.12,
-      envMapIntensity: 0.8,
-      reflectivity: 0.7,
+      clearcoatRoughness: 0.03,
+      iridescence: 0,
+      ior: 1.55,
+      envMapIntensity: 0.72,
+      reflectivity: 1,
     })
   );
   visor.polygonOffset = true;
@@ -143,9 +147,9 @@ function buildTessera(textures, options = {}) {
   head.position.set(0, 1.66, 0);
   const helmet = mesh(g.helmet, mat.pearl);
   helmet.scale.set(1.06, 0.96, 1.08);
-  const visor = mesh(new THREE.SphereGeometry(0.162, 40, 28), mat.visor, 0, -0.02, 0.138);
-  visor.scale.set(1.08, 0.76, 0.58);
-  const sensor = mesh(new THREE.SphereGeometry(0.026, 12, 8), mat.pearl, 0, 0.12, 0.155);
+  const visor = mesh(new THREE.SphereGeometry(0.172, 40, 24), mat.visor, 0, -0.045, 0.168);
+  visor.scale.set(1.18, 1.14, 0.36);
+  const sensor = mesh(new THREE.SphereGeometry(0.026, 12, 8), mat.pearl, 0, 0.148, 0.12);
   sensor.scale.set(1, 0.65, 0.5);
   const weak = mesh(g.seam, mat.amber, 0, -0.02, 0.185);
   weak.visible = false;
@@ -199,7 +203,7 @@ function buildTessera(textures, options = {}) {
   group.add(...parts, lLeg, rLeg, lArm, rArm, shadow);
 
   if (options.vestment) {
-    const tabard = mesh(g.tabard, mat.cloth, 0, 0.78, 0.16);
+    const tabard = mesh(g.tabard, mat.cloth, 0, 0.92, 0.16);
     const back = mesh(new THREE.BoxGeometry(0.28, 0.42, 0.04), mat.cloth, 0, 0.95, -0.14);
     const stole = mesh(g.stole, mat.gold, 0, 1.16, 0.18);
     const mantle = mesh(
@@ -212,7 +216,27 @@ function buildTessera(textures, options = {}) {
       1.4,
       0
     );
-    group.add(tabard, back, stole, mantle);
+    const skirt = mesh(
+      sculptCloth(
+        new THREE.LatheGeometry(
+          [
+            new THREE.Vector2(0.2, 0.02),
+            new THREE.Vector2(0.36, 0.2),
+            new THREE.Vector2(0.4, 0.46),
+            new THREE.Vector2(0.3, 0.74),
+            new THREE.Vector2(0.22, 0.96),
+          ],
+          28
+        ),
+        6,
+        0.016
+      ),
+      mat.cloth,
+      0,
+      0.06,
+      0
+    );
+    group.add(tabard, back, stole, mantle, skirt);
   }
   stampTangents(group);
 
@@ -235,7 +259,7 @@ function buildPriest(textures) {
   const mat = palette(textures);
   const g = geos();
 
-  const robe = mesh(g.robe, mat.cloth);
+  const robe = mesh(sculptCloth(g.robe, 8, 0.04), mat.cloth);
   const mantle = mesh(
     new THREE.LatheGeometry(
       [
@@ -272,10 +296,10 @@ function buildPriest(textures) {
   head.position.set(0, 2.05, 0);
   head.scale.setScalar(1.18);
   const helmet = mesh(g.helmet, mat.pearl);
-  const sensor = mesh(new THREE.SphereGeometry(0.028, 12, 8), mat.pearl, 0, 0.125, 0.15);
+  const sensor = mesh(new THREE.SphereGeometry(0.028, 12, 8), mat.pearl, 0, 0.15, 0.11);
   sensor.scale.set(1, 0.62, 0.48);
-  const visor = mesh(new THREE.SphereGeometry(0.162, 40, 28), mat.visor, 0, -0.015, 0.142);
-  visor.scale.set(1.12, 0.82, 0.6);
+  const visor = mesh(new THREE.SphereGeometry(0.175, 40, 24), mat.visor, 0, -0.04, 0.162);
+  visor.scale.set(1.22, 1.2, 0.38);
   const seam = mesh(new THREE.BoxGeometry(0.22, 0.03, 0.018), mat.amber, 0, -0.02, 0.175);
   seam.visible = false;
   seam.castShadow = false;
@@ -307,8 +331,9 @@ function buildPriest(textures) {
     const sleeve = mesh(new THREE.CylinderGeometry(0.075, 0.13, 0.52, 14), mat.cloth, 0, 0.26, 0);
     const cuff = mesh(new THREE.TorusGeometry(0.078, 0.016, 8, 16), mat.gold, 0, 0.5, 0);
     cuff.rotation.x = Math.PI / 2;
-    const glove = mesh(g.hand, mat.pearl, 0, -0.06, 0.02);
+    const glove = mesh(g.hand, mat.pearl, 0, -0.04, 0.02);
     glove.rotation.z = Math.PI;
+    glove.scale.setScalar(1.45);
     const palm = mesh(new THREE.BoxGeometry(0.06, 0.045, 0.018), mat.amber, 0, 0.62, 0.08);
     palm.castShadow = false;
     pivot.add(sleeve, cuff, glove, palm);
@@ -342,6 +367,26 @@ function buildPriest(textures) {
     flashMats: [mat.pearl, mat.cloth, mat.visor, mat.gold],
     flash: 0,
   };
+}
+
+function sculptCloth(geo, waves = 7, amp = 0.02) {
+  const copy = geo.clone();
+  const pos = copy.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const radius = Math.hypot(x, z) || 1;
+    const ang = Math.atan2(x, z);
+    const front = 0.4 + 0.6 * Math.max(0, z / radius);
+    const drape = 0.4 + 0.6 * Math.min(1, Math.max(0, (1.35 - y) / 1.35));
+    const fold = Math.sin(ang * waves) * amp * front * drape;
+    pos.setXYZ(i, x + (x / radius) * fold, y, z + (z / radius) * fold);
+  }
+  pos.needsUpdate = true;
+  copy.computeVertexNormals();
+  if (copy.getAttribute("tangent")) copy.deleteAttribute("tangent");
+  return copy;
 }
 
 function stampTangents(group) {
@@ -455,8 +500,8 @@ export function createActors(scene, textures) {
       priestRec.shadow.position.y = 0.025 - breathe;
       priestRec.halo.rotation.z = time * 0.15;
       const rite = priest.phase === "rite";
-      const splay = rite ? 1.05 : priest.windup > 0 ? 0.35 : 0.72;
-      const reach = priest.windup > 0 ? -0.85 : rite ? -0.2 : -0.05;
+      const splay = rite ? 1.28 : priest.windup > 0 ? 0.4 : 1.12;
+      const reach = priest.windup > 0 ? -0.85 : rite ? -0.25 : -0.12;
       priestRec.lArm.rotation.set(reach, 0, splay);
       priestRec.rArm.rotation.set(reach, 0, -splay);
       const riteHalo = !!priest.haloVisible;

@@ -72,6 +72,7 @@ export function createWorld(scene) {
   materials.hazard.side = THREE.DoubleSide;
   materials.floor.normalScale.set(0.7, 0.7);
   materials.wood.normalScale.set(0.85, 0.85);
+  materials.wood.side = THREE.DoubleSide;
   materials.brass.normalScale.set(0.4, 0.4);
 
   const buckets = new Map();
@@ -96,6 +97,18 @@ export function createWorld(scene) {
     emissiveIntensity: 0.32,
   });
   veilMat.side = THREE.DoubleSide;
+  const DRESSED = new Set([
+    "pew-1",
+    "pew-2",
+    "pew-3",
+    "pew-4",
+    "altar",
+    "fountain-n",
+    "fountain-s-l",
+    "fountain-s-r",
+    "fountain-w",
+    "fountain-e",
+  ]);
 
   for (const block of BLOCKS) {
     if (block.veil) {
@@ -131,6 +144,7 @@ export function createWorld(scene) {
       scene.add(doorGroup);
       continue;
     }
+    if (DRESSED.has(block.id)) continue;
     if (block.phaseGate) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(block.w, block.h, block.d), materials.hazard);
       mesh.position.set(block.x, block.y, block.z);
@@ -175,35 +189,62 @@ export function createWorld(scene) {
     scene.add(mesh);
   }
 
-  const basin = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.35, 1.35, 0.06, 24),
-    std({ color: 0x3e3a34, roughness: 0.9, metalness: 0.08 })
-  );
-  basin.position.set(0, 0.04, -0.05);
-  basin.receiveShadow = true;
-  scene.add(basin);
-  const bowl = new THREE.Mesh(
+  const stone = std({
+    map: textures.floor,
+    normalMap: textures.floorNormal,
+    roughnessMap: textures.floorRough,
+    roughness: 1,
+    metalness: 0.05,
+  });
+  stone.normalScale.set(0.55, 0.55);
+  function dress(geo, material, x, y, z) {
+    if (material.normalMap) tangents(geo);
+    const obj = new THREE.Mesh(geo, material);
+    obj.position.set(x, y, z);
+    obj.castShadow = true;
+    obj.receiveShadow = true;
+    scene.add(obj);
+    return obj;
+  }
+  function curb(x, y, z, w, h, d) {
+    dress(new THREE.BoxGeometry(w, h * 0.78, d * 0.92), stone, x, y - h * 0.08, z);
+    dress(new THREE.BoxGeometry(w * 1.04, h * 0.18, d * 1.08), materials.trim, x, y + h * 0.4, z);
+  }
+  curb(0, 0.4, -2.2, 4.5, 0.8, 0.5);
+  curb(-1.75, 0.4, 2.05, 1.7, 0.8, 0.5);
+  curb(1.75, 0.4, 2.05, 1.7, 0.8, 0.5);
+  curb(-2.25, 0.4, -0.05, 0.5, 0.8, 3.55);
+  curb(2.25, 0.4, -0.05, 0.5, 0.8, 3.55);
+  const bowl = dress(
     new THREE.LatheGeometry(
       [
-        new THREE.Vector2(0.35, 0.02),
-        new THREE.Vector2(1.2, 0.05),
-        new THREE.Vector2(1.42, 0.2),
-        new THREE.Vector2(1.22, 0.28),
+        new THREE.Vector2(0.15, 0.04),
+        new THREE.Vector2(0.7, 0.06),
+        new THREE.Vector2(1.15, 0.1),
+        new THREE.Vector2(1.38, 0.28),
+        new THREE.Vector2(1.22, 0.4),
+        new THREE.Vector2(1.05, 0.34),
       ],
-      28
+      32
     ),
-    std({ map: textures.trim, roughness: 0.62, metalness: 0.16, envMapIntensity: 0.4 })
+    std({ map: textures.trim, roughness: 0.55, metalness: 0.18, envMapIntensity: 0.45 }),
+    0,
+    0.02,
+    -0.05
   );
-  bowl.position.set(0, 0.02, -0.05);
   bowl.castShadow = true;
-  bowl.receiveShadow = true;
-  scene.add(bowl);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.28, 0.045, 8, 28), materials.brass);
+  lip.rotation.x = Math.PI / 2;
+  lip.position.set(0, 0.36, -0.05);
+  lip.castShadow = true;
+  scene.add(lip);
+  const spout = dress(new THREE.CylinderGeometry(0.06, 0.09, 0.34, 12), materials.brass, 0, 0.22, -0.05);
   const water = new THREE.Mesh(
-    new THREE.CircleGeometry(1.12, 24),
-    std({ color: 0x243033, roughness: 0.12, metalness: 0.55, envMapIntensity: 0.8 })
+    new THREE.CircleGeometry(1.05, 28),
+    std({ color: 0x1e2c30, roughness: 0.08, metalness: 0.62, envMapIntensity: 0.9 })
   );
   water.rotation.x = -Math.PI / 2;
-  water.position.set(0, 0.1, -0.05);
+  water.position.set(0, 0.16, -0.05);
   water.receiveShadow = true;
   scene.add(water);
 
@@ -296,15 +337,35 @@ export function createWorld(scene) {
     envMapIntensity: 0.7,
   });
   const horn = new THREE.Group();
-  const bell = new THREE.Mesh(tangents(new THREE.CylinderGeometry(0.08, 0.34, 0.62, 16)), hornMat);
-  bell.rotation.z = Math.PI / 2;
+  const bell = new THREE.Mesh(
+    tangents(
+      new THREE.LatheGeometry(
+        [
+          new THREE.Vector2(0.05, -0.28),
+          new THREE.Vector2(0.09, -0.08),
+          new THREE.Vector2(0.16, 0.08),
+          new THREE.Vector2(0.28, 0.24),
+          new THREE.Vector2(0.34, 0.32),
+          new THREE.Vector2(0.3, 0.36),
+        ],
+        20
+      )
+    ),
+    hornMat
+  );
+  bell.rotation.z = -Math.PI / 2;
   bell.castShadow = true;
-  const neck = new THREE.Mesh(tangents(new THREE.CylinderGeometry(0.06, 0.06, 0.45, 10)), materials.brass);
+  const grille = new THREE.Mesh(new THREE.CircleGeometry(0.26, 16), std({ color: 0x2a2418, roughness: 0.45, metalness: 0.4 }));
+  grille.rotation.y = Math.PI / 2;
+  grille.position.x = 0.34;
+  const neck = new THREE.Mesh(tangents(new THREE.CylinderGeometry(0.055, 0.07, 0.36, 12)), materials.brass);
   neck.rotation.z = Math.PI / 2;
   neck.position.x = -0.42;
-  const plate = new THREE.Mesh(tangents(new THREE.BoxGeometry(0.08, 0.32, 0.24)), materials.brass);
-  plate.position.set(-0.66, 0, 0);
+  const plate = new THREE.Mesh(tangents(new THREE.BoxGeometry(0.06, 0.36, 0.28)), materials.brass);
+  plate.position.set(-0.62, 0, 0);
   plate.castShadow = true;
+  const bracket = new THREE.Mesh(tangents(new THREE.BoxGeometry(0.1, 0.08, 0.16)), materials.brass);
+  bracket.position.set(-0.62, -0.2, 0);
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffb14a }));
   bulb.position.x = 0.28;
   const ring = new THREE.Mesh(
@@ -312,8 +373,8 @@ export function createWorld(scene) {
     new THREE.MeshBasicMaterial({ color: 0xfff1c8, transparent: true, opacity: 0, depthWrite: false })
   );
   ring.rotation.y = Math.PI / 2;
-  horn.add(bell, neck, plate, bulb, ring);
-  for (const [offset, radius] of [[-0.08, 0.16], [0.08, 0.24], [0.2, 0.3]]) {
+  horn.add(bell, grille, neck, plate, bracket, bulb, ring);
+  for (const [offset, radius] of [[-0.05, 0.1], [0.08, 0.16], [0.2, 0.26]]) {
     const rib = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.012, 6, 16), materials.brass);
     rib.rotation.y = Math.PI / 2;
     rib.position.x = offset;
@@ -363,17 +424,81 @@ export function createWorld(scene) {
   nave.receiveShadow = true;
   scene.add(nave);
 
+  const railGeo = new THREE.CylinderGeometry(0.028, 0.028, 2.28, 10);
+  railGeo.rotateZ(Math.PI / 2);
+  const noseGeo = new THREE.CylinderGeometry(0.03, 0.03, 2.32, 12);
+  noseGeo.rotateZ(Math.PI / 2);
+  const backArc = new THREE.CylinderGeometry(0.62, 0.62, 2.22, 16, 1, true, -0.42, 0.84);
+  backArc.rotateZ(Math.PI / 2);
+  function pew(px, pz) {
+    dress(new THREE.BoxGeometry(2.32, 0.05, 0.32), materials.wood, px, 0.46, pz - 0.04);
+    dress(noseGeo, materials.wood, px, 0.45, pz - 0.2);
+    for (const sx of [-1.02, 1.02]) {
+      dress(new THREE.BoxGeometry(0.055, 0.4, 0.05), materials.wood, px + sx, 0.22, pz - 0.12);
+      dress(new THREE.BoxGeometry(0.055, 0.4, 0.05), materials.wood, px + sx, 0.22, pz + 0.06);
+    }
+    for (const sx of [-1.2, 1.2]) {
+      dress(new THREE.BoxGeometry(0.07, 0.82, 0.4), materials.wood, px + sx, 0.44, pz + 0.02);
+    }
+    const arc = dress(backArc, materials.wood, px, 0.68, pz - 0.36);
+    arc.castShadow = true;
+    dress(railGeo, materials.wood, px, 0.9, pz + 0.2);
+    dress(new THREE.BoxGeometry(2.05, 0.028, 0.1), materials.wood, px, 0.3, pz + 0.04);
+    dress(new THREE.BoxGeometry(1.9, 0.035, 0.07), materials.wood, px, 0.16, pz - 0.02);
+  }
   for (const [px, pz] of [
     [-3.15, -18.2],
     [-3.15, -20.45],
     [3.15, -18.2],
     [3.15, -20.45],
   ]) {
-    const back = new THREE.Mesh(tangents(new THREE.BoxGeometry(2.85, 0.62, 0.08)), materials.wood);
-    back.position.set(px, 0.62, pz + 0.22);
-    back.castShadow = true;
-    back.receiveShadow = true;
-    scene.add(back);
+    pew(px, pz);
+  }
+  dress(new THREE.BoxGeometry(2.15, 0.16, 0.62), stone, 0, 0.1, -27.55);
+  dress(new THREE.BoxGeometry(1.82, 0.2, 0.5), stone, 0, 0.27, -27.55);
+  dress(new THREE.BoxGeometry(1.5, 0.18, 0.4), stone, 0, 0.45, -27.55);
+  dress(new THREE.BoxGeometry(2.2, 0.07, 0.66), materials.brass, 0, 0.62, -27.55);
+  const frontal = dress(new THREE.BoxGeometry(1.35, 0.32, 0.035), materials.brass, 0, 0.36, -27.26);
+  frontal.position.z = -27.26;
+  const altarSeal = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.016, 8, 20), materials.brass);
+  altarSeal.position.set(0, 0.38, -27.22);
+  scene.add(altarSeal);
+  for (const sx of [-0.72, 0.72]) {
+    dress(new THREE.CylinderGeometry(0.028, 0.04, 0.22, 8), materials.brass, sx, 0.76, -27.52);
+    const flame = new THREE.Mesh(
+      new THREE.SphereGeometry(0.035, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffb14a })
+    );
+    flame.position.set(sx, 0.9, -27.52);
+    flame.castShadow = false;
+    scene.add(flame);
+  }
+  const aoCanvas = document.createElement("canvas");
+  aoCanvas.width = 64;
+  aoCanvas.height = 64;
+  const aoCtx = aoCanvas.getContext("2d");
+  const aoGrad = aoCtx.createRadialGradient(32, 32, 4, 32, 32, 32);
+  aoGrad.addColorStop(0, "rgba(0,0,0,0.38)");
+  aoGrad.addColorStop(1, "rgba(0,0,0,0)");
+  aoCtx.fillStyle = aoGrad;
+  aoCtx.fillRect(0, 0, 64, 64);
+  const aoMap = new THREE.CanvasTexture(aoCanvas);
+  const aoMat = new THREE.MeshBasicMaterial({ map: aoMap, transparent: true, depthWrite: false });
+  function aoDisc(radius, x, z) {
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(radius, 18), aoMat);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(x, 0.028, z);
+    scene.add(disc);
+  }
+  aoDisc(1.7, 0, -0.05);
+  aoDisc(1.3, 0, -27.55);
+  for (const [px, pz] of [
+    [-3.15, -18.2],
+    [-3.15, -20.45],
+    [3.15, -18.2],
+    [3.15, -20.45],
+  ]) {
+    aoDisc(1.2, px, pz);
   }
 
   const cacheDef = PICKUPS.find((p) => p.kind === "signal");
@@ -402,16 +527,16 @@ export function createWorld(scene) {
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.35);
   sun.position.set(8, 18, 10);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 70;
-  sun.shadow.camera.left = -30;
-  sun.shadow.camera.right = 30;
-  sun.shadow.camera.top = 30;
-  sun.shadow.camera.bottom = -30;
-  sun.shadow.bias = -0.00025;
-  sun.shadow.normalBias = 0.025;
-  sun.shadow.radius = 1.5;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.near = 2;
+  sun.shadow.camera.far = 48;
+  sun.shadow.camera.left = -16;
+  sun.shadow.camera.right = 16;
+  sun.shadow.camera.top = 16;
+  sun.shadow.camera.bottom = -16;
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.035;
+  sun.shadow.radius = 2;
   sun.target.position.set(0, 0, -8);
   scene.add(sun, sun.target);
   const fill = new THREE.DirectionalLight(0xffe2c4, 0.7);
@@ -504,7 +629,14 @@ export function createWorld(scene) {
       if (which === "cache") cache.visible = visible;
       if (which === "aid") aid.visible = visible;
     },
-    update(time, channel) {
+    update(time, channel, focus) {
+      if (focus) {
+        const snap = 4;
+        const sx = Math.round(focus.x / snap) * snap;
+        const sz = Math.round(focus.z / snap) * snap;
+        sun.position.set(sx + 8, 18, sz + 10);
+        sun.target.position.set(sx, 0, sz);
+      }
       const dt = Math.min(0.05, Math.max(0, time - lastTime || 0));
       lastTime = time;
       doorLift += (doorGoal - doorLift) * Math.min(1, dt * 4.2);

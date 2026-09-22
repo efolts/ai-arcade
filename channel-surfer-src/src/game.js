@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { stepEnemy } from "./ai.js";
 import { createActors } from "./actors.js";
 import { damagePriest, priestAnswer, resolvePriestHit, riteBanner, tickPriest, PRIEST_TUNING, createPriest } from "./boss.js";
@@ -92,7 +93,7 @@ export function createGame(canvas, audio) {
 
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.06).texture;
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.012).texture;
   pmrem.dispose();
   const camera = new THREE.PerspectiveCamera(72, 960 / 780, 0.08, 90);
   scene.add(camera);
@@ -101,6 +102,10 @@ export function createGame(canvas, audio) {
   camera.add(fill);
 
   const world = createWorld(scene);
+  const ssao = new SSAOPass(scene, camera, 480, 390, 8);
+  ssao.kernelRadius = 0.18;
+  ssao.minDistance = 0.001;
+  ssao.maxDistance = 0.06;
   const actors = createActors(scene, world.textures);
   const viewmodel = createViewmodel(camera, world.textures);
 
@@ -909,13 +914,21 @@ export function createGame(canvas, audio) {
         aimed: mode === "play" && hijackAimed,
         hot: mode === "play" && time < retuneUntil,
       });
-      world.update(clock, state.channel);
+      world.update(clock, state.channel, player);
       actors.sync(enemies, step, clock, state.channel);
       actors.syncPriest(priest, step, clock, mode === "title" ? "LIVE" : state.channel);
       actors.syncBolts(bolts);
       paintFx(step);
       frameCamera(step);
+      const aoChannel = mode === "title" ? "LIVE" : state.channel;
+      ssao.kernelRadius = aoChannel === "DEAD_AIR" ? 0.05 : 0.18;
+      ssao.maxDistance = aoChannel === "DEAD_AIR" ? 0.02 : 0.06;
       renderer.render(scene, camera);
+      renderer.shadowMap.autoUpdate = false;
+      ssao.renderToScreen = true;
+      ssao.render(renderer);
+      renderer.shadowMap.autoUpdate = true;
+      renderer.setRenderTarget(null);
     },
     hud() {
       const inWing = player.z < -14.85;

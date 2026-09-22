@@ -351,7 +351,7 @@ export function makeTextures() {
     const u = x / w;
     const v = y / h;
     const edge = Math.min(u, 1 - u, v, 1 - v);
-    return 0.18 + (1 - Math.min(1, edge * 7)) * 0.34;
+    return 0.28 + (1 - Math.min(1, edge * 7)) * 0.42;
   });
   const goldNormal = heightToNormal(64, 64, (x, y, w, h) => {
     const brush = Math.sin(x * 0.85 + y * 0.2) * 0.08;
@@ -359,11 +359,12 @@ export function makeTextures() {
     return 0.55 + brush + lip;
   }, 2.4);
   const goldRough = roughTex(64, 64, (x, y) => 0.22 + (Math.sin(x * 0.7) * 0.5 + 0.5) * 0.12 + (y % 9 === 0 ? 0.08 : 0));
-  const clothNormal = heightToNormal(128, 128, (x, y) => {
-    const weave = Math.sin(x * 0.85) * 0.05 + Math.sin(y * 1.15) * 0.04;
-    const thread = x % 8 === 0 ? -0.06 : 0;
-    return 0.5 + weave + thread;
-  }, 2.2);
+  const clothNormal = heightToNormal(128, 128, (x, y, w) => {
+    const fold = Math.sin((x / w) * Math.PI * 5) * 0.2;
+    const weave = Math.sin(x * 0.85) * 0.04 + Math.sin(y * 1.15) * 0.03;
+    const thread = x % 8 === 0 ? -0.05 : 0;
+    return 0.55 + fold + weave + thread;
+  }, 3.6);
   const clothRough = roughTex(128, 128, (x, y, w, h) => 0.78 + (y / h) * 0.1 + (x % 8 === 0 ? 0.06 : 0));
   const floorNormal = heightToNormal(
     256,

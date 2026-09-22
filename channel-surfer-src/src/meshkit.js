@@ -66,14 +66,14 @@ export function merged(parts) {
 }
 
 const HELMET_PROFILE = [
-  [0.015, 0.19],
-  [0.08, 0.175],
-  [0.135, 0.12],
-  [0.158, 0.04],
-  [0.155, -0.02],
+  [0.02, 0.2],
+  [0.1, 0.175],
+  [0.148, 0.11],
+  [0.164, 0.04],
+  [0.158, -0.03],
   [0.132, -0.09],
-  [0.09, -0.14],
-  [0.055, -0.16],
+  [0.09, -0.135],
+  [0.04, -0.158],
 ];
 
 const TORSO_PROFILE = [
@@ -87,13 +87,15 @@ const TORSO_PROFILE = [
 ];
 
 const ROBE_PROFILE = [
-  [0.46, 0.06],
-  [0.5, 0.28],
-  [0.44, 0.62],
-  [0.36, 1.0],
-  [0.32, 1.28],
-  [0.24, 1.55],
-  [0.16, 1.66],
+  [0.42, 0.02],
+  [0.52, 0.16],
+  [0.5, 0.36],
+  [0.42, 0.62],
+  [0.36, 0.9],
+  [0.39, 1.12],
+  [0.3, 1.38],
+  [0.22, 1.56],
+  [0.15, 1.68],
 ];
 
 let shared = null;
@@ -101,19 +103,38 @@ let shared = null;
 export function geos() {
   if (shared) return shared;
   const handParts = [];
-  const palm = new THREE.SphereGeometry(0.04, 10, 8);
-  palm.scale(1.15, 0.7, 1.35);
-  palm.translate(0, -0.6, 0.02);
+  const palm = new THREE.SphereGeometry(0.046, 12, 10);
+  palm.scale(1.28, 0.7, 1.35);
+  palm.translate(0, -0.575, 0.02);
   handParts.push(palm);
   for (let i = 0; i < 4; i++) {
-    const finger = new THREE.CylinderGeometry(0.008, 0.01, 0.055, 6);
-    finger.translate(-0.022 + i * 0.015, -0.66, 0.04);
-    handParts.push(finger);
+    const x = -0.032 + i * 0.021;
+    const len = 0.036 - Math.abs(i - 1.4) * 0.004;
+    const curl = 0.22 + (i === 0 || i === 3 ? 0.1 : 0);
+    const base = new THREE.CylinderGeometry(0.008, 0.01, len, 6);
+    base.translate(0, -len * 0.5, 0);
+    base.rotateX(0.12);
+    base.translate(x, -0.615, 0.042);
+    const tip = new THREE.CylinderGeometry(0.006, 0.008, len * 0.85, 6);
+    tip.translate(0, -len * 0.4, 0);
+    tip.rotateX(curl);
+    tip.translate(x, -0.615 - len * 0.72, 0.05);
+    handParts.push(base, tip);
   }
   const thumb = new THREE.CylinderGeometry(0.009, 0.011, 0.04, 6);
-  thumb.translate(0.042, -0.6, 0.03);
-  thumb.rotateZ(0.8);
-  handParts.push(thumb);
+  thumb.translate(0, -0.02, 0);
+  thumb.rotateZ(0.85);
+  thumb.translate(0.048, -0.59, 0.015);
+  const thumbTip = new THREE.CylinderGeometry(0.007, 0.009, 0.028, 6);
+  thumbTip.translate(0, -0.014, 0);
+  thumbTip.rotateZ(1.15);
+  thumbTip.rotateX(0.25);
+  thumbTip.translate(0.062, -0.6, 0.03);
+  handParts.push(thumb, thumbTip);
+  const sole = new THREE.BoxGeometry(0.1, 0.025, 0.2);
+  sole.translate(0, -0.012, 0.02);
+  const shoe = new THREE.BoxGeometry(0.088, 0.038, 0.13);
+  shoe.translate(0, 0.016, -0.005);
 
   const gunParts = [];
   const receiver = new THREE.BoxGeometry(0.05, 0.055, 0.16);
@@ -138,7 +159,7 @@ export function geos() {
     shoulder: frustum(0.1, 0.1, 0.14, 0.12, 0.08),
     thigh: new THREE.CylinderGeometry(0.055, 0.072, 0.34, 12),
     shin: new THREE.CylinderGeometry(0.04, 0.055, 0.32, 12),
-    foot: new THREE.BoxGeometry(0.1, 0.05, 0.18),
+    foot: merged([sole, shoe]),
     upper: new THREE.CylinderGeometry(0.04, 0.05, 0.26, 12),
     forearm: new THREE.CylinderGeometry(0.03, 0.04, 0.22, 12),
     hand: merged(handParts),
