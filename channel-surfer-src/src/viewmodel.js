@@ -49,13 +49,29 @@ export function createViewmodel(camera, textures) {
   lens.position.set(0.02, -0.004, -0.2);
   root.add(lens);
 
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.22, 5), metal);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.22, 6), metal);
   antenna.position.set(0.07, 0.02, -0.12);
   antenna.rotation.z = -0.4;
   antenna.rotation.x = 0.5;
-  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 4), metal);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), metal);
   tip.position.set(0.11, 0.1, -0.2);
-  root.add(antenna, tip);
+  const capGeo = new THREE.SphereGeometry(0.045, 12, 8);
+  capGeo.scale(1.2, 0.62, 1.35);
+  const nose = new THREE.Mesh(capGeo, wood);
+  nose.position.set(0.02, -0.02, -0.15);
+  const tail = new THREE.Mesh(capGeo, wood);
+  tail.position.set(0.02, -0.02, 0.19);
+  const gripBar = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.04, 0.2), dark);
+  gripBar.position.set(-0.068, -0.03, 0.04);
+  const gripR = gripBar.clone();
+  gripR.position.x = 0.108;
+  root.add(antenna, tip, nose, tail, gripBar, gripR);
+  for (let i = 0; i < 4; i++) {
+    const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.012, 6), dark);
+    hole.rotation.x = Math.PI / 2;
+    hole.position.set(-0.02 + (i % 2) * 0.028, -0.01, -0.08 - Math.floor(i / 2) * 0.02);
+    root.add(hole);
+  }
 
   const flashMat = new THREE.MeshBasicMaterial({
     color: 0xd8fbff,

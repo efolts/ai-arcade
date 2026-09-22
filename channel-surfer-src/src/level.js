@@ -1,4 +1,4 @@
-/** Phase 3.3 realism on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
+/** Phase 3.4 realism on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
 
 export const PHASE = 3;
 

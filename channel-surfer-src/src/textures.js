@@ -230,15 +230,37 @@ export function makeTextures() {
   });
 
   const pearlWorn = canvasTex(128, 128, (g, w, h) => {
-    g.fillStyle = "#d5cec3";
+    g.fillStyle = "#ddd6cb";
     g.fillRect(0, 0, w, h);
-    g.fillStyle = "#c4b6a2";
-    g.fillRect(0, h * 0.55, w, h * 0.45);
-    g.fillStyle = "rgba(90,70,46,0.35)";
-    g.fillRect(0, h - 16, w, 16);
-    noise(g, w, h, 40, "rgba(70,54,32,0.28)", 2);
-    g.strokeStyle = "rgba(40,34,28,0.4)";
-    g.strokeRect(6, 6, w - 12, h - 12);
+    g.fillStyle = "#cbbba6";
+    g.fillRect(0, h * 0.48, w, h * 0.52);
+    for (let i = 0; i < 10; i++) {
+      const x = w * (0.34 + ((i * 13) % 32) / 100);
+      g.fillStyle = i % 2 ? "rgba(110,82,52,0.45)" : "rgba(86,64,40,0.32)";
+      g.fillRect(x, h * 0.4, 2 + (i % 3), h * 0.58);
+    }
+    g.fillStyle = "rgba(72,52,32,0.5)";
+    g.fillRect(0, h - 14, w, 14);
+    noise(g, w, h, 36, "rgba(70,54,32,0.28)", 2);
+  });
+
+  const shinGrime = canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = "#e7e0d6";
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = "#c9b49a";
+    g.fillRect(0, h * 0.28, w, h * 0.72);
+    for (let i = 0; i < 16; i++) {
+      const x = 18 + ((i * 29) % 92);
+      g.fillStyle = i % 2 ? "rgba(96,70,42,0.72)" : "rgba(62,46,30,0.55)";
+      g.fillRect(x, 28 + (i % 5) * 6, 2 + (i % 4), h - 24);
+    }
+    g.fillStyle = "rgba(48,34,20,0.55)";
+    g.fillRect(0, h - 20, w, 20);
+    g.fillStyle = "rgba(120,96,70,0.35)";
+    g.beginPath();
+    g.ellipse(w * 0.62, h * 0.72, 16, 8, 0.4, 0, Math.PI * 2);
+    g.fill();
+    noise(g, w, h, 28, "rgba(40,28,16,0.4)", 2);
   });
 
   const joint = canvasTex(64, 64, (g, w, h) => {
@@ -449,6 +471,7 @@ export function makeTextures() {
   });
 
   const naveLight = bakeNaveLight();
+  const courtLight = bakeCourtLight();
 
   return {
     floor,
@@ -459,6 +482,7 @@ export function makeTextures() {
     snow,
     pearl,
     pearlWorn,
+    shinGrime,
     joint,
     gold,
     cloth,
@@ -466,6 +490,7 @@ export function makeTextures() {
     trench,
     nave,
     naveLight,
+    courtLight,
     trim,
     brushed,
     pearlNormal,
@@ -540,6 +565,80 @@ function bakeNaveLight() {
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.anisotropy = 4;
+  return tex;
+}
+
+/** Court floor lightmap. u west→east, v south wall→north door. Added on top of the realtime lights. */
+export function courtLightUv(x, z) {
+  return [(x + 16.05) / 32.1, (-0.25 - z) / 28.6 + 0.5];
+}
+
+function bakeCourtLight() {
+  const w = 256;
+  const h = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext("2d");
+  g.fillStyle = "rgb(18,16,14)";
+  g.fillRect(0, 0, w, h);
+  const toPx = (x, z) => {
+    const [u, v] = courtLightUv(x, z);
+    return [u * w, (1 - v) * h];
+  };
+  const footprint = (x, z, bw, bd) => {
+    const [x0, y0] = toPx(x - bw / 2, z - bd / 2);
+    const [x1, y1] = toPx(x + bw / 2, z + bd / 2);
+    const left = Math.min(x0, x1);
+    const top = Math.min(y0, y1);
+    g.fillRect(left, top, Math.abs(x1 - x0), Math.abs(y1 - y0));
+  };
+  g.fillStyle = "rgb(8,7,6)";
+  footprint(0, -12.2, 32, 4.2);
+  footprint(0, -2.2, 4.6, 0.7);
+  footprint(-1.75, 2.05, 1.8, 0.7);
+  footprint(1.75, 2.05, 1.8, 0.7);
+  footprint(-2.25, -0.05, 0.7, 3.6);
+  footprint(2.25, -0.05, 0.7, 3.6);
+  for (const [x, z] of [
+    [-8, -6],
+    [8, -6],
+    [-8, 6],
+    [8, 5.2],
+  ]) {
+    const [px, py] = toPx(x, z);
+    g.beginPath();
+    g.arc(px, py, 7, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalCompositeOperation = "lighter";
+  const blot = (x, z, radius, inner) => {
+    const [px, py] = toPx(x, z);
+    const rad = radius * w;
+    const grd = g.createRadialGradient(px, py, 2, px, py, rad);
+    grd.addColorStop(0, inner);
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grd;
+    g.beginPath();
+    g.arc(px, py, rad, 0, Math.PI * 2);
+    g.fill();
+  };
+  blot(0, 1.2, 0.26, "rgba(255,244,220,0.62)");
+  blot(0, 1.2, 0.12, "rgba(255,250,240,0.45)");
+  blot(0, -0.05, 0.07, "rgba(198,214,216,0.4)");
+  blot(-10, 8.2, 0.09, "rgba(255,176,90,0.55)");
+  blot(9.2, 8.4, 0.08, "rgba(255,176,90,0.5)");
+  blot(12.8, -5, 0.09, "rgba(255,168,70,0.6)");
+  blot(-6, -9.2, 0.07, "rgba(255,196,130,0.28)");
+  blot(4, -9.2, 0.07, "rgba(255,196,130,0.28)");
+  g.globalCompositeOperation = "source-over";
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.LinearSRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.anisotropy = 4;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;
 }
 

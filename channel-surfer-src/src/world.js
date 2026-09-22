@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { BLOCKS, HIJACK_SPAWNS, PICKUPS, VEIL_Z, activeColliders } from "./level.js";
-import { makeSign, makeTextures } from "./textures.js";
+import { courtLightUv, makeSign, makeTextures } from "./textures.js";
 
 function std(params) {
   return new THREE.MeshStandardMaterial({ envMapIntensity: 0.32, ...params });
@@ -197,6 +197,41 @@ export function createWorld(scene) {
     metalness: 0.05,
   });
   stone.normalScale.set(0.55, 0.55);
+  const courtStone = stone.clone();
+  courtStone.lightMap = textures.courtLight;
+  courtStone.lightMapIntensity = 0.48;
+  const courtTrim = materials.trim.clone();
+  courtTrim.lightMap = textures.courtLight;
+  courtTrim.lightMapIntensity = 0.42;
+  const courtBrass = materials.brass.clone();
+  courtBrass.lightMap = textures.courtLight;
+  courtBrass.lightMapIntensity = 0.28;
+  const courtWall = materials.wall.clone();
+  courtWall.lightMap = textures.courtLight;
+  courtWall.lightMapIntensity = 0.55;
+  courtWall.polygonOffset = true;
+  courtWall.polygonOffsetFactor = -1;
+  courtWall.polygonOffsetUnits = -1;
+  const courtFloorMat = materials.floor.clone();
+  courtFloorMat.lightMap = textures.courtLight;
+  courtFloorMat.lightMapIntensity = 0.64;
+  courtFloorMat.polygonOffset = true;
+  courtFloorMat.polygonOffsetFactor = -1;
+  courtFloorMat.polygonOffsetUnits = -1;
+  const courtUv = new THREE.Vector3();
+  function stampCourt(obj) {
+    obj.updateMatrixWorld(true);
+    const pos = obj.geometry.attributes.position;
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      courtUv.fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld);
+      const light = courtLightUv(courtUv.x, courtUv.z);
+      uv[i * 2] = light[0];
+      uv[i * 2 + 1] = light[1];
+    }
+    obj.geometry.setAttribute("uv2", new THREE.BufferAttribute(uv, 2));
+    return obj;
+  }
   function dress(geo, material, x, y, z) {
     if (material.normalMap) tangents(geo);
     const obj = new THREE.Mesh(geo, material);
@@ -207,14 +242,22 @@ export function createWorld(scene) {
     return obj;
   }
   function curb(x, y, z, w, h, d) {
-    dress(new THREE.BoxGeometry(w, h * 0.78, d * 0.92), stone, x, y - h * 0.08, z);
-    dress(new THREE.BoxGeometry(w * 1.04, h * 0.18, d * 1.08), materials.trim, x, y + h * 0.4, z);
+    stampCourt(dress(new THREE.BoxGeometry(w, h * 0.78, d * 0.92), courtStone, x, y - h * 0.08, z));
+    stampCourt(dress(new THREE.BoxGeometry(w * 1.04, h * 0.18, d * 1.08), courtTrim, x, y + h * 0.4, z));
   }
   curb(0, 0.4, -2.2, 4.5, 0.8, 0.5);
   curb(-1.75, 0.4, 2.05, 1.7, 0.8, 0.5);
   curb(1.75, 0.4, 2.05, 1.7, 0.8, 0.5);
   curb(-2.25, 0.4, -0.05, 0.5, 0.8, 3.55);
   curb(2.25, 0.4, -0.05, 0.5, 0.8, 3.55);
+  const bowlMat = std({
+    map: textures.trim,
+    roughness: 0.55,
+    metalness: 0.18,
+    envMapIntensity: 0.45,
+    lightMap: textures.courtLight,
+    lightMapIntensity: 0.5,
+  });
   const bowl = dress(
     new THREE.LatheGeometry(
       [
@@ -227,26 +270,69 @@ export function createWorld(scene) {
       ],
       32
     ),
-    std({ map: textures.trim, roughness: 0.55, metalness: 0.18, envMapIntensity: 0.45 }),
+    bowlMat,
     0,
     0.02,
     -0.05
   );
   bowl.castShadow = true;
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.28, 0.045, 8, 28), materials.brass);
+  stampCourt(bowl);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.28, 0.045, 8, 28), courtBrass);
   lip.rotation.x = Math.PI / 2;
   lip.position.set(0, 0.36, -0.05);
   lip.castShadow = true;
   scene.add(lip);
-  const spout = dress(new THREE.CylinderGeometry(0.06, 0.09, 0.34, 12), materials.brass, 0, 0.22, -0.05);
-  const water = new THREE.Mesh(
-    new THREE.CircleGeometry(1.05, 28),
-    std({ color: 0x1e2c30, roughness: 0.08, metalness: 0.62, envMapIntensity: 0.9 })
-  );
+  stampCourt(lip);
+  stampCourt(dress(new THREE.CylinderGeometry(0.06, 0.09, 0.34, 12), courtBrass, 0, 0.22, -0.05));
+  const waterMat = std({
+    color: 0x1e2c30,
+    roughness: 0.08,
+    metalness: 0.62,
+    envMapIntensity: 0.9,
+    lightMap: textures.courtLight,
+    lightMapIntensity: 0.4,
+  });
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.05, 28), waterMat);
   water.rotation.x = -Math.PI / 2;
   water.position.set(0, 0.16, -0.05);
   water.receiveShadow = true;
   scene.add(water);
+  stampCourt(water);
+  const courtFloor = new THREE.Mesh(new THREE.PlaneGeometry(32.1, 28.6), courtFloorMat);
+  courtFloor.rotation.x = -Math.PI / 2;
+  courtFloor.position.set(0, 0.016, -0.25);
+  courtFloor.receiveShadow = true;
+  courtFloor.castShadow = false;
+  scene.add(courtFloor);
+  stampCourt(courtFloor);
+  if (courtFloor.geometry.attributes.tangent == null && courtFloorMat.normalMap) tangents(courtFloor.geometry);
+  function addCourtWall(geo, x, y, z, ry, tileX, tileY) {
+    const wall = new THREE.Mesh(geo, courtWall);
+    wall.position.set(x, y, z);
+    wall.rotation.y = ry;
+    wall.castShadow = false;
+    wall.receiveShadow = true;
+    scene.add(wall);
+    stampCourt(wall);
+    const uv = wall.geometry.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * tileX, uv.getY(i) * tileY);
+    uv.needsUpdate = true;
+    return wall;
+  }
+  addCourtWall(new THREE.PlaneGeometry(28.4, 6.3), -15.95, 3.25, -0.25, Math.PI / 2, 6, 2);
+  addCourtWall(new THREE.PlaneGeometry(28.4, 6.3), 15.95, 3.25, -0.25, -Math.PI / 2, 6, 2);
+  addCourtWall(new THREE.PlaneGeometry(31.6, 6.3), 0, 3.25, 13.95, Math.PI, 8, 2);
+  addCourtWall(new THREE.PlaneGeometry(14, 6.3), -8.9, 3.25, -14.05, 0, 4, 2);
+  addCourtWall(new THREE.PlaneGeometry(14, 6.3), 8.9, 3.25, -14.05, 0, 4, 2);
+  const skylight = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.4, 8.2),
+    new THREE.MeshBasicMaterial({ color: 0xfff3e2 })
+  );
+  skylight.rotation.x = Math.PI / 2;
+  skylight.position.set(0, 7.12, 1.2);
+  skylight.castShadow = false;
+  skylight.receiveShadow = false;
+  scene.add(skylight);
 
   const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 0.12, 12), materials.brass);
   dish.position.set(0, 4.28, -2.15);
@@ -749,5 +835,44 @@ export function bakeAisleProbe(renderer, pmrem) {
   const halo = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.06, 8, 24), new THREE.MeshBasicMaterial({ color: 0xe6c56a }));
   halo.position.set(0, 2.2 - origin.y, -26.55 - origin.z);
   probe.add(halo);
+  return pmrem.fromScene(probe, 0.04).texture;
+}
+
+/** Cubemap from the mall court so visors reflect the skylight and fountain. No cyan. */
+export function bakeCourtProbe(renderer, pmrem) {
+  const probe = new THREE.Scene();
+  probe.background = new THREE.Color(0xc8bfb2);
+  const room = new THREE.Mesh(
+    new THREE.BoxGeometry(34, 12, 30),
+    new THREE.MeshBasicMaterial({ color: 0xc8bfb2, side: THREE.BackSide })
+  );
+  probe.add(room);
+  const origin = new THREE.Vector3(0, 1.55, 0.2);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(34, 30), new THREE.MeshBasicMaterial({ color: 0x6a6358 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -origin.y;
+  probe.add(floor);
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(8, 10), new THREE.MeshBasicMaterial({ color: 0xfff6e8 }));
+  sky.rotation.x = Math.PI / 2;
+  sky.position.set(0, 6.9 - origin.y, 1.2 - origin.z);
+  probe.add(sky);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.15, 20), new THREE.MeshBasicMaterial({ color: 0x1e2c30 }));
+  water.rotation.x = -Math.PI / 2;
+  water.position.set(0, 0.2 - origin.y, -0.05 - origin.z);
+  probe.add(water);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.08, 8, 24), new THREE.MeshBasicMaterial({ color: 0xc6a15a }));
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(0, 0.4 - origin.y, -0.05 - origin.z);
+  probe.add(ring);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xffb14a });
+  for (const [x, y, z] of [
+    [-10, 2.3, 8.2],
+    [9.2, 2.3, 8.4],
+    [13.2, 1.9, -5],
+  ]) {
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), glowMat);
+    glow.position.set(x - origin.x, y - origin.y, z - origin.z);
+    probe.add(glow);
+  }
   return pmrem.fromScene(probe, 0.04).texture;
 }

@@ -2,6 +2,45 @@ import * as THREE from "three";
 import { PRIEST_SPAWN, createChapelEnemies, createEnemies } from "./level.js";
 import { geos, mesh } from "./meshkit.js";
 
+const visorMats = [];
+let currentProbeMix = 1;
+
+const PROBE_CHUNK = THREE.ShaderChunk.envmap_physical_pars_fragment
+  .replace(
+    "vec4 envMapColor = textureCubeUV( envMap, envMapRotation * worldNormal, 1.0 );",
+    "vec4 envMapColor = sampleProbe( envMapRotation * worldNormal, 1.0 );"
+  )
+  .replace(
+    "vec4 envMapColor = textureCubeUV( envMap, envMapRotation * reflectVec, roughness );",
+    "vec4 envMapColor = sampleProbe( envMapRotation * reflectVec, roughness );"
+  );
+
+function attachProbe(material, aisleMap, courtMap) {
+  material.envMap = aisleMap || null;
+  material.envMapIntensity = aisleMap ? 1.15 : 0.72;
+  if (!aisleMap || !courtMap) return;
+  material.customProgramCacheKey = () => "visor-dual-probe";
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.courtMap = { value: courtMap };
+    shader.uniforms.probeMix = { value: currentProbeMix };
+    material.userData.probeShader = shader;
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <envmap_physical_pars_fragment>",
+      `#ifdef USE_ENVMAP
+uniform sampler2D courtMap;
+uniform float probeMix;
+vec4 sampleProbe(vec3 dir, float roughness) {
+  if (probeMix >= 0.999) return textureCubeUV(courtMap, dir, roughness);
+  if (probeMix <= 0.001) return textureCubeUV(envMap, dir, roughness);
+  return mix(textureCubeUV(envMap, dir, roughness), textureCubeUV(courtMap, dir, roughness), probeMix);
+}
+#endif
+${PROBE_CHUNK}`
+    );
+  };
+  visorMats.push(material);
+}
+
 let contactMat = null;
 function contactBlob(radius) {
   if (!contactMat) {
@@ -35,7 +74,23 @@ function mark(material, rest = 0x000000, restI = 0) {
   return material;
 }
 
-function palette(textures, envMap) {
+function shinMat(textures, shift) {
+  const map = textures.shinGrime.clone();
+  map.wrapS = THREE.RepeatWrapping;
+  map.offset.x = shift;
+  return mark(
+    new THREE.MeshStandardMaterial({
+      map,
+      roughness: 0.96,
+      metalness: 0.02,
+      envMapIntensity: 0.14,
+    })
+  );
+}
+
+function palette(textures, probes) {
+  const aisle = probes?.aisle || null;
+  const court = probes?.court || null;
   const pearl = mark(
     new THREE.MeshPhysicalMaterial({
       map: textures.pearl,
@@ -78,11 +133,10 @@ function palette(textures, envMap) {
       clearcoatRoughness: 0.03,
       iridescence: 0,
       ior: 1.55,
-      envMapIntensity: envMap ? 1.15 : 0.72,
       reflectivity: 1,
-      envMap: envMap || null,
     })
   );
+  attachProbe(visor, aisle, court);
   visor.polygonOffset = true;
   visor.polygonOffsetFactor = -2;
   visor.polygonOffsetUnits = -2;
@@ -114,7 +168,9 @@ function palette(textures, envMap) {
   );
   gold.normalScale.set(0.35, 0.35);
   const amber = new THREE.MeshBasicMaterial({ color: 0xffb14a });
-  return { pearl, worn, joint, visor, cloth, gold, amber };
+  const grime = shinMat(textures, 0);
+  const grimeR = shinMat(textures, 0.17);
+  return { pearl, worn, joint, visor, cloth, gold, amber, grime, grimeR };
 }
 
 function jointSphere(material, radius, x, y, z) {
@@ -138,7 +194,7 @@ function paint(list, amount, tint = 0xfff6ee) {
 function buildTessera(textures, options = {}) {
   const group = new THREE.Group();
   const g = geos();
-  const mat = palette(textures, options.envMap);
+  const mat = palette(textures, options.probes);
   const parts = [];
 
   const torso = mesh(g.torso, mat.pearl);
@@ -156,8 +212,13 @@ function buildTessera(textures, options = {}) {
   weak.visible = false;
   weak.castShadow = false;
   head.add(helmet, visor, sensor, weak);
+  const chest = mesh(new THREE.BoxGeometry(0.32, 0.22, 0.028), mat.pearl, 0, 1.3, 0.22);
+  chest.castShadow = false;
+  const hips = mesh(new THREE.SphereGeometry(0.14, 14, 10), mat.pearl, 0, 0.74, 0);
+  hips.scale.set(1.65, 0.48, 1.05);
+  hips.castShadow = false;
 
-  parts.push(torso, belt, collar, head);
+  parts.push(torso, belt, collar, head, chest, hips);
 
   function limb(side, shoulder) {
     const pivot = new THREE.Group();
@@ -174,7 +235,17 @@ function buildTessera(textures, options = {}) {
       pivot.add(jointSphere(mat.joint, 0.058, 0, 0, 0));
       pivot.add(mesh(g.thigh, mat.pearl, 0, -0.2, 0));
       pivot.add(jointSphere(mat.joint, 0.048, 0, -0.38, 0));
-      pivot.add(mesh(g.shin, mat.worn, 0, -0.56, 0));
+      const knee = mesh(new THREE.SphereGeometry(0.046, 10, 8), mat.pearl, 0, -0.38, 0.042);
+      knee.scale.set(1.05, 0.8, 0.5);
+      knee.castShadow = false;
+      pivot.add(knee);
+      const shin = mesh(g.shin, mat.worn, 0, -0.56, 0);
+      shin.rotation.y = Math.PI;
+      shin.scale.set(1.12, 1, 0.86);
+      pivot.add(shin);
+      const plate = mesh(new THREE.BoxGeometry(0.078, 0.24, 0.016), side < 0 ? mat.grime : mat.grimeR, 0, -0.58, 0.058);
+      plate.castShadow = false;
+      pivot.add(plate);
       const foot = mesh(g.foot, mat.worn, 0, -0.76, 0.03);
       pivot.add(foot);
     }
@@ -253,14 +324,14 @@ function buildTessera(textures, options = {}) {
     muzzle,
     shadow,
     cloth,
-    flashMats: [mat.pearl, mat.worn, mat.joint, mat.visor, mat.cloth, mat.gold],
+    flashMats: [mat.pearl, mat.worn, mat.joint, mat.visor, mat.cloth, mat.gold, mat.grime, mat.grimeR],
     flash: 0,
   };
 }
 
-function buildPriest(textures, envMap) {
+function buildPriest(textures, probes) {
   const group = new THREE.Group();
-  const mat = palette(textures, envMap);
+  const mat = palette(textures, probes);
   const g = geos();
 
   const robe = motionMesh(sculptCloth(g.robe, 8, 0.04), mat.cloth);
@@ -302,8 +373,17 @@ function buildPriest(textures, envMap) {
   hem.rotation.x = Math.PI / 2;
   const belt = mesh(new THREE.TorusGeometry(0.35, 0.02, 8, 28), mat.gold, 0, 1.12, 0);
   belt.rotation.x = Math.PI / 2;
-  const stole = mesh(new THREE.BoxGeometry(0.14, 1.05, 0.04), mat.gold, 0, 1.02, 0.22);
-  const pendant = mesh(new THREE.SphereGeometry(0.045, 12, 10), mat.gold, 0, 0.7, 0.26);
+  const bodiceMat = mat.cloth.clone();
+  bodiceMat.side = THREE.DoubleSide;
+  const bodice = mesh(
+    new THREE.CylinderGeometry(0.36, 0.42, 0.78, 18, 1, true, -0.55, 1.1),
+    bodiceMat,
+    0,
+    1.0,
+    0.04
+  );
+  const stole = mesh(new THREE.BoxGeometry(0.1, 0.86, 0.02), mat.gold, 0, 1.02, 0.46);
+  const pendant = mesh(new THREE.SphereGeometry(0.045, 12, 10), mat.gold, 0, 0.72, 0.48);
 
   const head = new THREE.Group();
   head.position.set(0, 2.05, 0);
@@ -353,14 +433,14 @@ function buildPriest(textures, envMap) {
   const right = raisedArm(1);
 
   for (const y of [1.4, 1.2, 1.0]) {
-    const chain = mesh(new THREE.TorusGeometry(0.2, 0.01, 8, 22, Math.PI * 0.9), mat.gold, 0, y, 0.08);
+    const chain = mesh(new THREE.TorusGeometry(0.2, 0.01, 8, 22, Math.PI * 0.9), mat.gold, 0, y, 0.4);
     chain.rotation.x = Math.PI / 2;
     group.add(chain);
   }
 
   const shadow = contactBlob(0.9);
 
-  group.add(robe, cape, mantle, cowl, hem, belt, stole, pendant, head, halo, left.pivot, right.pivot, shadow);
+  group.add(robe, cape, mantle, cowl, hem, belt, bodice, stole, pendant, head, halo, left.pivot, right.pivot, shadow);
   group.position.set(PRIEST_SPAWN.x, 0, PRIEST_SPAWN.z);
   stampTangents(group);
   return {
@@ -376,7 +456,7 @@ function buildPriest(textures, envMap) {
     lDigits: left.digits,
     rDigits: right.digits,
     cloths: [robe, cape, mantle],
-    flashMats: [mat.pearl, mat.cloth, mat.visor, mat.gold],
+    flashMats: [mat.pearl, mat.cloth, bodiceMat, mat.visor, mat.gold],
     flash: 0,
   };
 }
@@ -510,11 +590,12 @@ function stampTangents(group) {
   });
 }
 
-export function createActors(scene, textures, envMap) {
+export function createActors(scene, textures, probes) {
+  visorMats.length = 0;
   const records = new Map();
   const chapelIds = new Set(createChapelEnemies().map((enemy) => enemy.id));
   for (const enemy of [...createEnemies(), ...createChapelEnemies()]) {
-    const built = buildTessera(textures, { vestment: chapelIds.has(enemy.id), envMap });
+    const built = buildTessera(textures, { vestment: chapelIds.has(enemy.id), probes });
     built.group.position.set(enemy.x, 0, enemy.z);
     built.group.visible = enemy.visible;
     built.death = 0;
@@ -526,7 +607,7 @@ export function createActors(scene, textures, envMap) {
     records.set(enemy.id, built);
   }
 
-  const priestRec = buildPriest(textures, envMap);
+  const priestRec = buildPriest(textures, probes);
   priestRec.died = false;
   priestRec.death = 0;
   priestRec.pose = 0;
@@ -544,6 +625,13 @@ export function createActors(scene, textures, envMap) {
   }
 
   return {
+    setProbeBlend(z) {
+      currentProbeMix = Math.min(1, Math.max(0, (z - -17) / 5));
+      for (const material of visorMats) {
+        const shader = material.userData.probeShader;
+        if (shader) shader.uniforms.probeMix.value = currentProbeMix;
+      }
+    },
     reset(enemies) {
       for (const enemy of enemies) {
         const rec = records.get(enemy.id);

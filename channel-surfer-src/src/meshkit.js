@@ -104,21 +104,21 @@ export function geos() {
   if (shared) return shared;
   const handParts = [];
   const palm = new THREE.SphereGeometry(0.046, 12, 10);
-  palm.scale(1.28, 0.7, 1.35);
+  palm.scale(1.5, 0.75, 1.45);
   palm.translate(0, -0.575, 0.02);
   handParts.push(palm);
   for (let i = 0; i < 4; i++) {
-    const x = -0.032 + i * 0.021;
-    const len = 0.036 - Math.abs(i - 1.4) * 0.004;
-    const curl = 0.22 + (i === 0 || i === 3 ? 0.1 : 0);
-    const base = new THREE.CylinderGeometry(0.008, 0.01, len, 6);
+    const x = -0.042 + i * 0.028;
+    const len = 0.05 - Math.abs(i - 1.5) * 0.006;
+    const curl = 0.28 + (i === 0 || i === 3 ? 0.12 : 0);
+    const base = new THREE.CylinderGeometry(0.011, 0.013, len, 6);
     base.translate(0, -len * 0.5, 0);
-    base.rotateX(0.12);
-    base.translate(x, -0.615, 0.042);
-    const tip = new THREE.CylinderGeometry(0.006, 0.008, len * 0.85, 6);
-    tip.translate(0, -len * 0.4, 0);
+    base.rotateX(0.16);
+    base.translate(x, -0.62, 0.05);
+    const tip = new THREE.CylinderGeometry(0.008, 0.011, len * 0.82, 6);
+    tip.translate(0, -len * 0.38, 0);
     tip.rotateX(curl);
-    tip.translate(x, -0.615 - len * 0.72, 0.05);
+    tip.translate(x, -0.62 - len * 0.7, 0.055);
     handParts.push(base, tip);
   }
   const thumb = new THREE.CylinderGeometry(0.009, 0.011, 0.04, 6);

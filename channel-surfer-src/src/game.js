@@ -40,7 +40,7 @@ import {
   movementSpeed,
 } from "./sim.js";
 import { createViewmodel } from "./viewmodel.js";
-import { bakeAisleProbe, createWorld } from "./world.js";
+import { bakeAisleProbe, bakeCourtProbe, createWorld } from "./world.js";
 
 const BEST_KEY = "channel-surfer-best";
 const LABEL = { LIVE: "LIVE", STATIC: "STATIC", DEAD_AIR: "DEAD AIR" };
@@ -95,6 +95,7 @@ export function createGame(canvas, audio) {
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.012).texture;
   const aisleEnv = bakeAisleProbe(renderer, pmrem);
+  const courtEnv = bakeCourtProbe(renderer, pmrem);
   pmrem.dispose();
   const camera = new THREE.PerspectiveCamera(72, 960 / 780, 0.08, 90);
   scene.add(camera);
@@ -107,7 +108,7 @@ export function createGame(canvas, audio) {
   ssao.kernelRadius = 0.18;
   ssao.minDistance = 0.001;
   ssao.maxDistance = 0.06;
-  const actors = createActors(scene, world.textures, aisleEnv);
+  const actors = createActors(scene, world.textures, { aisle: aisleEnv, court: courtEnv });
   const viewmodel = createViewmodel(camera, world.textures);
 
   const SPARK_N = 72;
@@ -916,6 +917,7 @@ export function createGame(canvas, audio) {
         hot: mode === "play" && time < retuneUntil,
       });
       world.update(clock, state.channel, player);
+      actors.setProbeBlend(player.z);
       actors.sync(enemies, step, clock, state.channel);
       actors.syncPriest(priest, step, clock, mode === "title" ? "LIVE" : state.channel);
       actors.syncBolts(bolts);

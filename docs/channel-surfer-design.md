@@ -109,16 +109,16 @@ Clearing him drops the choir, pays Signal, and opens the wing-clear card. Best t
 
 ## Presentation
 
-Phase 3.3 keeps the two rooms. Smooth shells, ceramic clearcoat, black glass, one 1024 shadow that follows the player, contact blobs, and a half-resolution occlusion pass. The nave also has a baked candle lightmap, and the visors use a reflection probe rendered from the aisle. No downloaded model packs.
+Phase 3.4 keeps the two rooms. Smooth shells, ceramic clearcoat, black glass, one 1024 shadow that follows the player, contact blobs, and a half-resolution occlusion pass. The nave has a baked candle lightmap. The court has a baked skylight and fountain lightmap. Visors blend an aisle probe and a court probe as you walk between the rooms. No downloaded model packs.
 
-- CRT viewmodel: wood-cased remote with grain and roughness, plastic buttons, trench cuffs, leather gloves with two-segment fingers. The fingers flex on a shot and on a channel change, and they breathe while you idle. Bob follows the walk and the strafe, and a channel change kicks the remote. LIVE muzzle flash is a cyan cross at the lens. The IR lens is the only cyan light on the body.
-- Court Tessera are smooth humanoids: lathe helmet and torso, wraparound black glass visor, black joints, worn shins, a small amber muzzle. No badges and no cyan. Choir Tessera keep that kit and add a white tabard, mantle, and gold stole so the legs stay readable. A soft contact blob sits under each one, on top of the sun shadow.
+- CRT viewmodel: wood-cased remote with rounded end caps, a side grip, grain and roughness, plastic buttons, trench cuffs, leather gloves with two-segment fingers. The fingers flex on a shot and on a channel change, and they breathe while you idle. Bob follows the walk and the strafe, and a channel change kicks the remote. LIVE muzzle flash is a cyan cross at the lens. The IR lens is the only cyan light on the body.
+- Court Tessera are smooth humanoids: lathe helmet and torso, a chest plate and hip shell, wraparound black glass visor, black joints, a knee cap, and a shin plate whose dirt texture is parented to the leg. No badges and no cyan. Choir Tessera keep that kit and add a white tabard, mantle, and gold stole so the legs stay readable. A soft contact blob sits under each one, on top of the sun shadow. The enemy hands are a static mesh with separated fingers. They are not skinned.
 - Hit flash whites the shell out for a short beat without changing hurt time. Deaths tip the kit over, limbs go limp, and the shell flashes before it drops. Amber bolts still have a plant-and-fire tell. Impacts are sparks plus a short additive flash. Retuned shots stay the cyan exception.
-- The priest is the same materials at boss scale: pearl helmet, a taller black glass visor, a lathe robe, a back cape, gold hem and chains, raised sleeves, and open pearl gloves with spread fingers. The robe, cape, mantle, and choir skirts sway with two morph targets (side to side, and a forward billow). The fingers open during a rite, curl on the windup, and idle with a small flex. Amber shows on the palms only while he is winding up or in a rite, and on the visor seam when LIVE can break it. The halo flares when STATIC can hit it. No cyan on the priest. The visor samples an aisle probe, so the glass mirrors candles and the nave.
+- The priest is the same materials at boss scale: pearl helmet, a taller black glass visor, a lathe robe with a front bodice, a back cape, gold hem, stole, and chains, raised sleeves, and open pearl gloves with spread fingers. The robe, cape, mantle, and choir skirts sway with two morph targets (side to side, and a forward billow). The fingers open during a rite, curl on the windup, and idle with a small flex. Amber shows on the palms only while he is winding up or in a rite, and on the visor seam when LIVE can break it. The halo flares when STATIC can hit it. No cyan on the priest. The visor blends two probes: the court probe (skylight, fountain, shop glow) when you stand in the mall, the aisle probe (candles, nave) when you stand in the wing, and a mix across the doorway from z=-17 to z=-12.
 - Hurt spheres are unchanged: Tessera head `y+1.62 r0.26` and body `y+0.98 r0.46`; priest head `2.05 r0.3`, body `1.2 r0.62`, halo `2.62 r0.42`. The shells were built to those volumes.
-- Court floor, walls, trim, and ceiling keep the tile atlases, with grout normals and roughness. The radio wing has a darker stone floor on top of the same slab. Pews are slatted seats with a curved back, the altar is a stepped stone plinth under a brass mensa, and the fountain is a lathed bowl. The PA horn is a lathed bell. Signage is still original KRCD copy. The aisle seal is a gold ring on stone and takes light.
-- Lighting is a warm key from the skylight, a warm unshadowed fill, and a lower hemisphere so the court stays readable. The shadow map is 1024 and recenters on the player in 4 meter steps, with a tighter frustum so nearby shadows stay sharp. A half-resolution occlusion pass darkens feet, pews, and the altar. On DEAD AIR that pass shrinks so the aisle stays readable. The nave floor, pews, altar, and inner walls also sample a baked lightmap: warm pools at the candles and the altar, darker under the pews. It is added to the realtime light. It is not a second shadow caster. Fog starts closer so the nave has depth. Grade is still a CSS treatment on the canvas. The HUD stays a CRT overlay.
-- Phase 3.4, not built: a court lightmap for the skylight and fountain, shin grime that follows the Tessera leg, and a second reflection probe for the mall court so the visor changes when you turn back toward the fountain. Still these two rooms.
+- Court floor, walls, trim, and ceiling keep the tile atlases, with grout normals and roughness. A court overlay plane, inner wall planes, and the fountain sample a baked lightmap: a skylight pool in the middle, darker under the mezzanine, the pillars, and the fountain curb, warm pools at the food hall, the booth, and the east window. An emissive skylight card sits in the ceiling so the pool has a source. The radio wing has a darker stone floor on top of the same slab. Pews are slatted seats with a curved back, the altar is a stepped stone plinth under a brass mensa, and the fountain is a lathed bowl. The PA horn is a lathed bell. Signage is still original KRCD copy. The aisle seal is a gold ring on stone and takes light.
+- Lighting is a warm key from the skylight, a warm unshadowed fill, and a lower hemisphere so the court stays readable. The shadow map is 1024 and recenters on the player in 4 meter steps, with a tighter frustum so nearby shadows stay sharp. A half-resolution occlusion pass darkens feet, pews, and the altar. On DEAD AIR that pass shrinks so the aisle stays readable. The nave floor, pews, altar, and inner walls sample a baked candle lightmap. Both lightmaps are added to the realtime light. Neither is a second shadow caster. Shin plates, chest plates, and knee caps do not cast shadows. Fog starts closer so the nave has depth. Grade is still a CSS treatment on the canvas. The HUD stays a CRT overlay.
+- Phase 3.5, not built: diminishing returns on another lighting pass. The leftover gap at 960×780 is close-range Tessera fingers (the court hands are still one static mesh) and heavier robe tailoring. Eric can also stop. Still these two rooms. Not weapons.
 - Audio is WebAudio: bolt, spread, dry click, channel ticks, impacts, a quiet carrier, plus a door, a rite chord, a break, a failed rite, and the PA squeal. DEAD AIR low-passes the bus. STATIC adds hiss.
 
 ## Build
@@ -152,13 +152,17 @@ Phase 3.1 realism on the two rooms: smooth Tessera and priest shells, glass viso
 
 Sharper visor reflections, ceramic clearcoat, half-resolution occlusion, a 1024 shadow map that follows the player, robe folds sculpted into the cloth, two-segment gloves, slatted pews, a stepped altar, a lathed fountain, and a lathed horn. Same combat numbers.
 
-### Phase 3.3 — this pass
+### Phase 3.3
 
 Cloth morphs on the robe, cape, and choir skirts. Priest and CRT fingers flex. A baked nave lightmap. An aisle reflection probe on the visors. Same combat numbers.
 
-### Phase 3.4 — not started
+### Phase 3.4 — this pass
 
-Court lightmap, leg grime, and a mall-court reflection probe. Not weapons, not new rooms.
+A baked court lightmap for the skylight and fountain. Shin grime parented to the Tessera leg. A court reflection probe blended with the aisle probe by where you stand. Chest, hip, knee, priest bodice, and a slightly less boxy remote. Same combat numbers.
+
+### Phase 3.5 — not started
+
+Close-range Tessera fingers and heavier robe tailoring, or stop. Another lightmap would be diminishing returns. Not weapons, not new rooms.
 
 ### Phase 4 — not started
 
