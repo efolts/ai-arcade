@@ -40,7 +40,7 @@ import {
   movementSpeed,
 } from "./sim.js";
 import { createViewmodel } from "./viewmodel.js";
-import { createWorld } from "./world.js";
+import { bakeAisleProbe, createWorld } from "./world.js";
 
 const BEST_KEY = "channel-surfer-best";
 const LABEL = { LIVE: "LIVE", STATIC: "STATIC", DEAD_AIR: "DEAD AIR" };
@@ -94,6 +94,7 @@ export function createGame(canvas, audio) {
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.012).texture;
+  const aisleEnv = bakeAisleProbe(renderer, pmrem);
   pmrem.dispose();
   const camera = new THREE.PerspectiveCamera(72, 960 / 780, 0.08, 90);
   scene.add(camera);
@@ -106,7 +107,7 @@ export function createGame(canvas, audio) {
   ssao.kernelRadius = 0.18;
   ssao.minDistance = 0.001;
   ssao.maxDistance = 0.06;
-  const actors = createActors(scene, world.textures);
+  const actors = createActors(scene, world.textures, aisleEnv);
   const viewmodel = createViewmodel(camera, world.textures);
 
   const SPARK_N = 72;

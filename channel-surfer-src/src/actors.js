@@ -35,7 +35,7 @@ function mark(material, rest = 0x000000, restI = 0) {
   return material;
 }
 
-function palette(textures) {
+function palette(textures, envMap) {
   const pearl = mark(
     new THREE.MeshPhysicalMaterial({
       map: textures.pearl,
@@ -78,8 +78,9 @@ function palette(textures) {
       clearcoatRoughness: 0.03,
       iridescence: 0,
       ior: 1.55,
-      envMapIntensity: 0.72,
+      envMapIntensity: envMap ? 1.15 : 0.72,
       reflectivity: 1,
+      envMap: envMap || null,
     })
   );
   visor.polygonOffset = true;
@@ -137,7 +138,7 @@ function paint(list, amount, tint = 0xfff6ee) {
 function buildTessera(textures, options = {}) {
   const group = new THREE.Group();
   const g = geos();
-  const mat = palette(textures);
+  const mat = palette(textures, options.envMap);
   const parts = [];
 
   const torso = mesh(g.torso, mat.pearl);
@@ -202,6 +203,7 @@ function buildTessera(textures, options = {}) {
 
   group.add(...parts, lLeg, rLeg, lArm, rArm, shadow);
 
+  let cloth = null;
   if (options.vestment) {
     const tabard = mesh(g.tabard, mat.cloth, 0, 0.92, 0.16);
     const back = mesh(new THREE.BoxGeometry(0.28, 0.42, 0.04), mat.cloth, 0, 0.95, -0.14);
@@ -216,7 +218,7 @@ function buildTessera(textures, options = {}) {
       1.4,
       0
     );
-    const skirt = mesh(
+    const skirt = motionMesh(
       sculptCloth(
         new THREE.LatheGeometry(
           [
@@ -236,6 +238,7 @@ function buildTessera(textures, options = {}) {
       0.06,
       0
     );
+    cloth = skirt;
     group.add(tabard, back, stole, mantle, skirt);
   }
   stampTangents(group);
@@ -249,18 +252,19 @@ function buildTessera(textures, options = {}) {
     rArm,
     muzzle,
     shadow,
+    cloth,
     flashMats: [mat.pearl, mat.worn, mat.joint, mat.visor, mat.cloth, mat.gold],
     flash: 0,
   };
 }
 
-function buildPriest(textures) {
+function buildPriest(textures, envMap) {
   const group = new THREE.Group();
-  const mat = palette(textures);
+  const mat = palette(textures, envMap);
   const g = geos();
 
-  const robe = mesh(sculptCloth(g.robe, 8, 0.04), mat.cloth);
-  const mantle = mesh(
+  const robe = motionMesh(sculptCloth(g.robe, 8, 0.04), mat.cloth);
+  const mantle = motionMesh(
     new THREE.LatheGeometry(
       [
         new THREE.Vector2(0.22, 0),
@@ -274,6 +278,15 @@ function buildPriest(textures) {
     0,
     1.46,
     0
+  );
+  const capeMat = mat.cloth.clone();
+  capeMat.side = THREE.DoubleSide;
+  const cape = motionMesh(
+    new THREE.CylinderGeometry(0.3, 0.56, 1.35, 18, 1, true, Math.PI - 0.9, 1.8),
+    capeMat,
+    0,
+    0.78,
+    -0.06
   );
   const cowl = mesh(
     new THREE.LatheGeometry(
@@ -331,14 +344,10 @@ function buildPriest(textures) {
     const sleeve = mesh(new THREE.CylinderGeometry(0.075, 0.13, 0.52, 14), mat.cloth, 0, 0.26, 0);
     const cuff = mesh(new THREE.TorusGeometry(0.078, 0.016, 8, 16), mat.gold, 0, 0.5, 0);
     cuff.rotation.x = Math.PI / 2;
-    const glove = mesh(g.hand, mat.pearl, 0, -0.04, 0.02);
-    glove.rotation.z = Math.PI;
-    glove.scale.setScalar(1.45);
-    const palm = mesh(new THREE.BoxGeometry(0.06, 0.045, 0.018), mat.amber, 0, 0.62, 0.08);
-    palm.castShadow = false;
-    pivot.add(sleeve, cuff, glove, palm);
+    const glove = openGlove(mat.pearl, mat.amber, side);
+    pivot.add(sleeve, cuff, glove.rig);
     pivot.position.set(side * 0.42, 1.48, 0.02);
-    return { pivot, hand: palm };
+    return { pivot, hand: glove.amber, digits: glove.digits };
   }
   const left = raisedArm(-1);
   const right = raisedArm(1);
@@ -351,7 +360,7 @@ function buildPriest(textures) {
 
   const shadow = contactBlob(0.9);
 
-  group.add(robe, mantle, cowl, hem, belt, stole, pendant, head, halo, left.pivot, right.pivot, shadow);
+  group.add(robe, cape, mantle, cowl, hem, belt, stole, pendant, head, halo, left.pivot, right.pivot, shadow);
   group.position.set(PRIEST_SPAWN.x, 0, PRIEST_SPAWN.z);
   stampTangents(group);
   return {
@@ -364,9 +373,108 @@ function buildPriest(textures) {
     rArm: right.pivot,
     lHand: left.hand,
     rHand: right.hand,
+    lDigits: left.digits,
+    rDigits: right.digits,
+    cloths: [robe, cape, mantle],
     flashMats: [mat.pearl, mat.cloth, mat.visor, mat.gold],
     flash: 0,
   };
+}
+
+function openGlove(pearl, amber, side) {
+  const rig = new THREE.Group();
+  rig.position.set(0, 0.58, 0.1);
+  const palmGeo = new THREE.SphereGeometry(0.055, 12, 8);
+  palmGeo.scale(1.7, 1.15, 0.4);
+  const palm = mesh(palmGeo, pearl);
+  palm.castShadow = false;
+  rig.add(palm);
+  const digits = [];
+  const spreads = [-0.058, -0.02, 0.02, 0.058];
+  const lengths = [0.09, 0.11, 0.1, 0.078];
+  for (let i = 0; i < 4; i++) {
+    const knuckle = new THREE.Group();
+    knuckle.position.set(spreads[i], 0.04, 0.02);
+    const len = lengths[i];
+    const base = mesh(new THREE.CylinderGeometry(0.012, 0.014, len, 6), pearl, 0, len * 0.48, 0);
+    base.castShadow = false;
+    const tipPivot = new THREE.Group();
+    tipPivot.position.y = len * 0.9;
+    const tipLen = len * 0.7;
+    const tip = mesh(new THREE.CylinderGeometry(0.009, 0.012, tipLen, 6), pearl, 0, tipLen * 0.46, 0);
+    tip.castShadow = false;
+    tipPivot.add(tip);
+    knuckle.add(base, tipPivot);
+    rig.add(knuckle);
+    digits.push({ knuckle, tip: tipPivot });
+  }
+  const thumb = new THREE.Group();
+  thumb.position.set(side * 0.078, -0.006, 0.02);
+  thumb.rotation.z = side * 0.85;
+  const thumbBase = mesh(new THREE.CylinderGeometry(0.01, 0.012, 0.05, 6), pearl, 0, 0.028, 0);
+  thumbBase.castShadow = false;
+  const thumbTip = new THREE.Group();
+  thumbTip.position.y = 0.05;
+  const thumbTipMesh = mesh(new THREE.CylinderGeometry(0.007, 0.01, 0.032, 6), pearl, 0, 0.016, 0);
+  thumbTipMesh.castShadow = false;
+  thumbTip.add(thumbTipMesh);
+  thumb.add(thumbBase, thumbTip);
+  rig.add(thumb);
+  digits.push({ knuckle: thumb, tip: thumbTip });
+  const pad = mesh(new THREE.BoxGeometry(0.09, 0.07, 0.014), amber, 0, 0.01, 0.04);
+  pad.castShadow = false;
+  rig.add(pad);
+  return { rig, digits, amber: pad };
+}
+
+function flexHand(digits, amount) {
+  for (let i = 0; i < digits.length; i++) {
+    const digit = digits[i];
+    const bias = i === digits.length - 1 ? 0.55 : 1;
+    digit.knuckle.rotation.x = -amount * bias;
+    digit.tip.rotation.x = -amount * 0.8 * bias;
+  }
+}
+
+function swayCloth(meshes, time, phase = 0, scale = 1) {
+  if (!meshes) return;
+  const list = Array.isArray(meshes) ? meshes : [meshes];
+  for (const obj of list) {
+    if (!obj?.morphTargetInfluences) continue;
+    obj.morphTargetInfluences[0] = Math.sin(time * 0.75 + phase) * 0.6 * scale;
+    obj.morphTargetInfluences[1] = Math.sin(time * 0.5 + phase + 0.8) * 0.4 * scale;
+  }
+}
+
+function clothMotion(geo) {
+  const pos = geo.attributes.position;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const span = Math.max(0.001, maxY - minY);
+  const sway = new Float32Array(pos.count * 3);
+  const billow = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const hem = Math.pow(Math.max(0, (maxY - pos.getY(i)) / span), 1.35);
+    sway[i * 3] = hem * 0.08;
+    billow[i * 3 + 2] = hem * 0.055;
+  }
+  geo.morphAttributes.position = [
+    new THREE.Float32BufferAttribute(sway, 3),
+    new THREE.Float32BufferAttribute(billow, 3),
+  ];
+  return geo;
+}
+
+function motionMesh(geo, material, x = 0, y = 0, z = 0) {
+  clothMotion(geo);
+  const obj = mesh(geo, material, x, y, z);
+  obj.updateMorphTargets();
+  return obj;
 }
 
 function sculptCloth(geo, waves = 7, amp = 0.02) {
@@ -402,11 +510,11 @@ function stampTangents(group) {
   });
 }
 
-export function createActors(scene, textures) {
+export function createActors(scene, textures, envMap) {
   const records = new Map();
   const chapelIds = new Set(createChapelEnemies().map((enemy) => enemy.id));
   for (const enemy of [...createEnemies(), ...createChapelEnemies()]) {
-    const built = buildTessera(textures, { vestment: chapelIds.has(enemy.id) });
+    const built = buildTessera(textures, { vestment: chapelIds.has(enemy.id), envMap });
     built.group.position.set(enemy.x, 0, enemy.z);
     built.group.visible = enemy.visible;
     built.death = 0;
@@ -418,7 +526,7 @@ export function createActors(scene, textures) {
     records.set(enemy.id, built);
   }
 
-  const priestRec = buildPriest(textures);
+  const priestRec = buildPriest(textures, envMap);
   priestRec.died = false;
   priestRec.death = 0;
   priestRec.pose = 0;
@@ -487,6 +595,8 @@ export function createActors(scene, textures) {
         priestRec.seam.visible = false;
         priestRec.lArm.rotation.x = 0.9;
         priestRec.rArm.rotation.x = 0.7;
+        flexHand(priestRec.lDigits, 0.85);
+        flexHand(priestRec.rDigits, 0.75);
         paint(priestRec.flashMats, k < 0.45 ? (1 - k / 0.45) * 2.4 : 0);
         return;
       }
@@ -504,6 +614,10 @@ export function createActors(scene, textures) {
       const reach = priest.windup > 0 ? -0.85 : rite ? -0.25 : -0.12;
       priestRec.lArm.rotation.set(reach, 0, splay);
       priestRec.rArm.rotation.set(reach, 0, -splay);
+      swayCloth(priestRec.cloths, time, 0.2, 1);
+      const curl = priest.windup > 0 ? 0.62 : rite ? 0.1 + Math.sin(time * 2.2) * 0.04 : 0.2 + Math.sin(time * 1.35) * 0.07;
+      flexHand(priestRec.lDigits, curl);
+      flexHand(priestRec.rDigits, curl);
       const riteHalo = !!priest.haloVisible;
       const revealed = riteHalo && channel === "STATIC";
       priestRec.halo.visible = true;
@@ -576,6 +690,7 @@ export function createActors(scene, textures) {
           rec.group.scale.setScalar(1);
         }
         rec.muzzle.scale.setScalar(enemy.windup > 0 ? 1.8 : 1);
+        if (rec.cloth) swayCloth(rec.cloth, time, rec.phase, 0.85);
         if (enemy.cloaked && enemy.visible && channel !== "STATIC" && enemy.reveal < 0.5) {
           rec.group.visible = Math.sin(time * 46) > -0.2;
         }

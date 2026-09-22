@@ -418,11 +418,64 @@ export function createWorld(scene) {
     })
   );
   nave.material.normalScale.set(0.8, 0.8);
+  nave.material.lightMap = textures.naveLight;
+  nave.material.lightMapIntensity = 0.72;
   tangents(nave.geometry);
+  nave.geometry.setAttribute("uv2", nave.geometry.attributes.uv.clone());
   nave.rotation.x = -Math.PI / 2;
   nave.position.set(0, 0.018, -21.55);
   nave.receiveShadow = true;
   scene.add(nave);
+  const naveWood = materials.wood.clone();
+  naveWood.lightMap = textures.naveLight;
+  naveWood.lightMapIntensity = 0.7;
+  const naveStone = stone.clone();
+  naveStone.lightMap = textures.naveLight;
+  naveStone.lightMapIntensity = 0.66;
+  const naveBrass = materials.brass.clone();
+  naveBrass.lightMap = textures.naveLight;
+  naveBrass.lightMapIntensity = 0.45;
+  const naveWall = materials.wall.clone();
+  naveWall.lightMap = textures.naveLight;
+  naveWall.lightMapIntensity = 0.85;
+  naveWall.polygonOffset = true;
+  naveWall.polygonOffsetFactor = -1;
+  naveWall.polygonOffsetUnits = -1;
+  const lightUv = new THREE.Vector3();
+  function litDress(geo, material, x, y, z) {
+    const copy = geo.clone();
+    const obj = dress(copy, material, x, y, z);
+    obj.updateMatrixWorld(true);
+    const pos = copy.attributes.position;
+    const uv = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) {
+      lightUv.fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld);
+      uv[i * 2] = (lightUv.x + 7.6) / 15.2;
+      uv[i * 2 + 1] = (-21.55 - lightUv.z) / 13.2 + 0.5;
+    }
+    copy.setAttribute("uv2", new THREE.BufferAttribute(uv, 2));
+    return obj;
+  }
+  const west = litDress(new THREE.PlaneGeometry(14.2, 6.2), naveWall, -8.08, 3.15, -21.75);
+  west.rotation.y = Math.PI / 2;
+  const east = litDress(new THREE.PlaneGeometry(14.2, 6.2), naveWall, 8.08, 3.15, -21.75);
+  east.rotation.y = -Math.PI / 2;
+  const north = litDress(new THREE.PlaneGeometry(15.4, 6.2), naveWall, 0, 3.15, -28.72);
+  for (const wall of [west, east, north]) {
+    wall.castShadow = false;
+    wall.updateMatrixWorld(true);
+    const pos = wall.geometry.attributes.position;
+    const uv2 = wall.geometry.attributes.uv2.array;
+    const uv = wall.geometry.attributes.uv;
+    for (let i = 0; i < pos.count; i++) {
+      lightUv.fromBufferAttribute(pos, i).applyMatrix4(wall.matrixWorld);
+      uv2[i * 2] = (lightUv.x + 7.6) / 15.2;
+      uv2[i * 2 + 1] = (-21.55 - lightUv.z) / 13.2 + 0.5;
+      uv.setXY(i, uv.getX(i) * 4, uv.getY(i) * 2);
+    }
+    wall.geometry.attributes.uv2.needsUpdate = true;
+    uv.needsUpdate = true;
+  }
 
   const railGeo = new THREE.CylinderGeometry(0.028, 0.028, 2.28, 10);
   railGeo.rotateZ(Math.PI / 2);
@@ -431,20 +484,20 @@ export function createWorld(scene) {
   const backArc = new THREE.CylinderGeometry(0.62, 0.62, 2.22, 16, 1, true, -0.42, 0.84);
   backArc.rotateZ(Math.PI / 2);
   function pew(px, pz) {
-    dress(new THREE.BoxGeometry(2.32, 0.05, 0.32), materials.wood, px, 0.46, pz - 0.04);
-    dress(noseGeo, materials.wood, px, 0.45, pz - 0.2);
+    litDress(new THREE.BoxGeometry(2.32, 0.05, 0.32), naveWood, px, 0.46, pz - 0.04);
+    litDress(noseGeo, naveWood, px, 0.45, pz - 0.2);
     for (const sx of [-1.02, 1.02]) {
-      dress(new THREE.BoxGeometry(0.055, 0.4, 0.05), materials.wood, px + sx, 0.22, pz - 0.12);
-      dress(new THREE.BoxGeometry(0.055, 0.4, 0.05), materials.wood, px + sx, 0.22, pz + 0.06);
+      litDress(new THREE.BoxGeometry(0.055, 0.4, 0.05), naveWood, px + sx, 0.22, pz - 0.12);
+      litDress(new THREE.BoxGeometry(0.055, 0.4, 0.05), naveWood, px + sx, 0.22, pz + 0.06);
     }
     for (const sx of [-1.2, 1.2]) {
-      dress(new THREE.BoxGeometry(0.07, 0.82, 0.4), materials.wood, px + sx, 0.44, pz + 0.02);
+      litDress(new THREE.BoxGeometry(0.07, 0.82, 0.4), naveWood, px + sx, 0.44, pz + 0.02);
     }
-    const arc = dress(backArc, materials.wood, px, 0.68, pz - 0.36);
+    const arc = litDress(backArc, naveWood, px, 0.68, pz - 0.36);
     arc.castShadow = true;
-    dress(railGeo, materials.wood, px, 0.9, pz + 0.2);
-    dress(new THREE.BoxGeometry(2.05, 0.028, 0.1), materials.wood, px, 0.3, pz + 0.04);
-    dress(new THREE.BoxGeometry(1.9, 0.035, 0.07), materials.wood, px, 0.16, pz - 0.02);
+    litDress(railGeo, naveWood, px, 0.9, pz + 0.2);
+    litDress(new THREE.BoxGeometry(2.05, 0.028, 0.1), naveWood, px, 0.3, pz + 0.04);
+    litDress(new THREE.BoxGeometry(1.9, 0.035, 0.07), naveWood, px, 0.16, pz - 0.02);
   }
   for (const [px, pz] of [
     [-3.15, -18.2],
@@ -454,10 +507,10 @@ export function createWorld(scene) {
   ]) {
     pew(px, pz);
   }
-  dress(new THREE.BoxGeometry(2.15, 0.16, 0.62), stone, 0, 0.1, -27.55);
-  dress(new THREE.BoxGeometry(1.82, 0.2, 0.5), stone, 0, 0.27, -27.55);
-  dress(new THREE.BoxGeometry(1.5, 0.18, 0.4), stone, 0, 0.45, -27.55);
-  dress(new THREE.BoxGeometry(2.2, 0.07, 0.66), materials.brass, 0, 0.62, -27.55);
+  litDress(new THREE.BoxGeometry(2.15, 0.16, 0.62), naveStone, 0, 0.1, -27.55);
+  litDress(new THREE.BoxGeometry(1.82, 0.2, 0.5), naveStone, 0, 0.27, -27.55);
+  litDress(new THREE.BoxGeometry(1.5, 0.18, 0.4), naveStone, 0, 0.45, -27.55);
+  litDress(new THREE.BoxGeometry(2.2, 0.07, 0.66), naveBrass, 0, 0.62, -27.55);
   const frontal = dress(new THREE.BoxGeometry(1.35, 0.32, 0.035), materials.brass, 0, 0.36, -27.26);
   frontal.position.z = -27.26;
   const altarSeal = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.016, 8, 20), materials.brass);
@@ -660,4 +713,41 @@ export function createWorld(scene) {
     },
     practicals,
   };
+}
+
+/** Cubemap from the aisle so visors reflect candles and the nave. No cyan. */
+export function bakeAisleProbe(renderer, pmrem) {
+  const probe = new THREE.Scene();
+  probe.background = new THREE.Color(0x2c261f);
+  const room = new THREE.Mesh(
+    new THREE.BoxGeometry(18, 9, 18),
+    new THREE.MeshBasicMaterial({ color: 0x2c261f, side: THREE.BackSide })
+  );
+  probe.add(room);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(18, 18), new THREE.MeshBasicMaterial({ color: 0x3a332c }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -1.6;
+  probe.add(floor);
+  const origin = new THREE.Vector3(0, 1.6, -20);
+  const candles = [
+    [-4.9, 0.55, -18.2],
+    [4.9, 0.55, -18.2],
+    [-4.9, 0.55, -20.45],
+    [4.9, 0.55, -20.45],
+    [-1.35, 0.95, -27.15],
+    [1.35, 0.95, -27.15],
+  ];
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb14a });
+  for (const [x, y, z] of candles) {
+    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), flameMat);
+    flame.position.set(x - origin.x, y - origin.y, z - origin.z);
+    probe.add(flame);
+  }
+  const altar = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.1, 0.7), new THREE.MeshBasicMaterial({ color: 0xc6a15a }));
+  altar.position.set(0, 0.55 - origin.y, -27.55 - origin.z);
+  probe.add(altar);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.06, 8, 24), new THREE.MeshBasicMaterial({ color: 0xe6c56a }));
+  halo.position.set(0, 2.2 - origin.y, -26.55 - origin.z);
+  probe.add(halo);
+  return pmrem.fromScene(probe, 0.04).texture;
 }

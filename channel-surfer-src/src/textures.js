@@ -448,6 +448,8 @@ export function makeTextures() {
     g.fill();
   });
 
+  const naveLight = bakeNaveLight();
+
   return {
     floor,
     wall,
@@ -463,6 +465,7 @@ export function makeTextures() {
     leather,
     trench,
     nave,
+    naveLight,
     trim,
     brushed,
     pearlNormal,
@@ -481,6 +484,63 @@ export function makeTextures() {
     leatherRough,
     seal,
   };
+}
+
+/** Nave floor lightmap. u west→east, v south door→north altar. Added on top of the realtime lights. */
+function bakeNaveLight() {
+  const w = 256;
+  const h = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext("2d");
+  g.fillStyle = "rgb(32,27,22)";
+  g.fillRect(0, 0, w, h);
+  const toPx = (x, z) => {
+    const u = (x + 7.6) / 15.2;
+    const v = (-21.55 - z) / 13.2 + 0.5;
+    return [u * w, (1 - v) * h];
+  };
+  g.fillStyle = "rgb(12,10,8)";
+  for (const [x, z] of [
+    [-3.15, -18.2],
+    [-3.15, -20.45],
+    [3.15, -18.2],
+    [3.15, -20.45],
+  ]) {
+    const [px, py] = toPx(x, z);
+    g.fillRect(px - 26, py - 8, 52, 16);
+  }
+  const [ax, ay] = toPx(0, -27.55);
+  g.fillRect(ax - 28, ay - 10, 56, 18);
+  g.globalCompositeOperation = "lighter";
+  const blot = (x, z, radius, inner) => {
+    const [px, py] = toPx(x, z);
+    const rad = radius * w;
+    const grd = g.createRadialGradient(px, py, 2, px, py, rad);
+    grd.addColorStop(0, inner);
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grd;
+    g.beginPath();
+    g.arc(px, py, rad, 0, Math.PI * 2);
+    g.fill();
+  };
+  blot(-4.9, -18.2, 0.18, "rgba(255,168,72,0.95)");
+  blot(4.9, -18.2, 0.18, "rgba(255,168,72,0.95)");
+  blot(-4.9, -20.45, 0.16, "rgba(255,150,60,0.8)");
+  blot(4.9, -20.45, 0.16, "rgba(255,150,60,0.8)");
+  blot(-1.35, -27.15, 0.2, "rgba(255,186,90,1)");
+  blot(1.35, -27.15, 0.2, "rgba(255,186,90,1)");
+  blot(0, -27.5, 0.28, "rgba(220,160,70,0.55)");
+  g.fillStyle = "rgba(255,214,170,0.16)";
+  g.fillRect(w * 0.4, 0, w * 0.2, h);
+  g.globalCompositeOperation = "source-over";
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.LinearSRGBColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.anisotropy = 4;
+  return tex;
 }
 
 export function makeSign(title, sub, bg = "#16130f", fg = "#f4efe6") {

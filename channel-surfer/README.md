@@ -25,7 +25,7 @@ Open `index.html` (or the Pages URL ending in `/channel-surfer/`). The playfield
 
 **LIVE** — precise cyan bolt, normal mall. **STATIC** — drains Signal, spread shot, reveals cloaks and visor seams. **DEAD AIR** — drains Signal, faster, phases through striped shutters and the priest's veil, cannot fire.
 
-Clear the court and the north door opens into the radio wing. The Visor Priest broadcasts three rites. Each one wants a different channel. Tessera and the priest are ceramic shells with black glass visors: pearl, gold, and amber attacks. Cyan stays on the CRT lens, the bolt, and the Signal UI.
+Clear the court and the north door opens into the radio wing. The Visor Priest broadcasts three rites. Each one wants a different channel. Tessera and the priest are ceramic shells with black glass visors: pearl, gold, and amber attacks. The nave has a baked candle lightmap, and the visors reflect that aisle. Cyan stays on the CRT lens, the bolt, and the Signal UI.
 
 ## Rebuild
 
