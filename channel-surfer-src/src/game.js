@@ -13,7 +13,7 @@ import {
   resolveDirectoryHit,
   tickDirectory,
 } from "./directory.js";
-import { HIJACK_TUNING, aimHijack, applyRetune, applySprinkler, tryHijack } from "./hijack.js";
+import { HIJACK_TUNING, aimHijack, applyRetune, applyShutter, applySprinkler, tryHijack } from "./hijack.js";
 import {
   BOUNDS,
   CHAPEL_ENTRY,
@@ -739,7 +739,7 @@ export function createGame(canvas, audio) {
           enemies[i] = { ...enemies[i], dormant: false };
         }
       }
-      queueTip("service", "Service wing. Aim at the sprinkler and press E. It slows the Tessera in this room.");
+      queueTip("service", "Service wing. The east sprinkler slows them. The west shutter slams them.");
     }
     if (directoryOpen && directory && player.z < -42.2 && !directory.active) {
       directory = { ...directory, active: true };
@@ -770,7 +770,10 @@ export function createGame(canvas, audio) {
     if (hijackId === "sprinkler" && hijackAimed) {
       prompt = cooling ? "SPRINKLERS RECHARGING" : "E  OPEN SPRINKLERS";
       promptKind = cooling ? "cool" : "ready";
-    } else if (hijackAimed) {
+    } else if (hijackId === "security-shutter" && hijackAimed) {
+      prompt = cooling ? "SHUTTER RECHARGING" : "E  SLAM SHUTTER";
+      promptKind = cooling ? "cool" : "ready";
+    } else if (hijackAimed && hijackId === "pa-horn") {
       prompt = hot ? "PA RETUNED" : cooling ? "PA RECHARGING" : "E  RETUNE PA";
       promptKind = hot ? "hot" : cooling ? "cool" : "ready";
     } else {
@@ -790,7 +793,23 @@ export function createGame(canvas, audio) {
         flash = Math.max(flash, 0.22);
         shake = Math.max(shake, 0.03);
         world.pulseHijack("sprinkler");
-      } else {
+      } else if (aimedSpawn.id === "security-shutter") {
+        hijackCooldownUntil = tried.cooldownUntil;
+        enemies = applyShutter(
+          enemies,
+          aimedSpawn,
+          HIJACK_TUNING.slamRadius,
+          HIJACK_TUNING.slam,
+          HIJACK_TUNING.slamKnock
+        );
+        addXp(TUNING.xpHijack);
+        banner("SHUTTER");
+        audio.play("hijack");
+        burst(aimedSpawn.x, aimedSpawn.y - 0.4, aimedSpawn.z, [1, 0.62, 0.22], 26);
+        flash = Math.max(flash, 0.24);
+        shake = Math.max(shake, 0.05);
+        world.pulseHijack("shutter");
+      } else if (aimedSpawn.id === "pa-horn") {
         hijackCooldownUntil = tried.cooldownUntil;
         retuneUntil = time + HIJACK_TUNING.retune;
         enemies = applyRetune(enemies, aimedSpawn, HIJACK_TUNING.radius, HIJACK_TUNING.stun);

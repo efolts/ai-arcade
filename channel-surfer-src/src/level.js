@@ -1,4 +1,4 @@
-/** One mall run: court, radio wing, service wing, Directory. PHASE stays the art generation. Broadcast Echo stays reserved. */
+/** One mall run: court, radio wing, service wing, Directory. PHASE stays the art generation. */
 
 export const PHASE = 3;
 
@@ -25,6 +25,7 @@ export const DIRECTORY_SPAWN = { x: 0, y: 0, z: -50.15 };
 export const HIJACK_SPAWNS = [
   { id: "pa-horn", x: -7.05, y: 2.42, z: -17.35 },
   { id: "sprinkler", x: 6.35, y: 2.65, z: -32.55 },
+  { id: "security-shutter", x: -7.72, y: 2.45, z: -33.05, room: "service" },
 ];
 
 export const ENEMIES = [

@@ -524,6 +524,31 @@ export function createWorld(scene) {
   sprinkler.position.set(sprinklerDef.x, sprinklerDef.y, sprinklerDef.z);
   scene.add(sprinkler);
 
+  const shutterDef = HIJACK_SPAWNS.find((item) => item.id === "security-shutter") || { x: -7.72, y: 2.45, z: -33.05 };
+  const shutter = new THREE.Group();
+  const shutterFrame = materials.brass;
+  const shutterTop = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 1.72), shutterFrame);
+  shutterTop.position.y = 0.86;
+  shutterTop.castShadow = false;
+  const shutterLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.72, 0.08), shutterFrame);
+  shutterLeft.position.set(0, 0, -0.82);
+  shutterLeft.castShadow = false;
+  const shutterRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.72, 0.08), shutterFrame);
+  shutterRight.position.set(0, 0, 0.82);
+  shutterRight.castShadow = false;
+  const shutterPanel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 1.48, 1.5),
+    std({ color: 0x241c14, roughness: 0.42, metalness: 0.48, emissive: 0x5a3a10, emissiveIntensity: 0.28 })
+  );
+  shutterPanel.position.set(0.04, 0.55, 0);
+  shutterPanel.castShadow = false;
+  const shutterLamp = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffb14a }));
+  shutterLamp.position.set(0.1, 0.95, 0);
+  shutter.add(shutterTop, shutterLeft, shutterRight, shutterPanel, shutterLamp);
+  shutter.position.set(shutterDef.x, shutterDef.y, shutterDef.z);
+  scene.add(shutter);
+  addSign("SHUTTER", "HOLD E", shutterDef.x + 0.16, shutterDef.y + 1.15, shutterDef.z, 1.35, 0.4, Math.PI / 2, "#1c140c", "#f0d48a");
+
   const kioskPearl = std({ color: 0xf4efe6, roughness: 0.42, metalness: 0.08 });
   const kioskInk = std({ color: 0x100e0c, roughness: 0.16, metalness: 0.62, emissive: 0x1a1208, emissiveIntensity: 0.16 });
   const kioskGold = std({ color: 0xd4b15a, roughness: 0.32, metalness: 0.74, emissive: 0x8a6a28, emissiveIntensity: 0.22 });
@@ -864,6 +889,7 @@ export function createWorld(scene) {
   let hornAimed = false;
   let hornHot = false;
   let sprinklerAimed = false;
+  let shutterAimed = false;
   let pulse = 0;
   let pulseTarget = "pa-horn";
   let lastTime = 0;
@@ -924,6 +950,7 @@ export function createWorld(scene) {
       hornAimed = !!aimed && id === "pa-horn";
       hornHot = !!hot;
       sprinklerAimed = !!aimed && id === "sprinkler";
+      shutterAimed = !!aimed && id === "security-shutter";
     },
     pulseHijack(which = "pa-horn") {
       pulse = 0.48;
@@ -1030,6 +1057,11 @@ export function createWorld(scene) {
       const spraying = pulseTarget === "sprinkler" && pulse > 0;
       spray.material.opacity = spraying ? 0.22 + pulse * 0.4 : 0;
       sprinklerBulb.material.color.setHex(spraying || sprinklerAimed ? 0xfff1c8 : 0xffb14a);
+      const slamming = pulseTarget === "shutter" && pulse > 0;
+      const drop = slamming ? 1 - pulse / 0.48 : 0;
+      shutterPanel.position.y = 0.55 - drop * 1.05;
+      shutterPanel.material.emissiveIntensity = slamming || shutterAimed ? 0.85 : 0.28;
+      shutterLamp.material.color.setHex(slamming || shutterAimed ? 0xfff1c8 : 0xffb14a);
       flicker.intensity = 18 + Math.sin(time * 28) * 10 + (Math.random() < 0.04 ? -12 : 0);
       if (channel === "STATIC") {
         const s = 1 + Math.sin(time * 6) * 0.08;

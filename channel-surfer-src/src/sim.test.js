@@ -17,7 +17,7 @@ import {
   resolveDirectoryHit,
   tickDirectory,
 } from "./directory.js";
-import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyRetune, applySprinkler, tryHijack } from "./hijack.js";
+import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyRetune, applyShutter, applySprinkler, tryHijack } from "./hijack.js";
 import {
   BLOCKS,
   BOUNDS,
@@ -70,6 +70,7 @@ import {
   refundBatteries,
   resolveShot,
   rewardForKill,
+  segmentClear,
   shotProfile,
   switchChannel,
   tickPads,
@@ -649,19 +650,21 @@ describe("radio wing", () => {
 });
 
 describe("pa horn", () => {
-  it("keeps the horn and the sprinkler playable and reserves the rest", () => {
+  it("keeps the horn, the sprinkler, and the shutter playable", () => {
     assert.deepEqual(
       HIJACK_CATALOG.filter((item) => item.status === "playable").map((item) => item.id),
-      ["pa-horn", "sprinkler"]
+      ["pa-horn", "sprinkler", "security-shutter"]
     );
     assert.deepEqual(
       HIJACK_CATALOG.filter((item) => item.status === "reserved").map((item) => item.id).sort(),
-      ["security-camera", "security-shutter"]
+      ["security-camera"]
     );
+    assert.equal(HIJACK_CATALOG.find((item) => item.id === "security-shutter").effect, "slam");
     assert.equal(HIJACK_CATALOG.some((item) => item.id === "broadcast-echo"), false);
     assert.equal(RESERVED_CONTENT.some((item) => item.id === "broadcast-echo"), true);
     assert.equal(HIJACK_SPAWNS[0].id, "pa-horn");
     assert.equal(HIJACK_SPAWNS.find((item) => item.id === "sprinkler").id, "sprinkler");
+    assert.equal(HIJACK_SPAWNS.find((item) => item.id === "security-shutter").room, "service");
   });
 
   it("aims only while looking at the horn and in range", () => {
@@ -727,6 +730,34 @@ describe("pa horn", () => {
     assert.ok(slowed.find((enemy) => enemy.id === "service-ghost").slow >= HIJACK_TUNING.slow);
     assert.equal(slowed.find((enemy) => enemy.id === "service-l").stun || 0, 0);
     assert.equal(slowed.find((enemy) => enemy.id === "service-l").windup, 0);
+  });
+
+  it("slams service Tessera without slowing them or touching the choir", () => {
+    const point = HIJACK_SPAWNS.find((item) => item.id === "security-shutter");
+    const cols = activeColliders({ doorOpen: true, serviceOpen: true });
+    assert.equal(segmentClear(0, 1.58, point.z, point.x, point.y, point.z, cols), true);
+    const before = [...createEnemies(), ...createChapelEnemies(), ...createServiceEnemies()];
+    const slammed = applyShutter(before, point, HIJACK_TUNING.slamRadius, HIJACK_TUNING.slam, HIJACK_TUNING.slamKnock);
+    for (const id of ["choir-l", "choir-ghost", "north-l", "alley"]) {
+      const enemy = slammed.find((item) => item.id === id);
+      const origin = before.find((item) => item.id === id);
+      assert.equal(enemy.stun || 0, 0, id);
+      assert.equal(enemy.slow || 0, 0, id);
+      assert.equal(enemy.x, origin.x);
+      assert.equal(enemy.z, origin.z);
+    }
+    for (const id of ["service-l", "service-r", "service-ghost"]) {
+      const enemy = slammed.find((item) => item.id === id);
+      const origin = before.find((item) => item.id === id);
+      assert.ok(enemy.stun >= HIJACK_TUNING.slam, id);
+      assert.equal(enemy.slow || 0, 0, id);
+      assert.equal(enemy.windup, 0);
+      assert.ok(Math.hypot(enemy.x - origin.x, enemy.z - origin.z) > 0.4, id);
+      const leash = LEASHES[id];
+      assert.ok(enemy.x > leash.minX && enemy.x < leash.maxX, id);
+      assert.ok(enemy.z > leash.minZ && enemy.z < leash.maxZ, id);
+    }
+    assert.equal(BLOCKS.filter((block) => block.phaseGate).length, 3);
   });
 });
 
