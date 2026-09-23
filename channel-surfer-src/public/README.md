@@ -18,14 +18,14 @@ Open `index.html` (or the Pages URL ending in `/channel-surfer/`). The playfield
 | Click | Fire |
 | 1 / 2 / 3 | LIVE / STATIC / DEAD AIR |
 | Wheel or Q | Cycle channels |
-| E | Retune the PA horn you are aiming at |
+| E | Retune the PA horn or the service sprinkler you are aiming at |
 | Esc | Pause and release the mouse |
 | M | Mute |
-| R | Restart. From a radio-wing death, retry that wing |
+| R | Restart. From a wing death, retry that wing |
 
-**LIVE Clicker** — precise cyan bolt, one battery a shot, normal mall. **STATIC Scatter** — drains Signal, pellet spread, reveals cloaks and visor seams. **DEAD AIR Phaser** — drains Signal, faster, a short bolt that phases striped shutters and the priest's veil. Empty magazines click dry. Kills drop batteries. Amber pads in the court and the radio wing recharge a cell (the remote you are holding, plus a little for the others) after a short cooldown. Clearing a room refills every magazine. Signal is still the channel meter. Kills, rite breaks, the PA, and room clears earn XP. You cap at level 6. A station break between the court and the wing, and a pause in the wing, each offer three retunes that change magazine size, pellets, range, drain, regen, or the horn cooldown. Channels stay the weapon switch.
+**LIVE Clicker** — precise cyan bolt, one battery a shot, normal mall. **STATIC Scatter** — drains Signal, pellet spread, reveals cloaks and visor seams. **DEAD AIR Phaser** — drains Signal, faster, a short bolt that phases striped shutters and rite gates. Empty magazines click dry. Kills drop batteries. Amber pads in the court, the radio wing, the service wing, and the Directory recharge a cell (the remote you are holding, plus a little for the others) after a short cooldown. Clearing a room refills every magazine. Signal is still the channel meter. Kills, rite breaks, retunes, and room clears earn XP. You cap at level 6. A station break between wings, and a pause when you level in a fight, each offer three retunes. Channels stay the weapon switch. A wing retry keeps that tuning.
 
-Clear the court and the north door opens into the radio wing. The Visor Priest broadcasts three rites. Each one wants a different channel. Tessera and the priest are ceramic shells with black glass visors: pearl, gold, and amber attacks. Tessera hands have segmented fingers. The priest's robe is a cut garment. The court and the nave both have baked light. Visors reflect the court or the aisle, depending on where you stand. Cyan stays on the CRT lens, the bolt, and the Signal UI.
+Clear the court and the north door opens into the radio wing. Defeat the Visor Priest and the service door opens. Clear the service wing and the Directory door opens. The Directory is the mall's last channel: listing, index, and gate. The clear card is the mall run, not a single wing. Tessera and the priest are ceramic shells with black glass visors: pearl, gold, and amber attacks. The Directory kiosk uses that same language and no cyan. Cyan stays on the CRT lens, the bolt, and the Signal UI.
 
 ## Rebuild
 

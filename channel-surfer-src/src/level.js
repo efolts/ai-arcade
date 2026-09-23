@@ -1,19 +1,31 @@
-/** Phase 4.1 ammo pads on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
+/** One mall run: court, radio wing, service wing, Directory. PHASE stays the art generation. Broadcast Echo stays reserved. */
 
 export const PHASE = 3;
 
-export const BOUNDS = { minX: -15.55, maxX: 15.55, minZ: -28.15, maxZ: 13.55 };
+export const BOUNDS = { minX: -15.55, maxX: 15.55, minZ: -53.45, maxZ: 13.55 };
 
 export const PLAYER_SPAWN = { x: 0, y: 1.58, z: 10.55, yaw: 0, pitch: 0 };
 
 export const CHAPEL_ENTRY = { x: 0, y: 1.58, z: -16.35, yaw: 0, pitch: 0 };
 
+export const SERVICE_ENTRY = { x: 0, y: 1.58, z: -30.2, yaw: 0, pitch: 0 };
+
+export const DIRECTORY_ENTRY = { x: 0, y: 1.58, z: -42.45, yaw: 0, pitch: 0 };
+
 export const VEIL_Z = -24.2;
 export const VEIL_CROSS_Z = VEIL_Z - 0.35;
 
+export const DIRECTORY_GATE_Z = -47.55;
+export const DIRECTORY_CROSS_Z = DIRECTORY_GATE_Z - 0.35;
+
 export const PRIEST_SPAWN = { x: 0, y: 0, z: -26.55 };
 
-export const HIJACK_SPAWNS = [{ id: "pa-horn", x: -7.05, y: 2.42, z: -17.35 }];
+export const DIRECTORY_SPAWN = { x: 0, y: 0, z: -50.15 };
+
+export const HIJACK_SPAWNS = [
+  { id: "pa-horn", x: -7.05, y: 2.42, z: -17.35 },
+  { id: "sprinkler", x: 6.35, y: 2.65, z: -32.55 },
+];
 
 export const ENEMIES = [
   { id: "north-l", x: -10.6, z: -8.2, cloak: false, hp: 72 },
@@ -30,6 +42,12 @@ export const CHAPEL_ENEMIES = [
   { id: "choir-ghost", x: 0.15, z: -22.25, cloak: true, hp: 68 },
 ];
 
+export const SERVICE_ENEMIES = [
+  { id: "service-l", x: -4.15, z: -33.55, cloak: false, hp: 70 },
+  { id: "service-r", x: 4.85, z: -34.15, cloak: false, hp: 70 },
+  { id: "service-ghost", x: 0.55, z: -37.35, cloak: true, hp: 84 },
+];
+
 export const PICKUPS = [
   { id: "signal-cache", kind: "signal", x: 13.7, z: 1.6, amount: 48, cloaked: true },
   { id: "aid-kit", kind: "health", x: 13.7, z: -6.4, amount: 36, cloaked: false },
@@ -39,15 +57,23 @@ export const PICKUPS = [
   { id: "pad-aisle", kind: "battery", pad: true, x: 0, z: -17.15, cloaked: false },
   { id: "pad-pew", kind: "battery", pad: true, x: 5.4, z: -22.7, cloaked: false },
   { id: "pad-altar", kind: "battery", pad: true, x: -4.2, z: -23.05, cloaked: false },
+  { id: "pad-service", kind: "battery", pad: true, x: 0, z: -31.15, cloaked: false },
+  { id: "pad-rack", kind: "battery", pad: true, x: -2.55, z: -38.55, cloaked: false },
+  { id: "pad-listing", kind: "battery", pad: true, x: -4.7, z: -43.7, cloaked: false },
+  { id: "pad-index", kind: "battery", pad: true, x: 4.55, z: -45.25, cloaked: false },
 ];
 
 const CHAPEL_LEASH = { minX: -7.2, maxX: 7.2, minZ: -23.35, maxZ: -15.9 };
+const SERVICE_LEASH = { minX: -6.4, maxX: 6.4, minZ: -39.7, maxZ: -30.5 };
 
 export const LEASHES = {
   alley: { minX: 12.15, maxX: 15.35, minZ: -11.6, maxZ: 3.5 },
   "choir-l": CHAPEL_LEASH,
   "choir-r": CHAPEL_LEASH,
   "choir-ghost": CHAPEL_LEASH,
+  "service-l": SERVICE_LEASH,
+  "service-r": SERVICE_LEASH,
+  "service-ghost": SERVICE_LEASH,
 };
 
 export const RESERVED_CONTENT = [
@@ -106,7 +132,34 @@ export const BLOCKS = [
   box("chapel-ceiling", "ceiling", 0, 7.35, -21.75, 16.7, 0.3, 14.7),
   box("chapel-w", "wall", -8.35, WALL_H / 2, -21.75, 0.5, WALL_H, 14.9),
   box("chapel-e", "wall", 8.35, WALL_H / 2, -21.75, 0.5, WALL_H, 14.9),
-  box("chapel-n", "wall", 0, WALL_H / 2, -29.05, 17.2, WALL_H, 0.5),
+  box("chapel-n-l", "wall", -5.55, WALL_H / 2, -29.05, 6.1, WALL_H, 0.5),
+  box("chapel-n-r", "wall", 5.55, WALL_H / 2, -29.05, 6.1, WALL_H, 0.5),
+  box("service-door", "trim", 0, WALL_H / 2, -29.05, 5, WALL_H, 0.66, { serviceDoor: true }),
+
+  box("service-floor", "floor", 0, -0.2, -35.2, 16.7, 0.4, 11.7, { floor: true }),
+  box("service-ceiling", "ceiling", 0, 7.35, -35.2, 16.7, 0.3, 11.7),
+  box("service-w", "wall", -8.35, WALL_H / 2, -35.15, 0.5, WALL_H, 12.3),
+  box("service-e", "wall", 8.35, WALL_H / 2, -35.15, 0.5, WALL_H, 12.3),
+  box("service-n-l", "wall", -5.24, WALL_H / 2, -41.2, 6.72, WALL_H, 0.5),
+  box("service-n-r", "wall", 5.24, WALL_H / 2, -41.2, 6.72, WALL_H, 0.5),
+  box("directory-door", "trim", 0, WALL_H / 2, -41.2, 3.76, WALL_H, 0.66, { directoryDoor: true }),
+  box("service-rack-w", "metal", -6.35, 1.15, -35.7, 1.45, 2.3, 2.5),
+  box("service-rack-e", "metal", 6.35, 1.15, -37.9, 1.35, 2.3, 2.2),
+  box("service-cart", "trim", -6.15, 0.48, -31.45, 1.45, 0.96, 0.85),
+  box("service-locker", "metal", 6.45, 0.7, -31.05, 1.5, 1.4, 0.75),
+  box("service-pipe", "metal", 0, 6.55, -35.2, 0.22, 0.22, 8.5),
+
+  box("directory-floor", "floor", 0, -0.2, -47, 16.7, 0.4, 11.2, { floor: true }),
+  box("directory-ceiling", "ceiling", 0, 7.35, -47, 16.7, 0.3, 11.2),
+  box("directory-w", "wall", -8.35, WALL_H / 2, -47, 0.5, WALL_H, 11.8),
+  box("directory-e", "wall", 8.35, WALL_H / 2, -47, 0.5, WALL_H, 11.8),
+  box("directory-n", "wall", 0, WALL_H / 2, -52.7, 17.2, WALL_H, 0.5),
+  box("dir-gate-l", "trim", -4.7, 1.8, DIRECTORY_GATE_Z, 6.7, 3.6, 0.46),
+  box("dir-gate-r", "trim", 4.7, 1.8, DIRECTORY_GATE_Z, 6.7, 3.6, 0.46),
+  box("directory-gate", "trim", 0, 1.8, DIRECTORY_GATE_Z, 3.3, 3.6, 0.4, { phaseGate: true, directoryVeil: true }),
+  box("dir-pier-l", "trim", -6.35, 1.55, -50.35, 0.5, 3.1, 0.5),
+  box("dir-pier-r", "trim", 6.35, 1.55, -50.35, 0.5, 3.1, 0.5),
+  box("directory-plinth", "trim", 0, 0.4, -50.15, 1.55, 0.8, 1.15),
 
   box("pew-1", "wood", -3.15, 0.48, -18.2, 3.05, 0.96, 0.58),
   box("pew-2", "wood", -3.15, 0.48, -20.45, 3.05, 0.96, 0.58),
@@ -133,10 +186,19 @@ export function toCollider(block) {
   };
 }
 
-export function activeColliders({ doorOpen = false, veilUp = false } = {}) {
+export function activeColliders({
+  doorOpen = false,
+  veilUp = false,
+  serviceOpen = false,
+  directoryOpen = false,
+  directoryVeilUp = false,
+} = {}) {
   return BLOCKS.filter((block) => {
     if (block.door && doorOpen) return false;
+    if (block.serviceDoor && serviceOpen) return false;
+    if (block.directoryDoor && directoryOpen) return false;
     if (block.veil && !veilUp) return false;
+    if (block.directoryVeil && !directoryVeilUp) return false;
     return true;
   }).map(toCollider);
 }
@@ -163,7 +225,8 @@ function spawnEnemy(enemy, index, room) {
     hits: 0,
     lastHitAt: null,
     aggro: room === "court" && !enemy.cloak,
-    cooldown: room === "chapel" ? 1.35 + (index % 3) * 0.25 : 0.95 + (index % 4) * 0.28,
+    cooldown:
+      room === "court" ? 0.95 + (index % 4) * 0.28 : room === "chapel" ? 1.35 + (index % 3) * 0.25 : 1.2 + (index % 3) * 0.25,
     windup: 0,
     strafeSign: index % 2 === 0 ? 1 : -1,
     strafeT: 0.8 + (index % 3) * 0.25,
@@ -180,6 +243,10 @@ export function createEnemies() {
 
 export function createChapelEnemies() {
   return CHAPEL_ENEMIES.map((enemy, index) => spawnEnemy(enemy, index, "chapel"));
+}
+
+export function createServiceEnemies() {
+  return SERVICE_ENEMIES.map((enemy, index) => spawnEnemy(enemy, index, "service"));
 }
 
 export function createPickups() {

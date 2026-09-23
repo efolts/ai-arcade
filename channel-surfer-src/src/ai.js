@@ -31,6 +31,7 @@ export function stepEnemy(input, dt, ctx) {
   if (e.cloaked && dist < 3.05) e.reveal = Math.max(e.reveal || 0, 1.25);
   e = tickReveal(e, 0, ctx.channel);
 
+  if ((e.slow || 0) > 0) e.slow = Math.max(0, e.slow - dt);
   if ((e.stun || 0) > 0) {
     e.stun -= dt;
     e.windup = 0;
@@ -99,7 +100,8 @@ export function stepEnemy(input, dt, ctx) {
   }
 
   const wish = normalize(wishX, wishZ);
-  const speed = (movementSpeed("STATIC") * 0.62) * (e.hurt > 0 ? 0.25 : 1);
+  const slowed = (e.slow || 0) > 0 ? 0.35 : 1;
+  const speed = movementSpeed("STATIC") * 0.62 * (e.hurt > 0 ? 0.25 : 1) * slowed;
   let mx = wish.x * speed * dt;
   let mz = wish.z * speed * dt;
   const moved = tryMove(e.x, e.z, mx, mz, 0.42, ctx.colliders, "LIVE", null);

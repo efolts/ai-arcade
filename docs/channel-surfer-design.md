@@ -2,7 +2,7 @@
 
 The FPS where changing TV channels changes combat and the level.
 
-The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 4 adds channel-locked remotes and Signal batteries on that slice. Phase 4.1 adds respawning battery pads so a fight can be recharged without waiting for a room clear. Phase 5 adds a short level-up that changes tuning numbers. Channels stay the weapon switch. Phase 6 stays on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
+The playable run is one mall: the KRCD court, the radio wing, the service wing, and the Directory. Phase 4 adds channel-locked remotes and Signal batteries. Phase 4.1 adds respawning battery pads. Phase 5 adds a short level-up that changes tuning numbers. Phase 6 opens the service wing and the Directory finale on that same run. Channels stay the weapon switch. Broadcast Echo, the security shutter, and the security camera stay hooks. This document matches what ships.
 
 ## Promise
 
@@ -33,7 +33,7 @@ Pointer lock is requested on the user gesture that enters play. If the cabinet i
 
 There is no jump and no sprint. Speed belongs to DEAD AIR.
 
-From the pause menu, Restart walks the whole mall again. A death in the radio wing retries from the radio door with the court still clear. A death in the court restarts the run.
+From the pause menu, Restart walks the whole mall again. A death in the court restarts the run. A death in the radio wing retries from the radio door with the court still clear. A death after the service door is open retries from the service door and keeps the radio wing clear. A death after the Directory door is open retries from that door and keeps the earlier wings clear. Each retry refills magazines to the upgraded caps, sets Signal to 80, and keeps level, XP, and retunes.
 
 ## Channel rules
 
@@ -54,9 +54,9 @@ Signal is capped at 100. Entering STATIC or DEAD AIR requires at least 8 Signal,
 
 Each channel has its own battery magazine. Surfing is the weapon switch: 1, 2, 3, the wheel, and Q change the remote with the channel. A shot or a scatter volley costs 1 battery from that magazine. An empty magazine plays a dry click and the banner NO BATTERY. The other magazines are untouched, so the answer is to surf or to pick up a cell. The count sits under the channel name as `CLICKER 18/20`. It is not a third bar.
 
-Kills restore Signal and drop a one-shot battery cell (5 Clicker, 2 Scatter, 2 Phaser, clamped to the mag). Six pads hold a cell that comes back: east of the fountain, south of the food counter, and on the approach to the north door in the court; the center aisle, the east pews, and the altar approach in the radio wing. Picking one up feeds the remote you are holding (+6) and puts +2 in each other magazine. The banner names that remote (`CLICKER +6`). A full load leaves the pad alone. The pad stays on the floor, dim and amber, and the cell returns after 16 seconds. Clearing the court refills every magazine. Clearing the wing refills them again and still pays 40 Signal. A close kill, a STATIC kill, or a burst (another hit within 0.48s) restores 26 Signal. A spaced long-range LIVE tap restores 10. Standing in LIVE also refills the Signal bar, slowly.
+Kills restore Signal and drop a one-shot battery cell (5 Clicker, 2 Scatter, 2 Phaser, clamped to the mag). Ten pads hold a cell that comes back: east of the fountain, south of the food counter, and on the approach to the north door in the court; the center aisle, the east pews, and the altar approach in the radio wing; the service aisle and the west rack; the directory approach and the west side of the gate. Picking one up feeds the remote you are holding (+6) and puts +2 in each other magazine. The banner names that remote (`CLICKER +6`). A full load leaves the pad alone. The pad stays on the floor, dim and amber, and the cell returns after 16 seconds. Clearing the court, the service wing, or the Directory refills every magazine. Defeating the priest and clearing the Directory also pay 40 Signal. A close kill, a STATIC kill, or a burst (another hit within 0.48s) restores 26 Signal. A spaced long-range LIVE tap restores 10. Standing in LIVE also refills the Signal bar, slowly.
 
-You start at level 1 and cap at level 6. A Tessera kill pays 16 XP, a rite break pays 28, a PA retune pays 18, and each room clear pays 48. Leaving a level costs 40, then 52, 64, 76, and 88. Levels earned in the court wait for the station break when the north door opens. Levels in the radio wing pause where you stand. Each break offers three retunes (fewer if the list is short). Press 1, 2, or 3, or click. The picks change numbers: Clicker magazine +4, Scatter pellets +2, Phaser range +2, Dead Air drain −3, every magazine a little larger, faster remote recovery, PA cooldown −4s, or LIVE regen +3. Each pick stacks twice. A magazine pick loads the extra rounds. Pads and kill drops still fill whatever is left, so the bigger mag does not replace the pads. A wing retry keeps the level. A court death clears it. The reserved id `upgrades` still must not spawn as an encounter.
+You start at level 1 and cap at level 6. A Tessera kill pays 16 XP, a rite break pays 28, a PA retune or a sprinkler pays 18, and each room clear pays 48. Leaving a level costs 40, then 52, 64, 76, and 88. Levels earned in the court wait for the station break when the north door opens. The priest's defeat and the service clear do the same between wings. Levels during a fight pause where you stand. Each break offers three retunes (fewer if the list is short). Press 1, 2, or 3, or click. The picks change numbers: Clicker magazine +4, Scatter pellets +2, Phaser range +2, Dead Air drain −3, every magazine a little larger, faster remote recovery, hijack cooldown −4s, or LIVE regen +3. Each pick stacks twice. A magazine pick loads the extra rounds. Pads and kill drops still fill whatever is left, so the bigger mag does not replace the pads. A wing retry keeps the level. A court death clears it. The reserved id `upgrades` still must not spawn as an encounter.
 
 The cloaked Tessera cannot be hit until STATIC (or until you bump it, which cracks the cloak for a moment). After you leave STATIC its reveal lingers about 4.2s, long enough to finish on LIVE. Ordinary Tessera only take visor bonus damage while STATIC is actually up.
 
@@ -82,11 +82,21 @@ The wing is a narrower chapel north of the court: pews, a center aisle, a gold s
 
 Three choir Tessera wait inside, dormant until the player steps through the door, so they cannot shoot the court through the wall and they do not count toward clearing the court. One of them is cloaked. They are leashed to the nave.
 
-The HUD reads COURT while you are in the mall and RADIO once you are through the door. A gold bar tracks the priest.
+The HUD reads COURT in the mall, RADIO through the nave, SERVICE past the chapel's north door, and DIRECTORY in the last room. A gold bar tracks the priest in the nave and the Directory in the last room.
+
+Defeating the priest silences the choir, refills magazines, pays Signal, and opens the service door. It does not end the run.
+
+## Service wing
+
+Back-of-house corridor north of the chapel: pipe run, racks, a cart, a locker, and a darker aisle. The service door is its own collider (`serviceDoor`). `doorOpen` still lifts only the radio door. Three Tessera wait inside, dormant until you step through, so they do not count toward the court or the radio wing. One of them is cloaked. They are leashed to the corridor.
+
+The sprinkler is on the east wall. Aim and press E. It slows service Tessera to about 0.35 speed for 4.2s and clears their windup. It does not stun them, it does not touch the choir, and it does not heat your shots. It pays the same hijack XP as the horn and shares the hijack cooldown, so the PA cooldown retune shortens both. The prompt is `E  OPEN SPRINKLERS`.
+
+Clearing the three opens the Directory door, refills magazines, pays the wing XP, and can open a station break.
 
 ## PA horn
 
-One hijack ships. The catalog in `hijack.js` reserves a security shutter, a sprinkler, and a security camera for later. They are not in the wing.
+Two hijacks ship. The catalog in `hijack.js` still reserves a security shutter and a security camera. Broadcast Echo is not in the catalog.
 
 The horn is on the west wall of the nave. Aim at it and press E:
 
@@ -109,7 +119,21 @@ He idles, fires a telegraphed amber bolt, then opens a rite for 3.2s. The banner
 | STATIC · THE HALO | The halo is only a target on STATIC. LIVE shots pass through it and chip the body. |
 | DEAD AIR · THE VEIL | A gold veil seals the aisle. Walk through it on DEAD AIR. Clicker and Scatter stop on it. The Phaser chips the priest through it and does not break the rite. Standing in the altar when it rises and switching to DEAD AIR also breaks it. |
 
-Clearing him drops the choir, pays Signal, and opens the wing-clear card. Best time is still `channel-surfer-best` for the whole run.
+Clearing him drops the choir, pays Signal, and opens the service door. Best time is still `channel-surfer-best`, saved when the Directory falls.
+
+## Directory
+
+Final room north of the service wing. One kiosk, not a second priest and not a Tessera. Pearl plinth, black column, gold cap, amber listing lines, an amber seam, and a gold ring. Attacks and the gate are amber. No cyan on the boss. The id is `directory-boss`. The reserved id `directory` still must not spawn as an encounter.
+
+He does not chase. Body shots are armored to about a fifth of the bolt. The real damage is breaking a rite (72). Three clean breaks do not kill him (480 HP). Failing a rite costs 16, inside the same hurt invulnerability as a Tessera bolt. Idle bolts are telegraphed amber shots.
+
+| Rite | Answer |
+| --- | --- |
+| LIVE · THE LISTING | Hitscan the lit seam. STATIC on the seam does not break it. |
+| STATIC · THE INDEX | The ring is only a target on STATIC. LIVE shots pass through it and chip the body. |
+| DEAD AIR · THE GATE | An amber shutter seals the aisle. Walk through it on DEAD AIR. Clicker and Scatter stop on it. The Phaser chips the kiosk through it and does not break the rite. |
+
+The gate is a `phaseGate` with its own flag, so the priest veil stays the priest's. Side walls close the flanks. Defeating the kiosk refills magazines, pays Signal, and after a short beat opens the mall-clear card.
 
 ## Presentation
 
@@ -122,7 +146,7 @@ Phase 3.5 keeps the two rooms. Smooth shells, ceramic clearcoat, black glass, on
 - Hurt spheres are unchanged: Tessera head `y+1.62 r0.26` and body `y+0.98 r0.46`; priest head `2.05 r0.3`, body `1.2 r0.62`, halo `2.62 r0.42`. The shells were built to those volumes.
 - Court floor, walls, trim, and ceiling keep the tile atlases, with grout normals and roughness. A court overlay plane, inner wall planes, and the fountain sample a baked lightmap: a skylight pool in the middle, darker under the mezzanine, the pillars, and the fountain curb, warm pools at the food hall, the booth, and the east window. An emissive skylight card sits in the ceiling so the pool has a source. The radio wing has a darker stone floor on top of the same slab. Pews are slatted seats with a curved back, the altar is a stepped stone plinth under a brass mensa, and the fountain is a lathed bowl. The PA horn is a lathed bell. Signage is still original KRCD copy. The aisle seal is a gold ring on stone and takes light.
 - Lighting is a warm key from the skylight, a warm unshadowed fill, and a lower hemisphere so the court stays readable. The shadow map is 1024 and recenters on the player in 4 meter steps, with a tighter frustum so nearby shadows stay sharp. A half-resolution occlusion pass darkens feet, pews, and the altar. On DEAD AIR that pass shrinks so the aisle stays readable. The nave floor, pews, altar, and inner walls sample a baked candle lightmap. Both lightmaps are added to the realtime light. Neither is a second shadow caster. Shin plates, chest plates, and knee caps do not cast shadows. Fog starts closer so the nave has depth. Grade is still a CSS treatment on the canvas. The HUD stays a CRT overlay.
-- The art loop stopped after 3.5. Lighting, probes, and the character pass stay as they shipped. Phase 4 did not repaint the rooms.
+- The art loop stopped after 3.5. Lighting, probes, and the character pass stay as they shipped. Phase 6 adds the service corridor and the Directory kiosk with the same materials and a few unshadowed amber practicals. No new lightmap and no second shadow map.
 - Audio is WebAudio: bolt, spread, dry click, channel ticks, impacts, a quiet carrier, plus a door, a rite chord, a break, a failed rite, and the PA squeal. DEAD AIR low-passes the bus. STATIC adds hiss.
 
 ## Build
@@ -136,7 +160,7 @@ npm test
 npm run build
 ```
 
-Tests are `node --test` on `src/sim.test.js`. They cover the channel, Signal, shot, cloak, and shutter rules, plus the radio door, the rite veil, the hijack catalog, the three priest answers, and the dormant choir. `PHASE` is 3. Ids in `RESERVED_CONTENT` (arsenal, upgrades, wings, Directory, Broadcast Echo) must not appear as encounters.
+Tests are `node --test` on `src/sim.test.js`. They cover the channel, Signal, shot, cloak, and shutter rules, plus the radio door, the rite veil, the service door, the Directory gate, the hijack catalog, the three priest answers, the three Directory answers, and the dormant choir. `PHASE` is 3. Ids in `RESERVED_CONTENT` (arsenal, upgrades, wings, Directory, Broadcast Echo) must not appear as encounters.
 
 ## Phases
 
@@ -176,22 +200,23 @@ Three remotes, one per channel. LIVE Clicker, STATIC Scatter, DEAD AIR Phaser. M
 
 Six respawning battery pads replace the two one-shot floor cells. Three are in the court and three are in the radio wing. A pad feeds the held remote +6 and the other magazines +2, then recharges in 16 seconds. Kill drops and room-clear refills stay. Hurt spheres and the rooms are unchanged.
 
-### Phase 5 — this pass
+### Phase 5
 
 A level chip and a cyan XP bar. Cap is level 6. XP comes from Tessera kills, rite breaks, PA retunes, and room clears. The court banks those levels until the north door, then a station break offers three numeric retunes. The wing pauses on the level-up itself. Picks stack twice and do not replace channels. Hurt spheres and the rooms are unchanged. The reserved id `upgrades` still must not spawn as an encounter.
 
-### Phase 6 — not started
+### Phase 6 — this pass
 
-Four wings and the Directory as the mall’s final boss. Not a campaign map yet.
+One continuous mall run. Court, radio wing, service wing, Directory. The service wing is the third room: racks, a cloaked Tessera, and the sprinkler hijack. The Directory is one kiosk boss with listing, index, and gate rites, one per channel. Wing checkpoints keep tuning and earlier pads. The clear card is the mall, not the priest.
 
-Broadcast Echo (a ghost that replays a channel timeline) and the rest of the hijack catalog (shutter, sprinkler, camera) stay hooks only. They are not part of Phases 4–6 as locked, and they are not in this build.
+Broadcast Echo (a ghost that replays a channel timeline), the security shutter, and the security camera stay hooks. They are not in this build.
 
 ## Hooks
 
-- `level.js` — `BLOCKS`, `ENEMIES`, `CHAPEL_ENEMIES`, `PICKUPS`, `LEASHES`, `RESERVED_CONTENT`, `PHASE`, `activeColliders`.
+- `level.js` — `BLOCKS`, `ENEMIES`, `CHAPEL_ENEMIES`, `SERVICE_ENEMIES`, `PICKUPS`, `LEASHES`, `RESERVED_CONTENT`, `PHASE`, `activeColliders`. Door flags are separate: radio, service, Directory.
 - `sim.js` — channel, Signal, health, movement, shots, reveal, rewards, XP, and the retune list.
-- `ai.js` — Tessera step. `dormant` and `stun` are data. Enemies never phase.
-- `boss.js` — priest rites, chip damage, and the halo ray. New bosses should be new steppers, not extra Tessera.
-- `hijack.js` — catalog, aim test, cooldown, retune. Add a playable entry beside `pa-horn` instead of a special case in the renderer.
+- `ai.js` — Tessera step. `dormant`, `stun`, and `slow` are data. Enemies never phase.
+- `boss.js` — priest rites, chip damage, and the halo ray.
+- `directory.js` — Directory rites. A new stepper, not a Tessera and not a second priest.
+- `hijack.js` — catalog, aim test, cooldown, retune, sprinkler. Playable entries sit beside `pa-horn`.
 - `meshkit.js` / `textures.js` / `viewmodel.js` — Phase 3 kits and atlases. They do not own combat rules.
 - Renderer (`world.js`, `actors.js`, `game.js`) reads that data and does not invent rules.

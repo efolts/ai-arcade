@@ -4,17 +4,30 @@ import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { stepEnemy } from "./ai.js";
 import { createActors } from "./actors.js";
 import { damagePriest, priestAnswer, resolvePriestHit, riteBanner, tickPriest, PRIEST_TUNING, createPriest } from "./boss.js";
-import { HIJACK_TUNING, aimHijack, applyRetune, tryHijack } from "./hijack.js";
+import {
+  DIRECTORY_TUNING,
+  createDirectory,
+  damageDirectory,
+  directoryAnswer,
+  directoryBanner,
+  resolveDirectoryHit,
+  tickDirectory,
+} from "./directory.js";
+import { HIJACK_TUNING, aimHijack, applyRetune, applySprinkler, tryHijack } from "./hijack.js";
 import {
   BOUNDS,
   CHAPEL_ENTRY,
+  DIRECTORY_CROSS_Z,
+  DIRECTORY_ENTRY,
   HIJACK_SPAWNS,
   PLAYER_SPAWN,
+  SERVICE_ENTRY,
   VEIL_CROSS_Z,
   activeColliders,
   createChapelEnemies,
   createEnemies,
   createPickups,
+  createServiceEnemies,
 } from "./level.js";
 import {
   TUNING,
@@ -187,16 +200,21 @@ export function createGame(canvas, audio) {
   let state = null;
   let enemies = [];
   let priest = null;
+  let directory = null;
   let pickups = [];
   let bolts = [];
   let levelReason = "level";
   let doorOpen = false;
-  let diedInChapel = false;
+  let serviceOpen = false;
+  let directoryOpen = false;
+  let checkpoint = "";
   let choirSilenced = false;
-  let wingDelay = 1.25;
+  let serviceCleared = false;
+  let mallCleared = false;
   let retuneUntil = 0;
   let hijackCooldownUntil = 0;
   let hijackAimed = false;
+  let hijackId = "";
   let prompt = "";
   let promptKind = "";
   let riteText = "";
@@ -268,7 +286,22 @@ export function createGame(canvas, audio) {
   }
 
   function liveColliders() {
-    return activeColliders({ doorOpen, veilUp: !!(priest && priest.alive && priest.veilUp) });
+    return activeColliders({
+      doorOpen,
+      veilUp: !!(priest && priest.alive && priest.veilUp),
+      serviceOpen,
+      directoryOpen,
+      directoryVeilUp: !!(directory && directory.alive && directory.veilUp),
+    });
+  }
+
+  function keptProgress() {
+    return {
+      level: state.level,
+      xp: state.xp,
+      pending: state.pending,
+      mods: { ...(state.mods || {}) },
+    };
   }
 
   function freshPlayer(spawn) {
@@ -285,13 +318,17 @@ export function createGame(canvas, audio) {
 
   function resetRun() {
     state = createRunState();
-    enemies = [...createEnemies(), ...createChapelEnemies()];
+    enemies = [...createEnemies(), ...createChapelEnemies(), ...createServiceEnemies()];
     priest = createPriest();
+    directory = createDirectory();
     pickups = createPickups();
     doorOpen = false;
-    diedInChapel = false;
+    serviceOpen = false;
+    directoryOpen = false;
+    checkpoint = "";
     choirSilenced = false;
-    wingDelay = 1.25;
+    serviceCleared = false;
+    mallCleared = false;
     retuneUntil = 0;
     hijackCooldownUntil = 0;
     hijackAimed = false;
@@ -320,29 +357,14 @@ export function createGame(canvas, audio) {
     tipsShown.clear();
     actors.reset(enemies);
     actors.resetPriest(priest);
-    world.setDoor(false, true);
+    world.setDoors({ radio: false, service: false, directory: false }, true);
     world.setVeil(false, "LIVE");
+    world.setDirectoryVeil(false, "LIVE");
+    world.syncDirectory(directory);
     present("LIVE");
   }
 
-  function retryChapel() {
-    const kept = {
-      level: state.level,
-      xp: state.xp,
-      pending: state.pending,
-      mods: { ...(state.mods || {}) },
-    };
-    state = refillBatteries({ ...createRunState(), signal: 80, ...kept });
-    enemies = [
-      ...enemies.filter((enemy) => enemy.room !== "chapel"),
-      ...createChapelEnemies().map((enemy) => ({ ...enemy, dormant: false })),
-    ];
-    priest = { ...createPriest(), active: true };
-    const placed = createPickups();
-    pickups = [...pickups.filter((pickup) => pickup.z > -14.5), ...placed.filter((pickup) => pickup.z < -14.5)];
-    doorOpen = true;
-    choirSilenced = false;
-    wingDelay = 1.25;
+  function scrubFx() {
     retuneUntil = 0;
     hijackCooldownUntil = 0;
     hijackAimed = false;
@@ -353,19 +375,91 @@ export function createGame(canvas, audio) {
     sparks = [];
     impacts = [];
     tracers = [];
-    player = freshPlayer(CHAPEL_ENTRY);
     arm = 0.45;
     denyLatch = false;
-    diedInChapel = false;
+    checkpoint = "";
     flash = 0;
     shake = 0;
     recoil = 0;
+  }
+
+  function retryChapel() {
+    state = refillBatteries({ ...createRunState(), signal: 80, ...keptProgress() });
+    enemies = [
+      ...enemies.filter((enemy) => enemy.room === "court"),
+      ...createChapelEnemies().map((enemy) => ({ ...enemy, dormant: false })),
+      ...createServiceEnemies(),
+    ];
+    priest = { ...createPriest(), active: true };
+    directory = createDirectory();
+    const placed = createPickups();
+    pickups = [...pickups.filter((pickup) => pickup.z > -14.5), ...placed.filter((pickup) => pickup.z < -14.5)];
+    doorOpen = true;
+    serviceOpen = false;
+    directoryOpen = false;
+    choirSilenced = false;
+    serviceCleared = false;
+    mallCleared = false;
+    scrubFx();
+    player = freshPlayer(CHAPEL_ENTRY);
     actors.reset(enemies);
     actors.resetPriest(priest);
-    world.setDoor(true, true);
+    world.setDoors({ radio: true, service: false, directory: false }, true);
     world.setVeil(false, "LIVE");
+    world.setDirectoryVeil(false, "LIVE");
+    world.syncDirectory(directory);
     present("LIVE");
     banner("RADIO WING");
+  }
+
+  function retryService() {
+    state = refillBatteries({ ...createRunState(), signal: 80, ...keptProgress() });
+    enemies = [
+      ...enemies.filter((enemy) => enemy.room === "court" || enemy.room === "chapel"),
+      ...createServiceEnemies().map((enemy) => ({ ...enemy, dormant: false })),
+    ];
+    priest = { ...priest, alive: false, phase: "dead", veilUp: false, active: false, rite: null };
+    directory = createDirectory();
+    const placed = createPickups();
+    pickups = [...pickups.filter((pickup) => pickup.z > -29.2), ...placed.filter((pickup) => pickup.z < -29.2)];
+    doorOpen = true;
+    serviceOpen = true;
+    directoryOpen = false;
+    choirSilenced = true;
+    serviceCleared = false;
+    mallCleared = false;
+    scrubFx();
+    player = freshPlayer(SERVICE_ENTRY);
+    actors.reset(enemies);
+    actors.resetPriest(priest);
+    world.setDoors({ radio: true, service: true, directory: false }, true);
+    world.setVeil(false, "LIVE");
+    world.setDirectoryVeil(false, "LIVE");
+    world.syncDirectory(directory);
+    present("LIVE");
+    banner("SERVICE WING");
+  }
+
+  function retryDirectory() {
+    state = refillBatteries({ ...createRunState(), signal: 80, ...keptProgress() });
+    directory = { ...createDirectory(), active: true };
+    const placed = createPickups();
+    pickups = [...pickups.filter((pickup) => pickup.z > -41.4), ...placed.filter((pickup) => pickup.z < -41.4)];
+    doorOpen = true;
+    serviceOpen = true;
+    directoryOpen = true;
+    choirSilenced = true;
+    serviceCleared = true;
+    mallCleared = false;
+    scrubFx();
+    player = freshPlayer(DIRECTORY_ENTRY);
+    actors.reset(enemies);
+    world.setDoors({ radio: true, service: true, directory: true }, true);
+    world.setVeil(false, "LIVE");
+    world.setDirectoryVeil(false, "LIVE");
+    world.syncDirectory(directory);
+    present("LIVE");
+    banner("DIRECTORY");
   }
 
   resetRun();
@@ -421,32 +515,58 @@ export function createGame(canvas, audio) {
     for (const dir of dirs) {
       const hit = resolveShot(origin, dir, begun.profile.range, enemies, cols, { phase: begun.profile.phases });
       const priestHit = priest.alive ? resolvePriestHit(origin, dir, begun.profile.range, priest, state.channel) : null;
-      const usePriest = !!(priestHit && (!hit || priestHit.t < hit.t));
-      const chosen = usePriest ? priestHit : hit;
+      const directoryHit =
+        directory && directory.alive && directory.active
+          ? resolveDirectoryHit(origin, dir, begun.profile.range, directory, state.channel)
+          : null;
+      let bossHit = null;
+      if (priestHit && (!hit || priestHit.t < hit.t)) bossHit = priestHit;
+      if (directoryHit && (!hit || directoryHit.t < hit.t) && (!bossHit || directoryHit.t < bossHit.t)) bossHit = directoryHit;
+      const chosen = bossHit || hit;
       const reach = Math.min(begun.profile.range, 22);
       const end = chosen
         ? { x: chosen.x, y: chosen.y, z: chosen.z }
         : { x: origin.x + dir.x * reach, y: origin.y + dir.y * reach, z: origin.z + dir.z * reach };
       if (!chosen || chosen.t > 0.45) tracers.push({ a: muzzle, b: end, color: tracerColor, life: 0.16 });
-      if (usePriest) {
+      if (bossHit && bossHit.kind === "priest") {
         const amount =
-          damageAtRange(begun.profile.damage, priestHit.t, begun.profile.range, begun.profile.falloff) *
+          damageAtRange(begun.profile.damage, bossHit.t, begun.profile.range, begun.profile.falloff) *
           (retuned ? HIJACK_TUNING.retuneMult : 1);
         const chipped = damagePriest(priest, amount);
         priest = chipped.priest;
         if (chipped.dealt > 0) connected = true;
-        burst(priestHit.x, priestHit.y, priestHit.z, retuned ? [0.45, 0.97, 1] : [0.96, 0.94, 0.88], 5);
+        burst(bossHit.x, bossHit.y, bossHit.z, retuned ? [0.45, 0.97, 1] : [0.96, 0.94, 0.88], 5);
         if (!chipped.killed) {
           const answered = priestAnswer(priest, {
             channel: state.channel,
-            weak: priestHit.weak,
-            halo: priestHit.halo,
+            weak: bossHit.weak,
+            halo: bossHit.halo,
             crossed: false,
           });
           if (answered.broken) {
             noteBreak(answered);
             riteBroken = true;
           } else priest = answered.priest;
+        }
+        continue;
+      }
+      if (bossHit && bossHit.kind === "directory") {
+        const amount = damageAtRange(begun.profile.damage, bossHit.t, begun.profile.range, begun.profile.falloff);
+        const chipped = damageDirectory(directory, amount);
+        directory = chipped.boss;
+        if (chipped.dealt > 0) connected = true;
+        burst(bossHit.x, bossHit.y, bossHit.z, [1, 0.62, 0.22], 6);
+        if (!chipped.killed) {
+          const answered = directoryAnswer(directory, {
+            channel: state.channel,
+            weak: bossHit.weak,
+            halo: bossHit.halo,
+            crossed: false,
+          });
+          if (answered.broken) {
+            noteDirectoryBreak(answered);
+            riteBroken = true;
+          } else directory = answered.boss;
         }
         continue;
       }
@@ -500,6 +620,16 @@ export function createGame(canvas, audio) {
     addXp(TUNING.xpRite);
   }
 
+  function noteDirectoryBreak(answered) {
+    directory = answered.boss;
+    if (!answered.broken) return;
+    audio.play("rite-break");
+    burst(directory.x, 2.2, directory.z, [1, 0.68, 0.22], 22);
+    flash = Math.max(flash, 0.34);
+    if (directory.alive) banner("RITE BROKEN");
+    addXp(TUNING.xpRite);
+  }
+
   function addXp(amount) {
     const gained = grantXp(state, amount);
     state = gained.state;
@@ -535,6 +665,27 @@ export function createGame(canvas, audio) {
     };
   }
 
+  function directoryBolt() {
+    const ox = directory.x;
+    const oy = 1.85;
+    const oz = directory.z;
+    const tx = player.x - ox + (rng() - 0.5) * 0.18;
+    const ty = 1.15 - oy + (rng() - 0.5) * 0.1;
+    const tz = player.z - oz + (rng() - 0.5) * 0.18;
+    const len = Math.hypot(tx, ty, tz) || 1;
+    const speed = DIRECTORY_TUNING.boltSpeed;
+    return {
+      x: ox,
+      y: oy,
+      z: oz,
+      vx: (tx / len) * speed,
+      vy: (ty / len) * speed,
+      vz: (tz / len) * speed,
+      damage: DIRECTORY_TUNING.boltDamage,
+      life: 2.6,
+    };
+  }
+
   function simulate(dt, input) {
     const drained = tickResources(state, dt);
     state = drained.state;
@@ -555,7 +706,7 @@ export function createGame(canvas, audio) {
     player.yaw -= input.lookX * 0.00215;
     player.pitch = clamp(player.pitch - input.lookY * 0.00215, -1.35, 1.35);
 
-    const courtLeft = enemies.some((enemy) => enemy.alive && enemy.room !== "chapel");
+    const courtLeft = enemies.some((enemy) => enemy.alive && enemy.room === "court");
     let broke = false;
     if (!doorOpen && !courtLeft) {
       doorOpen = true;
@@ -582,42 +733,79 @@ export function createGame(canvas, audio) {
         queueTip("priest", "Three rites. LIVE the seam. STATIC the halo. DEAD AIR through the veil.");
       }
     }
+    if (serviceOpen && player.z < -29.6) {
+      for (let i = 0; i < enemies.length; i++) {
+        if (enemies[i].room === "service" && enemies[i].dormant) {
+          enemies[i] = { ...enemies[i], dormant: false };
+        }
+      }
+      queueTip("service", "Service wing. Aim at the sprinkler and press E. It slows the Tessera in this room.");
+    }
+    if (directoryOpen && directory && player.z < -42.2 && !directory.active) {
+      directory = { ...directory, active: true };
+      queueTip("directory", "The Directory. LIVE the listing. STATIC the index. DEAD AIR through the gate.");
+    }
 
-    const horn = HIJACK_SPAWNS[0];
     const { forward } = aim(player.yaw, player.pitch);
-    const blocked = !segmentClear(player.x, player.y, player.z, horn.x, horn.y, horn.z, liveColliders());
-    const look = aimHijack({
-      origin: { x: player.x, y: player.y, z: player.z },
-      dir: forward,
-      point: horn,
-      maxDist: HIJACK_TUNING.maxDist,
-      cone: HIJACK_TUNING.cone,
-      blocked,
-    });
-    hijackAimed = look.aimed;
+    let aimedSpawn = null;
+    let aimedDist = Infinity;
+    for (const spawn of HIJACK_SPAWNS) {
+      const blocked = !segmentClear(player.x, player.y, player.z, spawn.x, spawn.y, spawn.z, liveColliders());
+      const look = aimHijack({
+        origin: { x: player.x, y: player.y, z: player.z },
+        dir: forward,
+        point: spawn,
+        maxDist: HIJACK_TUNING.maxDist,
+        cone: HIJACK_TUNING.cone,
+        blocked,
+      });
+      if (!look.aimed || look.dist >= aimedDist) continue;
+      aimedSpawn = spawn;
+      aimedDist = look.dist;
+    }
+    hijackAimed = !!aimedSpawn;
+    hijackId = aimedSpawn ? aimedSpawn.id : "";
     const hot = time < retuneUntil;
     const cooling = hijackCooldownUntil > time;
-    if (hijackAimed) prompt = hot ? "PA RETUNED" : cooling ? "PA RECHARGING" : "E  RETUNE PA";
-    else prompt = hot ? "PA RETUNED" : "";
-    promptKind = hot ? "hot" : hijackAimed && cooling ? "cool" : hijackAimed ? "ready" : "";
-    if (input.use && hijackAimed) {
+    if (hijackId === "sprinkler" && hijackAimed) {
+      prompt = cooling ? "SPRINKLERS RECHARGING" : "E  OPEN SPRINKLERS";
+      promptKind = cooling ? "cool" : "ready";
+    } else if (hijackAimed) {
+      prompt = hot ? "PA RETUNED" : cooling ? "PA RECHARGING" : "E  RETUNE PA";
+      promptKind = hot ? "hot" : cooling ? "cool" : "ready";
+    } else {
+      prompt = hot ? "PA RETUNED" : "";
+      promptKind = hot ? "hot" : "";
+    }
+    if (input.use && hijackAimed && aimedSpawn) {
       const tried = tryHijack({ cooldownUntil: hijackCooldownUntil }, time, tuningOf(state).paCooldown);
       if (!tried.ok) audio.play("deny");
-      else {
+      else if (aimedSpawn.id === "sprinkler") {
+        hijackCooldownUntil = tried.cooldownUntil;
+        enemies = applySprinkler(enemies, aimedSpawn, HIJACK_TUNING.sprinklerRadius, HIJACK_TUNING.slow);
+        addXp(TUNING.xpHijack);
+        banner("SPRINKLERS");
+        audio.play("hijack");
+        burst(aimedSpawn.x, aimedSpawn.y, aimedSpawn.z, [1, 0.72, 0.28], 22);
+        flash = Math.max(flash, 0.22);
+        shake = Math.max(shake, 0.03);
+        world.pulseHijack("sprinkler");
+      } else {
         hijackCooldownUntil = tried.cooldownUntil;
         retuneUntil = time + HIJACK_TUNING.retune;
-        enemies = applyRetune(enemies, horn, HIJACK_TUNING.radius, HIJACK_TUNING.stun);
+        enemies = applyRetune(enemies, aimedSpawn, HIJACK_TUNING.radius, HIJACK_TUNING.stun);
         const refund = refundBatteries(state);
         state = refund.state;
         addXp(TUNING.xpHijack);
         banner("PA RETUNE");
         audio.play("hijack");
-        burst(horn.x, horn.y, horn.z, [0.45, 0.97, 1], 28);
+        burst(aimedSpawn.x, aimedSpawn.y, aimedSpawn.z, [0.45, 0.97, 1], 28);
         flash = Math.max(flash, 0.28);
         shake = Math.max(shake, 0.035);
-        world.pulseHijack();
+        world.pulseHijack("pa-horn");
       }
     }
+    const horn = HIJACK_SPAWNS[0];
     if (doorOpen && Math.hypot(player.x - horn.x, player.z - horn.z) < 8) {
       queueTip("pa", "Aim at the wall horn and press E. It retunes Tessera nearby.");
     }
@@ -641,7 +829,27 @@ export function createGame(canvas, audio) {
         audio.play("bolt");
       }
     }
-    riteText = priest.alive && priest.phase === "rite" ? riteBanner(priest.rite) : "";
+    const steppedDirectory = tickDirectory(directory, dt, { player: { x: player.x, z: player.z } });
+    directory = steppedDirectory.boss;
+    for (const event of steppedDirectory.events) {
+      if (event.type === "announce") {
+        banner(directoryBanner(event.rite));
+        audio.play("rite");
+      } else if (event.type === "fail") {
+        const hurt = hurtPlayer(state, event.damage);
+        state = hurt.state;
+        if (hurt.hit) {
+          audio.play("rite-fail");
+          shake = Math.max(shake, 0.05);
+        }
+        banner("RITE HOLDS");
+      } else if (event.type === "shot" && bolts.length < 16) {
+        bolts.push(directoryBolt());
+        audio.play("bolt");
+      }
+    }
+    if (directory.alive && directory.phase === "rite") riteText = directoryBanner(directory.rite);
+    else riteText = priest.alive && priest.phase === "rite" ? riteBanner(priest.rite) : "";
 
     const cols = liveColliders();
     for (let i = 0; i < enemies.length; i++) {
@@ -712,6 +920,17 @@ export function createGame(canvas, audio) {
     ) {
       const answered = priestAnswer(priest, { channel: "DEAD_AIR", weak: false, halo: false, crossed: true });
       if (answered.broken) noteBreak(answered);
+    }
+    if (
+      directory &&
+      directory.alive &&
+      directory.phase === "rite" &&
+      directory.rite === "gate" &&
+      state.channel === "DEAD_AIR" &&
+      player.z < DIRECTORY_CROSS_Z
+    ) {
+      const answered = directoryAnswer(directory, { channel: "DEAD_AIR", weak: false, halo: false, crossed: true });
+      if (answered.broken) noteDirectoryBreak(answered);
     }
 
     if (arm > 0) arm -= dt;
@@ -796,7 +1015,7 @@ export function createGame(canvas, audio) {
     if (player.x > 12.1 && pickups.some((pickup) => pickup.cloaked && !pickup.taken)) {
       queueTip("cache", "Something in the alley is off-channel. STATIC reveals a signal cache.");
     }
-    const courtLiving = enemies.filter((enemy) => enemy.alive && enemy.room !== "chapel");
+    const courtLiving = enemies.filter((enemy) => enemy.alive && enemy.room === "court");
     if (courtLiving.length === 1 && courtLiving[0].id === "alley") {
       queueTip("last", "Last Tessera is in the east service alley. Phase the shutter or walk the north end.");
     }
@@ -809,38 +1028,62 @@ export function createGame(canvas, audio) {
     }
 
     if (state.health <= 0) {
-      diedInChapel = doorOpen;
+      checkpoint = directoryOpen ? "directory" : serviceOpen ? "service" : doorOpen ? "radio" : "";
       mode = "dead";
       audio.play("ui");
       return;
     }
-    if (!priest.alive && doorOpen) {
-      if (!choirSilenced) {
-        choirSilenced = true;
-        enemies = enemies.map((enemy) =>
-          enemy.room === "chapel" && enemy.alive ? { ...enemy, alive: false, hittable: false } : enemy
-        );
+    if (!priest.alive && doorOpen && !serviceOpen) {
+      choirSilenced = true;
+      enemies = enemies.map((enemy) =>
+        enemy.room === "chapel" && enemy.alive ? { ...enemy, alive: false, hittable: false } : enemy
+      );
+      state = refillBatteries(grantSignal(state, 40));
+      const cleared = grantXp(state, TUNING.xpWing);
+      state = cleared.state;
+      serviceOpen = true;
+      banner("OFF THE AIR");
+      audio.play("death");
+      audio.play("door");
+      burst(priest.x, 2.1, priest.z, [0.96, 0.8, 0.38], 34);
+      burst(priest.x, 2.75, priest.z, [0.9, 0.72, 0.28], 16);
+      queueTip("service-door", "Service door is open. The mall keeps going north.");
+      if ((state.pending || 0) > 0 && mode === "play") openLevelUp("break");
+    }
+    const serviceLiving = enemies.some((enemy) => enemy.alive && enemy.room === "service");
+    if (serviceOpen && !serviceLiving && !directoryOpen && !serviceCleared) {
+      serviceCleared = true;
+      directoryOpen = true;
+      state = refillBatteries(state);
+      const cleared = grantXp(state, TUNING.xpWing);
+      state = cleared.state;
+      banner("DIRECTORY");
+      audio.play("door");
+      queueTip("directory-door", "Directory door is open. That kiosk is the last channel.");
+      if ((state.pending || 0) > 0 && mode === "play") openLevelUp("break");
+    }
+    if (directoryOpen && directory && !directory.alive) {
+      if (!mallCleared) {
+        mallCleared = true;
         state = refillBatteries(grantSignal(state, 40));
         const cleared = grantXp(state, TUNING.xpWing);
         state = cleared.state;
-        banner("OFF THE AIR");
+        banner("MALL CLEAR");
         audio.play("death");
-        burst(priest.x, 2.1, priest.z, [0.96, 0.8, 0.38], 34);
-        burst(priest.x, 2.75, priest.z, [0.9, 0.72, 0.28], 16);
-        wingDelay = 1.25;
+        burst(directory.x, 2.2, directory.z, [1, 0.68, 0.22], 36);
+        burst(directory.x, 2.95, directory.z, [0.96, 0.78, 0.32], 18);
+        clearDelay = 1.2;
       }
       if ((state.pending || 0) > 0 && mode === "play") {
         openLevelUp("level");
         return;
       }
-      wingDelay -= dt;
-      if (wingDelay <= 0) {
+      clearDelay -= dt;
+      if (clearDelay <= 0 && mode === "play") {
         mode = "clear";
         rememberBest();
         audio.play("pickup");
       }
-    } else {
-      wingDelay = 1.25;
     }
   }
 
@@ -956,7 +1199,9 @@ export function createGame(canvas, audio) {
       if (mode === "play") mode = "pause";
     },
     replay() {
-      if (diedInChapel) retryChapel();
+      if (checkpoint === "directory") retryDirectory();
+      else if (checkpoint === "service") retryService();
+      else if (checkpoint === "radio") retryChapel();
       else resetRun();
       mode = "play";
       audio.play("ui");
@@ -983,11 +1228,14 @@ export function createGame(canvas, audio) {
       world.setPickup("cache", !!(cache && !cache.taken && state.channel === "STATIC" && mode !== "title"));
       world.setPickup("aid", !!(aid && !aid.taken));
       world.syncCells(pickups, mode === "play" ? time : 0);
-      world.setDoor(doorOpen);
+      world.setDoors({ radio: doorOpen, service: serviceOpen, directory: directoryOpen });
       world.setVeil(!!(priest.alive && priest.veilUp), mode === "title" ? "LIVE" : state.channel);
+      world.setDirectoryVeil(!!(directory && directory.alive && directory.veilUp), mode === "title" ? "LIVE" : state.channel);
+      world.syncDirectory(directory);
       world.setHijack({
         aimed: mode === "play" && hijackAimed,
         hot: mode === "play" && time < retuneUntil,
+        id: hijackId,
       });
       world.update(clock, state.channel, player);
       actors.setProbeBlend(player.z);
@@ -1022,13 +1270,26 @@ export function createGame(canvas, audio) {
       return true;
     },
     hud() {
-      const inWing = player.z < -14.85;
-      const courtCount = enemies.filter((enemy) => enemy.alive && enemy.room !== "chapel").length;
-      const wingCount =
-        enemies.filter((enemy) => enemy.alive && enemy.room === "chapel").length + (priest.alive ? 1 : 0);
+      const band = player.z < -41.55 ? "directory" : player.z < -29.35 ? "service" : player.z < -14.85 ? "radio" : "court";
+      const courtCount = enemies.filter((enemy) => enemy.alive && enemy.room === "court").length;
+      const radioCount = enemies.filter((enemy) => enemy.alive && enemy.room === "chapel").length + (priest.alive ? 1 : 0);
+      const serviceCount = enemies.filter((enemy) => enemy.alive && enemy.room === "service").length;
+      const directoryCount = directory && directory.alive ? 1 : 0;
+      const roomMeta = {
+        court: ["COURT", courtCount, "TESSERA"],
+        radio: ["RADIO", radioCount, "ON AIR"],
+        service: ["SERVICE", serviceCount, "TESSERA"],
+        directory: ["DIRECTORY", directoryCount, "ON AIR"],
+      }[band];
       const playing = mode === "play";
       const profile = shotProfile(state.channel, state);
       const offers = mode === "levelup" ? offersFor(state) : [];
+      const bossRatio =
+        band === "directory" && directory && directory.alive
+          ? directory.hp / directory.maxHp
+          : band === "radio" && priest.alive
+            ? priest.hp / priest.maxHp
+            : null;
       return {
         mode,
         health: state.health,
@@ -1041,9 +1302,9 @@ export function createGame(canvas, audio) {
         xp: xpProgress(state),
         levelReason,
         offers: offers.map((offer) => ({ id: offer.id, name: offer.name, detail: offer.detail })),
-        enemies: inWing ? wingCount : courtCount,
-        roomLabel: inWing ? "RADIO" : "COURT",
-        countLabel: inWing ? "ON AIR" : "TESSERA",
+        enemies: roomMeta[1],
+        roomLabel: roomMeta[0],
+        countLabel: roomMeta[2],
         tip,
         banner: bannerText,
         bannerSerial,
@@ -1056,8 +1317,8 @@ export function createGame(canvas, audio) {
         prompt: playing ? prompt : "",
         promptKind: playing ? promptKind : "",
         rite: playing ? riteText : "",
-        boss: inWing && priest.alive ? priest.hp / priest.maxHp : null,
-        checkpoint: diedInChapel,
+        boss: bossRatio,
+        checkpoint,
       };
     },
   };

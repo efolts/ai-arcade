@@ -9,11 +9,21 @@ import {
   resolvePriestHit,
   tickPriest,
 } from "./boss.js";
-import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyRetune, tryHijack } from "./hijack.js";
+import {
+  DIRECTORY_TUNING,
+  createDirectory,
+  damageDirectory,
+  directoryAnswer,
+  resolveDirectoryHit,
+  tickDirectory,
+} from "./directory.js";
+import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyRetune, applySprinkler, tryHijack } from "./hijack.js";
 import {
   BLOCKS,
   BOUNDS,
   CHAPEL_ENEMIES,
+  DIRECTORY_CROSS_Z,
+  DIRECTORY_SPAWN,
   ENEMIES,
   HIJACK_SPAWNS,
   LEASHES,
@@ -22,11 +32,14 @@ import {
   PLAYER_SPAWN,
   PRIEST_SPAWN,
   RESERVED_CONTENT,
+  SERVICE_ENEMIES,
+  SERVICE_ENTRY,
   VEIL_CROSS_Z,
   activeColliders,
   courtColliders,
   createChapelEnemies,
   createEnemies,
+  createServiceEnemies,
 } from "./level.js";
 import {
   TUNING,
@@ -425,15 +438,17 @@ describe("level up", () => {
 });
 
 describe("court layout", () => {
-  it("ships the two-room slice with phase-3 art and no later bosses", () => {
+  it("ships the mall run with phase-3 art and reserved ids kept off encounters", () => {
     assert.equal(PHASE, 3);
     assert.equal(ENEMIES.filter((e) => e.cloak).length, 1);
     assert.equal(ENEMIES.find((e) => e.cloak).id, "fountain");
     assert.equal(PICKUPS.filter((p) => p.cloaked).length, 1);
     const gates = BLOCKS.filter((b) => b.phaseGate);
-    assert.equal(gates.length, 2);
+    assert.equal(gates.length, 3);
     assert.equal(BLOCKS.find((b) => b.id === "phase-gate").veil, undefined);
     assert.equal(BLOCKS.find((b) => b.id === "rite-veil").veil, true);
+    assert.equal(BLOCKS.find((b) => b.id === "directory-gate").directoryVeil, true);
+    assert.equal(BLOCKS.find((b) => b.id === "directory-gate").veil, undefined);
     assert.deepEqual(
       courtColliders()
         .filter((c) => c.phaseGate)
@@ -447,20 +462,28 @@ describe("court layout", () => {
     assert.equal(reserved.has("wings"), true);
     assert.equal(reserved.has("broadcast-echo"), true);
     assert.equal(reserved.has("visor-priest"), false);
-    for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES]) assert.equal(reserved.has(enemy.id), false);
+    for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES, ...SERVICE_ENEMIES]) assert.equal(reserved.has(enemy.id), false);
+    assert.equal(createDirectory().id, "directory-boss");
+    assert.equal(reserved.has("directory-boss"), false);
     assert.ok(LEASHES.alley);
+    assert.ok(LEASHES["service-ghost"]);
     assert.equal(PICKUPS.find((p) => p.cloaked).kind, "signal");
     const cells = PICKUPS.filter((p) => p.kind === "battery");
-    assert.equal(cells.length, 6);
+    assert.equal(cells.length, 10);
     const courtPads = cells.filter((cell) => cell.z > -14.5);
-    const wingPads = cells.filter((cell) => cell.z < -14.5);
+    const radioPads = cells.filter((cell) => cell.z < -14.5 && cell.z > -29.2);
+    const servicePads = cells.filter((cell) => cell.z < -29.2 && cell.z > -41.4);
+    const directoryPads = cells.filter((cell) => cell.z < -41.4);
     assert.ok(courtPads.length >= 3);
-    assert.ok(wingPads.length >= 2);
+    assert.ok(radioPads.length >= 2);
+    assert.equal(servicePads.length, 2);
+    assert.equal(directoryPads.length, 2);
+    const openCols = activeColliders({ doorOpen: true, serviceOpen: true, directoryOpen: true });
     for (const cell of cells) {
       assert.equal(cell.pad, true);
       assert.equal(cell.cloaked, false);
-      assert.equal(overlapsCircle(cell.x, cell.z, TUNING.playerRadius, cols, "LIVE"), null, cell.id);
-      for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES]) {
+      assert.equal(overlapsCircle(cell.x, cell.z, TUNING.playerRadius, openCols, "LIVE"), null, cell.id);
+      for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES, ...SERVICE_ENEMIES]) {
         const gap = Math.hypot(cell.x - enemy.x, cell.z - enemy.z);
         assert.ok(gap > 1.6, `${cell.id} on ${enemy.id}`);
       }
@@ -626,13 +649,19 @@ describe("radio wing", () => {
 });
 
 describe("pa horn", () => {
-  it("keeps one playable hijack and reserves the rest", () => {
+  it("keeps the horn and the sprinkler playable and reserves the rest", () => {
     assert.deepEqual(
       HIJACK_CATALOG.filter((item) => item.status === "playable").map((item) => item.id),
-      ["pa-horn"]
+      ["pa-horn", "sprinkler"]
     );
-    assert.ok(HIJACK_CATALOG.filter((item) => item.status === "reserved").length >= 3);
+    assert.deepEqual(
+      HIJACK_CATALOG.filter((item) => item.status === "reserved").map((item) => item.id).sort(),
+      ["security-camera", "security-shutter"]
+    );
+    assert.equal(HIJACK_CATALOG.some((item) => item.id === "broadcast-echo"), false);
+    assert.equal(RESERVED_CONTENT.some((item) => item.id === "broadcast-echo"), true);
     assert.equal(HIJACK_SPAWNS[0].id, "pa-horn");
+    assert.equal(HIJACK_SPAWNS.find((item) => item.id === "sprinkler").id, "sprinkler");
   });
 
   it("aims only while looking at the horn and in range", () => {
@@ -681,6 +710,23 @@ describe("pa horn", () => {
     assert.equal(early.ok, false);
     const later = tryHijack({ cooldownUntil: first.cooldownUntil }, first.cooldownUntil + 0.01);
     assert.equal(later.ok, true);
+  });
+
+  it("slows the service wing and leaves the choir unsunned", () => {
+    const point = HIJACK_SPAWNS.find((item) => item.id === "sprinkler");
+    const slowed = applySprinkler(
+      [...createEnemies(), ...createChapelEnemies(), ...createServiceEnemies()],
+      point,
+      HIJACK_TUNING.sprinklerRadius,
+      HIJACK_TUNING.slow
+    );
+    assert.equal(slowed.find((enemy) => enemy.id === "choir-l").slow || 0, 0);
+    assert.equal(slowed.find((enemy) => enemy.id === "choir-l").stun || 0, 0);
+    assert.equal(slowed.find((enemy) => enemy.id === "north-l").slow || 0, 0);
+    assert.ok(slowed.find((enemy) => enemy.id === "service-l").slow >= HIJACK_TUNING.slow);
+    assert.ok(slowed.find((enemy) => enemy.id === "service-ghost").slow >= HIJACK_TUNING.slow);
+    assert.equal(slowed.find((enemy) => enemy.id === "service-l").stun || 0, 0);
+    assert.equal(slowed.find((enemy) => enemy.id === "service-l").windup, 0);
   });
 });
 
@@ -835,6 +881,166 @@ describe("choir", () => {
     assert.equal(step.enemy.windup, 0);
     assert.ok(step.enemy.stun < 0.5);
     assert.equal(step.enemy.x, enemy.x);
+  });
+});
+
+describe("service wing", () => {
+  it("keeps the service door shut until that wing is open", () => {
+    const shut = activeColliders({ doorOpen: true, serviceOpen: false });
+    let closed = { x: 1.85, z: -26.6 };
+    for (let i = 0; i < 30; i++) {
+      closed = tryMove(closed.x, closed.z, 0, -0.22, TUNING.playerRadius, shut, "LIVE", BOUNDS);
+    }
+    assert.ok(closed.z > -28.85, `closed z ${closed.z}`);
+    const openCols = activeColliders({ doorOpen: true, serviceOpen: true, directoryOpen: false });
+    let open = { x: 1.85, z: -26.6 };
+    for (let i = 0; i < 40; i++) {
+      open = tryMove(open.x, open.z, 0, -0.22, TUNING.playerRadius, openCols, "LIVE", BOUNDS);
+    }
+    assert.ok(open.z < -31, `open z ${open.z}`);
+    assert.equal(overlapsCircle(SERVICE_ENTRY.x, SERVICE_ENTRY.z, TUNING.playerRadius, openCols, "LIVE"), null);
+    for (const enemy of createServiceEnemies()) {
+      assert.equal(overlapsCircle(enemy.x, enemy.z, 0.42, openCols, "LIVE"), null, enemy.id);
+      assert.equal(enemy.room, "service");
+      assert.equal(enemy.dormant, true);
+    }
+    assert.equal(SERVICE_ENEMIES.filter((enemy) => enemy.cloak).length, 1);
+  });
+
+  it("slows a Tessera without freezing it", () => {
+    let slow = createEnemies().find((enemy) => enemy.id === "north-l");
+    let free = { ...slow, cooldown: 5, windup: 0 };
+    slow = { ...slow, slow: 3, cooldown: 5, windup: 0 };
+    const ctx = {
+      channel: "LIVE",
+      player: { x: slow.x, y: 1.2, z: slow.z - 8, forceAggro: true },
+      colliders: cols,
+      allies: [],
+      rng: () => 0.4,
+    };
+    let slowTravel = 0;
+    let freeTravel = 0;
+    for (let i = 0; i < 20; i++) {
+      const a = stepEnemy(slow, 0.1, ctx);
+      const b = stepEnemy(free, 0.1, ctx);
+      slowTravel += Math.hypot(a.enemy.x - slow.x, a.enemy.z - slow.z);
+      freeTravel += Math.hypot(b.enemy.x - free.x, b.enemy.z - free.z);
+      slow = a.enemy;
+      free = b.enemy;
+    }
+    assert.ok(slowTravel > 0.05, `slow travel ${slowTravel}`);
+    assert.ok(freeTravel > slowTravel, `free ${freeTravel} slow ${slowTravel}`);
+    assert.ok(slowTravel < freeTravel * 0.55, `slow ${slowTravel} free ${freeTravel}`);
+  });
+});
+
+describe("directory", () => {
+  const ctx = { player: { x: 0, z: -44 } };
+
+  it("announces listing, index, then the gate, and three breaks do not kill it", () => {
+    let boss = { ...createDirectory(), active: true };
+    assert.equal(boss.id, "directory-boss");
+    const rites = [];
+    for (let i = 0; i < 3; i++) {
+      boss.timer = 0.01;
+      boss.phase = "idle";
+      const step = tickDirectory(boss, 0.05, ctx);
+      assert.equal(step.events[0].type, "announce");
+      rites.push(step.events[0].rite);
+      const answer =
+        step.boss.rite === "listing"
+          ? { channel: "LIVE", weak: true, halo: false, crossed: false }
+          : step.boss.rite === "index"
+            ? { channel: "STATIC", weak: false, halo: true, crossed: false }
+            : { channel: "DEAD_AIR", weak: false, halo: false, crossed: true };
+      const broken = directoryAnswer(step.boss, answer);
+      assert.equal(broken.broken, true);
+      boss = broken.boss;
+      boss.timer = 0.01;
+      boss = tickDirectory(boss, 0.05, ctx).boss;
+      assert.equal(boss.phase, "idle");
+    }
+    assert.deepEqual(rites, ["listing", "index", "gate"]);
+    assert.equal(boss.alive, true);
+    assert.ok(boss.hp <= DIRECTORY_TUNING.hp - DIRECTORY_TUNING.breakDamage * 3);
+    assert.ok(boss.hp > 0);
+  });
+
+  it("rejects the wrong channel and a phaser shot that does not cross the gate", () => {
+    const listing = directoryAnswer(
+      { ...createDirectory(), phase: "rite", rite: "listing", exposed: true },
+      { channel: "STATIC", weak: true, halo: false, crossed: false }
+    );
+    assert.equal(listing.broken, false);
+    const index = directoryAnswer(
+      { ...createDirectory(), phase: "rite", rite: "index", haloVisible: true },
+      { channel: "LIVE", weak: true, halo: false, crossed: false }
+    );
+    assert.equal(index.broken, false);
+    const gate = directoryAnswer(
+      { ...createDirectory(), phase: "rite", rite: "gate", veilUp: true },
+      { channel: "DEAD_AIR", weak: false, halo: false, crossed: false }
+    );
+    assert.equal(gate.broken, false);
+    const walked = directoryAnswer(
+      { ...createDirectory(), phase: "rite", rite: "gate", veilUp: true },
+      { channel: "DEAD_AIR", weak: false, halo: false, crossed: true }
+    );
+    assert.equal(walked.broken, true);
+    assert.equal(walked.boss.veilUp, false);
+  });
+
+  it("chips the body and shows the ring only on STATIC", () => {
+    const boss = createDirectory();
+    const chip = damageDirectory(boss, TUNING.liveDamage);
+    assert.equal(chip.killed, false);
+    assert.ok(chip.dealt < 8);
+    const index = { ...createDirectory(), phase: "rite", rite: "index", haloVisible: true };
+    const origin = { x: 0, y: 2.95, z: -46 };
+    const dir = { x: 0, y: 0, z: -1 };
+    const hidden = resolveDirectoryHit(origin, dir, 30, index, "LIVE");
+    assert.ok(!hidden || hidden.halo === false);
+    const shown = resolveDirectoryHit(origin, dir, 30, index, "STATIC");
+    assert.equal(shown.halo, true);
+    const listing = { ...createDirectory(), phase: "rite", rite: "listing", exposed: true };
+    const seam = resolveDirectoryHit({ x: 0, y: 2.2, z: -46 }, dir, 30, listing, "LIVE");
+    assert.equal(seam.weak, true);
+    assert.equal(directoryAnswer(listing, { channel: "LIVE", weak: true, halo: false, crossed: false }).broken, true);
+  });
+
+  it("lets DEAD AIR through the gate and stops LIVE", () => {
+    const gateCols = activeColliders({
+      doorOpen: true,
+      serviceOpen: true,
+      directoryOpen: true,
+      directoryVeilUp: true,
+    });
+    let live = { x: 0, z: -46.2 };
+    let dead = { x: 0, z: -46.2 };
+    for (let i = 0; i < 28; i++) {
+      live = tryMove(live.x, live.z, 0, -0.22, TUNING.playerRadius, gateCols, "LIVE", BOUNDS);
+      dead = tryMove(dead.x, dead.z, 0, -0.22, TUNING.playerRadius, gateCols, "DEAD_AIR", BOUNDS);
+    }
+    assert.ok(live.z > -47.2, `live z ${live.z}`);
+    assert.ok(dead.z < DIRECTORY_CROSS_Z, `dead z ${dead.z}`);
+    assert.ok(dead.z > -50.6, `dead z ${dead.z}`);
+    assert.equal(overlapsCircle(DIRECTORY_SPAWN.x, DIRECTORY_SPAWN.z, 0.42, gateCols, "LIVE").id, "directory-plinth");
+  });
+
+  it("telegraphs a bolt and fails a rite for chip damage", () => {
+    let boss = { ...createDirectory(), active: true, phase: "rite", rite: "listing", timer: 0.05, exposed: true };
+    const failed = tickDirectory(boss, 0.1, ctx);
+    assert.equal(failed.events[0].type, "fail");
+    assert.equal(failed.events[0].damage, DIRECTORY_TUNING.failDamage);
+    assert.ok(failed.events[0].damage < 25);
+    assert.equal(failed.boss.phase, "recover");
+    boss = { ...createDirectory(), active: true, phase: "idle", timer: 10, shotCooldown: 0, windup: 0 };
+    let step = tickDirectory(boss, 0.05, ctx);
+    assert.ok(step.boss.windup > 0.4);
+    step = tickDirectory(step.boss, DIRECTORY_TUNING.shotWindup + 0.02, ctx);
+    assert.equal(step.events.some((event) => event.type === "shot"), true);
+    const quiet = tickDirectory(createDirectory(), 1, ctx);
+    assert.equal(quiet.events.length, 0);
   });
 });
 

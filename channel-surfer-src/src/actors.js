@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { PRIEST_SPAWN, createChapelEnemies, createEnemies } from "./level.js";
+import { PRIEST_SPAWN, createChapelEnemies, createEnemies, createServiceEnemies } from "./level.js";
 import { geos, mesh } from "./meshkit.js";
 
 const visorMats = [];
@@ -735,7 +735,7 @@ export function createActors(scene, textures, probes) {
   visorMats.length = 0;
   const records = new Map();
   const chapelIds = new Set(createChapelEnemies().map((enemy) => enemy.id));
-  for (const enemy of [...createEnemies(), ...createChapelEnemies()]) {
+  for (const enemy of [...createEnemies(), ...createChapelEnemies(), ...createServiceEnemies()]) {
     const built = buildTessera(textures, { vestment: chapelIds.has(enemy.id), probes });
     built.group.position.set(enemy.x, 0, enemy.z);
     built.group.visible = enemy.visible;

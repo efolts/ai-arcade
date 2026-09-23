@@ -262,13 +262,27 @@ function paint(hud) {
     primary.textContent = "Resume";
     secondary.textContent = "Restart";
   } else if (hud.mode === "clear") {
-    panelKicker.textContent = "KRCD 7 · RADIO";
-    panelTitle.textContent = "WING CLEAR";
-    panelBody.textContent = "The Visor Priest is off the air. The mall is still broadcasting.";
+    panelKicker.textContent = "KRCD 7 · DIRECTORY";
+    panelTitle.textContent = "MALL CLEAR";
+    panelBody.textContent = "The Directory is off the air. The mall run is clear.";
     panelMeta.textContent = `TIME ${fmt(hud.time)} · BEST ${fmt(hud.best)} · ${hud.swaps} CHANNEL CHANGES`;
     primary.textContent = "Replay";
     secondary.textContent = "Title";
-  } else if (hud.checkpoint) {
+  } else if (hud.checkpoint === "directory") {
+    panelKicker.textContent = "KRCD 7 · DIRECTORY";
+    panelTitle.textContent = "WING LOST";
+    panelBody.textContent = "The earlier wings stay clear. Retry from the directory door.";
+    panelMeta.textContent = `TIME ${fmt(hud.time)} · BEST ${fmt(hud.best)}`;
+    primary.textContent = "Retry wing";
+    secondary.textContent = "Title";
+  } else if (hud.checkpoint === "service") {
+    panelKicker.textContent = "KRCD 7 · SERVICE";
+    panelTitle.textContent = "WING LOST";
+    panelBody.textContent = "The radio wing stays clear. Retry from the service door.";
+    panelMeta.textContent = `TIME ${fmt(hud.time)} · BEST ${fmt(hud.best)}`;
+    primary.textContent = "Retry wing";
+    secondary.textContent = "Title";
+  } else if (hud.checkpoint === "radio") {
     panelKicker.textContent = "KRCD 7 · RADIO";
     panelTitle.textContent = "WING LOST";
     panelBody.textContent = "The court stays clear. Retry from the radio door.";
