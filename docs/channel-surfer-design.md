@@ -2,7 +2,7 @@
 
 The FPS where changing TV channels changes combat and the level.
 
-The playable run is one mall: the KRCD court, the radio wing, the service wing, and the Directory. Phase 4 adds channel-locked remotes and Signal batteries. Phase 4.1 adds respawning battery pads. Phase 5 adds a short level-up that changes tuning numbers. Phase 6 opens the service wing and the Directory finale on that same run. Phase 7 adds a security shutter you can slam. Phase 8 adds security cameras that reveal cloaks and mark a room. Channels stay the weapon switch. Broadcast Echo stays a hook. This document matches what ships.
+The playable run is one mall: the KRCD court, the radio wing, the service wing, and the Directory. Phase 4 adds channel-locked remotes and Signal batteries. Phase 4.1 adds respawning battery pads. Phase 5 adds a short level-up that changes tuning numbers. Phase 6 opens the service wing and the Directory finale on that same run. Phase 7 adds a security shutter you can slam. Phase 8 adds security cameras that reveal cloaks and mark a room. Phase 9 replays the radio-wing fire as a Broadcast Echo in the Directory. Channels stay the weapon switch. This document matches what ships.
 
 ## Promise
 
@@ -100,11 +100,11 @@ Two amber housings, same catalog id. One hangs under the court mezzanine, lookin
 
 The camera does not stun and does not slow. Cloaked Tessera in that room are revealed for 5.5s, the same reveal the STATIC channel uses, so a cloak shows on LIVE. Every living Tessera in that room is marked for 5.5s and takes 1.25× damage. The choir is not marked by the court camera. The court is not marked by the service camera. It pays hijack XP and shares the hijack cooldown.
 
-Clearing the three opens the Directory door, refills magazines, pays the wing XP, and can open a station break.
+Clearing the three service Tessera opens the Directory door, refills magazines, pays the wing XP, and can open a station break.
 
 ## PA horn
 
-The horn, the sprinkler, the security shutter, and the security cameras ship. Broadcast Echo is not in the catalog. Every playable hijack shares one cooldown, so the PA cooldown retune shortens every one of them.
+The horn, the sprinkler, the security shutter, and the security cameras ship. Broadcast Echo is a separate tape, not an E hijack. Every playable hijack shares one cooldown, so the PA cooldown retune shortens every one of them.
 
 The horn is on the west wall of the nave. Aim at it and press E:
 
@@ -143,6 +143,14 @@ He does not chase. Body shots are armored to about a fifth of the bolt. The real
 
 The gate is a `phaseGate` with its own flag, so the priest veil stays the priest's. Side walls close the flanks. Defeating the kiosk refills magazines, pays Signal, and after a short beat opens the mall-clear card.
 
+## Broadcast Echo
+
+KRCD rebroadcasts the radio wing. While the Visor Priest is on the air, the run records each shot you fire: the time and the channel, up to 12 shots or 10 seconds. The tape seals when the priest drops, or when that window ends. It does not record the court, the service wing, or the Directory.
+
+When the Directory wakes, the kiosk plays the tape back as amber ghost bolts. LIVE ghosts are tighter and faster. STATIC ghosts are wider and slower. DEAD AIR ghosts are the fastest. Each one deals 8. They hurt you. They do not hurt Tessera or the kiosk. Cyan stays on your remote. If the tape is empty, the station ident plays four amber beats so the room still shows the rebroadcast. The banner reads `BROADCAST ECHO`, and a line says KRCD is rebroadcasting your radio-wing fire.
+
+A radio retry starts a new tape. A service retry keeps the sealed tape and does not play it. A Directory retry plays that tape again. A court death throws the tape out with the run.
+
 ## Presentation
 
 Phase 3.5 keeps the two rooms. Smooth shells, ceramic clearcoat, black glass, one 1024 shadow that follows the player, contact blobs, and a half-resolution occlusion pass. The nave has a baked candle lightmap. The court has a baked skylight and fountain lightmap. Visors blend an aisle probe and a court probe as you walk between the rooms. No downloaded model packs.
@@ -168,7 +176,7 @@ npm test
 npm run build
 ```
 
-Tests are `node --test` on `src/sim.test.js`. They cover the channel, Signal, shot, cloak, and shutter rules, plus the radio door, the rite veil, the service door, the Directory gate, the hijack catalog, the three priest answers, the three Directory answers, and the dormant choir. `PHASE` is 3. Ids in `RESERVED_CONTENT` (arsenal, upgrades, wings, Directory, Broadcast Echo) must not appear as encounters.
+Tests are `node --test` on `src/sim.test.js`. They cover the channel, Signal, shot, cloak, and shutter rules, plus the radio door, the rite veil, the service door, the Directory gate, the hijack catalog, the three priest answers, the three Directory answers, the camera mark, the Broadcast Echo tape, and the dormant choir. `PHASE` is 3. Ids in `RESERVED_CONTENT` (arsenal, upgrades, wings, Directory, Broadcast Echo) must not appear as encounters.
 
 ## Phases
 
@@ -220,9 +228,13 @@ One continuous mall run. Court, radio wing, service wing, Directory. The service
 
 A hijackable security shutter on the service west wall. Press E and it slams the Tessera in that room: a short stun and a knockback, no heat and no battery refund. The alley shutter, the priest veil, and the Directory gate stay Dead Air phase gates.
 
-### Phase 8 — this pass
+### Phase 8
 
-Security cameras under the court mezzanine and on the service west wall. Press E and that room's cloaks are revealed for a few seconds, and every Tessera there is marked for 1.25× damage. No stun and no slow. Broadcast Echo stays a hook.
+Security cameras under the court mezzanine and on the service west wall. Press E and that room's cloaks are revealed for a few seconds, and every Tessera there is marked for 1.25× damage. No stun and no slow.
+
+### Phase 9 — this pass
+
+Broadcast Echo. The radio-wing fight records a short channel timeline. The Directory replays it as amber ghost fire to dodge. An empty tape plays a four-beat station ident. The shutter, the cameras, and the echo are in this build.
 
 ## Hooks
 
@@ -232,5 +244,6 @@ Security cameras under the court mezzanine and on the service west wall. Press E
 - `boss.js` — priest rites, chip damage, and the halo ray.
 - `directory.js` — Directory rites. A new stepper, not a Tessera and not a second priest.
 - `hijack.js` — catalog, aim test, cooldown, retune, sprinkler, shutter slam, camera mark. Playable entries sit beside `pa-horn`.
+- `echo.js` — radio-wing tape and Directory playback. Not an E hijack and not an encounter.
 - `meshkit.js` / `textures.js` / `viewmodel.js` — Phase 3 kits and atlases. They do not own combat rules.
 - Renderer (`world.js`, `actors.js`, `game.js`) reads that data and does not invent rules.

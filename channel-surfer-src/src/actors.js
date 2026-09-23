@@ -940,6 +940,7 @@ export function createActors(scene, textures, probes) {
         }
         boltMesh.visible = true;
         boltMesh.position.set(bolt.x, bolt.y, bolt.z);
+        boltMesh.scale.setScalar(bolt.echo ? 1.7 : 1);
       }
     },
   };

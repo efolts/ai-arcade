@@ -84,7 +84,7 @@ export const RESERVED_CONTENT = [
   { id: "upgrades", phase: 5, kind: "system" },
   { id: "wings", phase: 6, kind: "level" },
   { id: "directory", phase: 6, kind: "boss" },
-  { id: "broadcast-echo", phase: 6, kind: "later" },
+  { id: "broadcast-echo", phase: 9, kind: "shipped" },
 ];
 
 function box(id, mat, x, y, z, w, h, d, extra = {}) {

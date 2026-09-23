@@ -4,6 +4,7 @@ import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { stepEnemy } from "./ai.js";
 import { createActors } from "./actors.js";
 import { damagePriest, priestAnswer, resolvePriestHit, riteBanner, tickPriest, PRIEST_TUNING, createPriest } from "./boss.js";
+import { ECHO_TUNING, beginEcho, createEcho, noteEchoShot, sealEcho, startEchoPlayback, tickEchoPlay, tickEchoRecord } from "./echo.js";
 import {
   DIRECTORY_TUNING,
   createDirectory,
@@ -203,6 +204,7 @@ export function createGame(canvas, audio) {
   let directory = null;
   let pickups = [];
   let bolts = [];
+  let echo = createEcho();
   let levelReason = "level";
   let doorOpen = false;
   let serviceOpen = false;
@@ -357,6 +359,7 @@ export function createGame(canvas, audio) {
     tipT = 0;
     tipQueue.length = 0;
     tipsShown.clear();
+    echo = createEcho();
     actors.reset(enemies);
     actors.resetPriest(priest);
     world.setDoors({ radio: false, service: false, directory: false }, true);
@@ -411,6 +414,7 @@ export function createGame(canvas, audio) {
     world.setDirectoryVeil(false, "LIVE");
     world.syncDirectory(directory);
     present("LIVE");
+    echo = beginEcho(createEcho());
     banner("RADIO WING");
   }
 
@@ -439,6 +443,7 @@ export function createGame(canvas, audio) {
     world.setDirectoryVeil(false, "LIVE");
     world.syncDirectory(directory);
     present("LIVE");
+    echo = { ...sealEcho(echo), playing: false, playT: 0, fired: 0 };
     banner("SERVICE WING");
   }
 
@@ -461,6 +466,8 @@ export function createGame(canvas, audio) {
     world.setDirectoryVeil(false, "LIVE");
     world.syncDirectory(directory);
     present("LIVE");
+    echo = startEchoPlayback(echo);
+    queueTip("echo", "KRCD is rebroadcasting your radio-wing fire. Dodge the amber ghosts.");
     banner("DIRECTORY");
   }
 
@@ -496,6 +503,7 @@ export function createGame(canvas, audio) {
     const begun = beginShot(state);
     state = begun.state;
     if (!begun.fired) return;
+    if (echo.recording) echo = noteEchoShot(echo, state.channel);
     const { forward, right, up } = aim(player.yaw, player.pitch);
     const origin = { x: player.x, y: player.y, z: player.z };
     const dirs = spreadDirs(forward, right, up, begun.profile.pellets, begun.profile.spread, Math.random);
@@ -688,6 +696,29 @@ export function createGame(canvas, audio) {
     };
   }
 
+  function echoBolt(channel) {
+    const ox = directory.x;
+    const oy = 2.15;
+    const oz = directory.z + 1.1;
+    const spread = channel === "STATIC" ? 0.55 : channel === "DEAD_AIR" ? 0.15 : 0.28;
+    const speed = channel === "STATIC" ? 9 : channel === "DEAD_AIR" ? 15 : 13;
+    const tx = player.x - ox + (rng() - 0.5) * spread;
+    const ty = 1.15 - oy + (rng() - 0.5) * spread * 0.45;
+    const tz = player.z - oz + (rng() - 0.5) * spread;
+    const len = Math.hypot(tx, ty, tz) || 1;
+    return {
+      x: ox,
+      y: oy,
+      z: oz,
+      vx: (tx / len) * speed,
+      vy: (ty / len) * speed,
+      vz: (tz / len) * speed,
+      damage: ECHO_TUNING.boltDamage,
+      life: 2.8,
+      echo: true,
+    };
+  }
+
   function simulate(dt, input) {
     const drained = tickResources(state, dt);
     state = drained.state;
@@ -732,6 +763,7 @@ export function createGame(canvas, audio) {
       }
       if (!priest.active) {
         priest = { ...priest, active: true };
+        if (!echo.sealed) echo = beginEcho(echo);
         queueTip("priest", "Three rites. LIVE the seam. STATIC the halo. DEAD AIR through the veil.");
       }
     }
@@ -745,7 +777,20 @@ export function createGame(canvas, audio) {
     }
     if (directoryOpen && directory && player.z < -42.2 && !directory.active) {
       directory = { ...directory, active: true };
+      echo = startEchoPlayback(echo);
+      banner("BROADCAST ECHO");
+      queueTip("echo", "KRCD is rebroadcasting your radio-wing fire. Dodge the amber ghosts.");
       queueTip("directory", "The Directory. LIVE the listing. STATIC the index. DEAD AIR through the gate.");
+    }
+    if (echo.recording) echo = tickEchoRecord(echo, dt);
+    if (echo.playing) {
+      const played = tickEchoPlay(echo, dt);
+      echo = played.echo;
+      for (const shot of played.shots) {
+        if (bolts.length >= 16) break;
+        bolts.push(echoBolt(shot.channel));
+        audio.play("bolt");
+      }
     }
 
     const { forward } = aim(player.yaw, player.pitch);
@@ -1081,6 +1126,7 @@ export function createGame(canvas, audio) {
       const cleared = grantXp(state, TUNING.xpWing);
       state = cleared.state;
       serviceOpen = true;
+      echo = sealEcho(echo);
       banner("OFF THE AIR");
       audio.play("death");
       audio.play("door");

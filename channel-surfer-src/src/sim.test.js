@@ -17,6 +17,7 @@ import {
   resolveDirectoryHit,
   tickDirectory,
 } from "./directory.js";
+import { ECHO_TUNING, beginEcho, createEcho, echoSchedule, noteEchoShot, sealEcho, startEchoPlayback, tickEchoPlay, tickEchoRecord } from "./echo.js";
 import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyCamera, applyRetune, applyShutter, applySprinkler, tryHijack } from "./hijack.js";
 import {
   BLOCKS,
@@ -462,7 +463,8 @@ describe("court layout", () => {
     assert.equal(reserved.has("arsenal"), true);
     assert.equal(reserved.has("upgrades"), true);
     assert.equal(reserved.has("wings"), true);
-    assert.equal(reserved.has("broadcast-echo"), true);
+    assert.equal(RESERVED_CONTENT.find((item) => item.id === "broadcast-echo").kind, "shipped");
+    assert.equal(HIJACK_CATALOG.some((item) => item.id === "broadcast-echo"), false);
     assert.equal(reserved.has("visor-priest"), false);
     for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES, ...SERVICE_ENEMIES]) assert.equal(reserved.has(enemy.id), false);
     assert.equal(createDirectory().id, "directory-boss");
@@ -1103,6 +1105,51 @@ describe("directory", () => {
     assert.equal(step.events.some((event) => event.type === "shot"), true);
     const quiet = tickDirectory(createDirectory(), 1, ctx);
     assert.equal(quiet.events.length, 0);
+  });
+});
+
+describe("broadcast echo", () => {
+  it("records a short radio-wing tape and stops when it is sealed", () => {
+    let echo = beginEcho(createEcho());
+    for (let i = 0; i < 20; i++) echo = noteEchoShot({ ...echo, t: i * 0.2 }, i % 2 ? "STATIC" : "LIVE");
+    assert.equal(echo.shots.length, ECHO_TUNING.maxShots);
+    assert.equal(echo.shots[0].channel, "LIVE");
+    assert.equal(echo.shots[1].channel, "STATIC");
+    const sealed = sealEcho(echo);
+    const extra = noteEchoShot(sealed, "DEAD_AIR");
+    assert.equal(extra.shots.length, ECHO_TUNING.maxShots);
+    assert.equal(extra.recording, false);
+    let timed = beginEcho(createEcho());
+    timed = tickEchoRecord(timed, ECHO_TUNING.recordWindow + 0.1);
+    assert.equal(timed.sealed, true);
+    assert.equal(noteEchoShot(timed, "LIVE").shots.length, 0);
+  });
+
+  it("plays the tape in order, and an empty tape as a four-beat ident", () => {
+    let echo = beginEcho(createEcho());
+    echo = noteEchoShot(echo, "LIVE");
+    echo = tickEchoRecord(echo, 0.5);
+    echo = noteEchoShot(echo, "DEAD_AIR");
+    const playing = startEchoPlayback(echo);
+    assert.equal(playing.schedule.length, 2);
+    assert.equal(playing.schedule[0].channel, "LIVE");
+    assert.equal(playing.schedule[1].channel, "DEAD_AIR");
+    assert.equal(playing.schedule.some((shot) => shot.ident), false);
+    let cursor = playing;
+    const heard = [];
+    for (let i = 0; i < 8; i++) {
+      const step = tickEchoPlay(cursor, 0.2);
+      cursor = step.echo;
+      heard.push(...step.shots.map((shot) => shot.channel));
+    }
+    assert.deepEqual(heard, ["LIVE", "DEAD_AIR"]);
+    assert.equal(cursor.playing, false);
+    const ident = echoSchedule(createEcho());
+    assert.equal(ident.length, ECHO_TUNING.identBeats);
+    assert.ok(ident.every((beat) => beat.ident && beat.channel === "LIVE"));
+    assert.ok(ident[1].t - ident[0].t > 0.5);
+    assert.equal(ECHO_TUNING.boltDamage, 8);
+    assert.equal(HIJACK_CATALOG.some((item) => item.id === "broadcast-echo"), false);
   });
 });
 
