@@ -32,6 +32,7 @@ import {
   TUNING,
   applyEnemyHit,
   applyPickup,
+  armPad,
   batteryMaxes,
   beginShot,
   canFire,
@@ -46,6 +47,7 @@ import {
   makeBatteryDrop,
   noteHit,
   overlapsCircle,
+  pickupLabel,
   pickupVisible,
   refillBatteries,
   refundBatteries,
@@ -53,6 +55,7 @@ import {
   rewardForKill,
   shotProfile,
   switchChannel,
+  tickPads,
   tickResources,
   tickReveal,
   tryMove,
@@ -214,6 +217,39 @@ describe("weapons", () => {
     assert.equal(refund.state.batteries.LIVE, 1 + TUNING.paRefund);
     assert.equal(refund.state.batteries.STATIC, TUNING.paRefund);
     assert.equal(refund.state.batteries.DEAD_AIR, TUNING.paRefund + TUNING.paRefundFocus);
+    assert.equal(drop.pad, undefined);
+    const stale = tickPads([armPad({ ...drop, taken: true }, 0)], 100);
+    assert.equal(stale[0].taken, true);
+  });
+
+  it("recharges ammo pads into the held remote", () => {
+    const pad = { id: "pad-test", kind: "battery", pad: true, x: 1, z: 1, cloaked: false, taken: false };
+    const low = { ...createRunState(), batteries: { LIVE: 2, STATIC: 1, DEAD_AIR: 0 } };
+    const got = applyPickup(low, pad);
+    assert.equal(got.took, true);
+    assert.equal(got.state.batteries.LIVE, 2 + TUNING.padFocus);
+    assert.equal(got.state.batteries.STATIC, 1 + TUNING.padSide);
+    assert.equal(got.state.batteries.DEAD_AIR, TUNING.padSide);
+    assert.equal(pickupLabel(pad, "LIVE"), `CLICKER +${TUNING.padFocus}`);
+    const armed = armPad(got.pickup, 10);
+    assert.equal(armed.taken, true);
+    assert.equal(armed.respawnAt, 10 + TUNING.padRespawn);
+    const waiting = tickPads([armed], 10 + TUNING.padRespawn - 0.01);
+    assert.equal(waiting[0], armed);
+    assert.equal(waiting[0].taken, true);
+    const back = tickPads(waiting, 10 + TUNING.padRespawn);
+    assert.equal(back[0].taken, false);
+    assert.equal(back[0].respawnAt, null);
+    const full = applyPickup(createRunState(), pad);
+    assert.equal(full.took, false);
+    assert.equal(full.pickup.taken, false);
+    const scatter = applyPickup(switchChannel(low, "STATIC").state, pad);
+    assert.equal(scatter.state.batteries.STATIC, 1 + TUNING.padFocus);
+    assert.equal(scatter.state.batteries.LIVE, 2 + TUNING.padSide);
+    assert.equal(scatter.state.batteries.DEAD_AIR, TUNING.padSide);
+    assert.equal(pickupLabel(pad, "STATIC"), `SCATTER +${TUNING.padFocus}`);
+    assert.equal(pickupLabel(pad, "DEAD_AIR"), `PHASER +${TUNING.padFocus}`);
+    assert.ok(TUNING.padRespawn >= 12 && TUNING.padRespawn <= 20);
   });
 
   it("lets the Phaser through a phase gate and stops the Clicker", () => {
@@ -321,10 +357,25 @@ describe("court layout", () => {
     assert.ok(LEASHES.alley);
     assert.equal(PICKUPS.find((p) => p.cloaked).kind, "signal");
     const cells = PICKUPS.filter((p) => p.kind === "battery");
-    assert.equal(cells.length, 2);
+    assert.equal(cells.length, 6);
+    const courtPads = cells.filter((cell) => cell.z > -14.5);
+    const wingPads = cells.filter((cell) => cell.z < -14.5);
+    assert.ok(courtPads.length >= 3);
+    assert.ok(wingPads.length >= 2);
     for (const cell of cells) {
+      assert.equal(cell.pad, true);
       assert.equal(cell.cloaked, false);
       assert.equal(overlapsCircle(cell.x, cell.z, TUNING.playerRadius, cols, "LIVE"), null, cell.id);
+      for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES]) {
+        const gap = Math.hypot(cell.x - enemy.x, cell.z - enemy.z);
+        assert.ok(gap > 1.6, `${cell.id} on ${enemy.id}`);
+      }
+    }
+    for (let i = 0; i < cells.length; i++) {
+      for (let j = i + 1; j < cells.length; j++) {
+        const gap = Math.hypot(cells[i].x - cells[j].x, cells[i].z - cells[j].z);
+        assert.ok(gap > 3.5, `${cells[i].id} ${cells[j].id} ${gap}`);
+      }
     }
   });
 

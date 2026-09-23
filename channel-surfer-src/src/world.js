@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { BLOCKS, HIJACK_SPAWNS, PICKUPS, VEIL_Z, activeColliders } from "./level.js";
+import { TUNING, clamp } from "./sim.js";
 import { courtLightUv, makeSign, makeTextures } from "./textures.js";
 
 function std(params) {
@@ -663,19 +664,60 @@ export function createWorld(scene) {
 
   const cellBody = new THREE.CylinderGeometry(0.055, 0.055, 0.2, 8);
   const cellCap = new THREE.CylinderGeometry(0.03, 0.03, 0.04, 8);
+  const padDisc = new THREE.CylinderGeometry(0.46, 0.5, 0.06, 20);
+  const padRing = new THREE.TorusGeometry(0.5, 0.045, 6, 24);
+  const padGlow = new THREE.CircleGeometry(0.58, 24);
   const cellMat = new THREE.MeshStandardMaterial({ color: 0x2a241c, roughness: 0.45, metalness: 0.35 });
   const cellCapMat = new THREE.MeshBasicMaterial({ color: 0x67f6ff });
   const cells = new Map();
+  function quiet(group) {
+    group.traverse((obj) => {
+      obj.castShadow = false;
+      obj.receiveShadow = false;
+    });
+  }
   function makeCell() {
     const group = new THREE.Group();
     const body = new THREE.Mesh(cellBody, cellMat);
     const cap = new THREE.Mesh(cellCap, cellCapMat);
     cap.position.y = 0.12;
     group.add(body, cap);
-    group.traverse((obj) => {
-      obj.castShadow = false;
-      obj.receiveShadow = false;
+    quiet(group);
+    scene.add(group);
+    return group;
+  }
+  function makePad() {
+    const group = new THREE.Group();
+    const discMat = new THREE.MeshStandardMaterial({
+      color: 0xe8dcc8,
+      roughness: 0.4,
+      metalness: 0.14,
+      emissive: 0xffb15a,
+      emissiveIntensity: 0.42,
     });
+    const disc = new THREE.Mesh(padDisc, discMat);
+    disc.position.y = 0.04;
+    const ring = new THREE.Mesh(padRing, new THREE.MeshBasicMaterial({ color: 0xffe2b0 }));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.075;
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xffc56a,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    });
+    const glow = new THREE.Mesh(padGlow, glowMat);
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.025;
+    const cell = new THREE.Group();
+    const body = new THREE.Mesh(cellBody, cellMat);
+    const cap = new THREE.Mesh(cellCap, cellCapMat);
+    cap.position.y = 0.12;
+    cell.add(body, cap);
+    cell.position.y = 0.24;
+    group.add(glow, disc, ring, cell);
+    quiet(group);
+    group.userData = { disc, glow, cell };
     scene.add(group);
     return group;
   }
@@ -787,18 +829,32 @@ export function createWorld(scene) {
       if (which === "cache") cache.visible = visible;
       if (which === "aid") aid.visible = visible;
     },
-    syncCells(list) {
+    syncCells(list, time = lastTime) {
       const live = new Set();
       for (const pickup of list) {
-        if (pickup.kind !== "battery" || pickup.taken) continue;
+        if (pickup.kind !== "battery") continue;
         live.add(pickup.id);
         let group = cells.get(pickup.id);
         if (!group) {
-          group = makeCell();
+          group = pickup.pad ? makePad() : makeCell();
           cells.set(pickup.id, group);
         }
-        group.visible = true;
-        group.position.set(pickup.x, 0.28 + Math.sin(lastTime * 2.2 + pickup.x) * 0.03, pickup.z);
+        const bob = Math.sin(time * 2.2 + pickup.x) * 0.03;
+        if (pickup.pad) {
+          group.visible = true;
+          group.position.set(pickup.x, 0, pickup.z);
+          const ready = !pickup.taken;
+          const left = pickup.respawnAt == null ? 0 : Math.max(0, pickup.respawnAt - time);
+          const charge = ready ? 1 : clamp(1 - left / TUNING.padRespawn, 0, 1);
+          group.userData.cell.visible = ready;
+          group.userData.cell.position.y = 0.24 + bob;
+          group.userData.disc.material.emissiveIntensity = ready ? 0.85 : 0.2 + charge * 0.9;
+          group.userData.glow.material.opacity = ready ? 0.92 : 0.28 + charge * 0.6;
+          group.userData.glow.scale.setScalar(ready ? 1 : 0.7 + charge * 0.3);
+        } else {
+          group.visible = !pickup.taken;
+          group.position.set(pickup.x, 0.28 + bob, pickup.z);
+        }
       }
       for (const [id, group] of cells) {
         if (!live.has(id)) group.visible = false;

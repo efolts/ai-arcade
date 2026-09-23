@@ -1,4 +1,4 @@
-/** Phase 4 arsenal on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
+/** Phase 4.1 ammo pads on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
 
 export const PHASE = 3;
 
@@ -33,22 +33,12 @@ export const CHAPEL_ENEMIES = [
 export const PICKUPS = [
   { id: "signal-cache", kind: "signal", x: 13.7, z: 1.6, amount: 48, cloaked: true },
   { id: "aid-kit", kind: "health", x: 13.7, z: -6.4, amount: 36, cloaked: false },
-  {
-    id: "cell-court",
-    kind: "battery",
-    x: -6.2,
-    z: 5.8,
-    amounts: { LIVE: 8, STATIC: 4, DEAD_AIR: 3 },
-    cloaked: false,
-  },
-  {
-    id: "cell-nave",
-    kind: "battery",
-    x: 2.4,
-    z: -16.7,
-    amounts: { LIVE: 8, STATIC: 4, DEAD_AIR: 3 },
-    cloaked: false,
-  },
+  { id: "pad-fountain", kind: "battery", pad: true, x: 3.72, z: 0.45, cloaked: false },
+  { id: "pad-food", kind: "battery", pad: true, x: -10.2, z: 7.5, cloaked: false },
+  { id: "pad-door", kind: "battery", pad: true, x: 0, z: -10.05, cloaked: false },
+  { id: "pad-aisle", kind: "battery", pad: true, x: 0, z: -17.15, cloaked: false },
+  { id: "pad-pew", kind: "battery", pad: true, x: 5.4, z: -22.7, cloaked: false },
+  { id: "pad-altar", kind: "battery", pad: true, x: -4.2, z: -23.05, cloaked: false },
 ];
 
 const CHAPEL_LEASH = { minX: -7.2, maxX: 7.2, minZ: -23.35, maxZ: -15.9 };
@@ -193,5 +183,5 @@ export function createChapelEnemies() {
 }
 
 export function createPickups() {
-  return PICKUPS.map((pickup) => ({ ...pickup, taken: false }));
+  return PICKUPS.map((pickup) => ({ ...pickup, taken: false, respawnAt: null }));
 }

@@ -21,6 +21,7 @@ import {
   applyEnemyHit,
   createRunState,
   applyPickup,
+  armPad,
   batteryMaxes,
   beginShot,
   clamp,
@@ -30,6 +31,7 @@ import {
   hurtPlayer,
   makeBatteryDrop,
   noteHit,
+  pickupLabel,
   pickupVisible,
   refillBatteries,
   refundBatteries,
@@ -39,6 +41,7 @@ import {
   segmentClear,
   spreadDirs,
   switchChannel,
+  tickPads,
   tickResources,
   tryMove,
   rayWorld,
@@ -730,18 +733,23 @@ export function createGame(canvas, audio) {
     }
     bolts = nextBolts;
 
-    for (const pickup of pickups) {
+    pickups = tickPads(pickups, time);
+    for (let i = 0; i < pickups.length; i++) {
+      const pickup = pickups[i];
       if (pickup.taken || !pickupVisible(pickup, state.channel)) continue;
       if (Math.hypot(player.x - pickup.x, player.z - pickup.z) > 1.15) continue;
       const got = applyPickup(state, pickup);
       if (!got.took) continue;
       state = got.state;
-      pickup.taken = true;
+      pickups[i] = armPad(pickup, time);
       audio.play("pickup");
-      banner(pickup.kind === "signal" ? "SIGNAL CACHE" : "AID KIT");
+      banner(pickupLabel(pickup, state.channel));
     }
 
     if (time > 0.45) queueTip("intro", "1 LIVE Clicker, 2 STATIC Scatter, 3 DEAD AIR Phaser. Each shot spends a battery.");
+    if (pickups.some((pickup) => pickup.pad && Math.hypot(player.x - pickup.x, player.z - pickup.z) < 4.2)) {
+      queueTip("pads", "Amber pads recharge. They feed the remote you are holding, then a little to the others.");
+    }
     if (Math.hypot(player.x, player.z) < 7.5 || time > 11) {
       queueTip("cloak", "A Tessera is cloaked in the fountain. STATIC reveals it and every visor seam.");
     }
@@ -931,7 +939,7 @@ export function createGame(canvas, audio) {
       const aid = pickups.find((pickup) => pickup.kind === "health");
       world.setPickup("cache", !!(cache && !cache.taken && state.channel === "STATIC" && mode !== "title"));
       world.setPickup("aid", !!(aid && !aid.taken));
-      world.syncCells(pickups);
+      world.syncCells(pickups, mode === "play" ? time : 0);
       world.setDoor(doorOpen);
       world.setVeil(!!(priest.alive && priest.veilUp), mode === "title" ? "LIVE" : state.channel);
       world.setHijack({

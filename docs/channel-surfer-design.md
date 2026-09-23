@@ -2,7 +2,7 @@
 
 The FPS where changing TV channels changes combat and the level.
 
-The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 4 adds channel-locked remotes and Signal batteries on that slice. Phases 5–6 stay on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
+The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 4 adds channel-locked remotes and Signal batteries on that slice. Phase 4.1 adds respawning battery pads so a fight can be recharged without waiting for a room clear. Phases 5–6 stay on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
 
 ## Promise
 
@@ -54,7 +54,7 @@ Signal is capped at 100. Entering STATIC or DEAD AIR requires at least 8 Signal,
 
 Each channel has its own battery magazine. Surfing is the weapon switch: 1, 2, 3, the wheel, and Q change the remote with the channel. A shot or a scatter volley costs 1 battery from that magazine. An empty magazine plays a dry click and the banner NO BATTERY. The other magazines are untouched, so the answer is to surf or to pick up a cell. The count sits under the channel name as `CLICKER 18/20`. It is not a third bar.
 
-Kills restore Signal and drop a battery cell (5 Clicker, 2 Scatter, 2 Phaser, clamped to the mag). A cell on the court floor and one in the nave do the same, larger. Clearing the court refills every magazine. Clearing the wing refills them again and still pays 40 Signal. A close kill, a STATIC kill, or a burst (another hit within 0.48s) restores 26 Signal. A spaced long-range LIVE tap restores 10. Standing in LIVE also refills the Signal bar, slowly.
+Kills restore Signal and drop a one-shot battery cell (5 Clicker, 2 Scatter, 2 Phaser, clamped to the mag). Six pads hold a cell that comes back: east of the fountain, south of the food counter, and on the approach to the north door in the court; the center aisle, the east pews, and the altar approach in the radio wing. Picking one up feeds the remote you are holding (+6) and puts +2 in each other magazine. The banner names that remote (`CLICKER +6`). A full load leaves the pad alone. The pad stays on the floor, dim and amber, and the cell returns after 16 seconds. Clearing the court refills every magazine. Clearing the wing refills them again and still pays 40 Signal. A close kill, a STATIC kill, or a burst (another hit within 0.48s) restores 26 Signal. A spaced long-range LIVE tap restores 10. Standing in LIVE also refills the Signal bar, slowly.
 
 The cloaked Tessera cannot be hit until STATIC (or until you bump it, which cracks the cloak for a moment). After you leave STATIC its reveal lingers about 4.2s, long enough to finish on LIVE. Ordinary Tessera only take visor bonus damage while STATIC is actually up.
 
@@ -113,7 +113,7 @@ Clearing him drops the choir, pays Signal, and opens the wing-clear card. Best t
 
 Phase 3.5 keeps the two rooms. Smooth shells, ceramic clearcoat, black glass, one 1024 shadow that follows the player, contact blobs, and a half-resolution occlusion pass. The nave has a baked candle lightmap. The court has a baked skylight and fountain lightmap. Visors blend an aisle probe and a court probe as you walk between the rooms. No downloaded model packs.
 
-- CRT viewmodel: one wood-cased remote that changes silhouette with the channel. LIVE keeps the single antenna and the cyan lens. STATIC swaps in a two-prong fork and a white crackle flash. DEAD AIR extends a short silver blade and a pale flash. Gloves, bob, and the channel-change kick stay. The IR lens is the only cyan light on the body. Battery cells on the floor have a cyan cap because they feed that remote.
+- CRT viewmodel: one wood-cased remote that changes silhouette with the channel. LIVE keeps the single antenna and the cyan lens. STATIC swaps in a two-prong fork and a white crackle flash. DEAD AIR extends a short silver blade and a pale flash. Gloves, bob, and the channel-change kick stay. The IR lens is the only cyan light on the body. Battery cells have a cyan cap because they feed that remote. The pad under a respawning cell is pearl and amber, so it does not read as Signal UI.
 - Court Tessera are smooth humanoids: lathe helmet and torso, a chest plate and hip shell, wraparound black glass visor, black joints, a knee cap, and a shin plate whose dirt texture is parented to the leg. No badges and no cyan. Choir Tessera keep that kit and add a white tabard, mantle, and gold stole so the legs stay readable. A soft contact blob sits under each one, on top of the sun shadow. Each hand is a palm plus four two-bone fingers and a thumb. The open hand turns toward you so the digits stay separated at close range. The gun hand closes on a shot. The fingers do not cast shadows.
 - Hit flash whites the shell out for a short beat without changing hurt time. Deaths tip the kit over, limbs go limp, and the shell flashes before it drops. Amber bolts still have a plant-and-fire tell. Impacts are sparks plus a short additive flash. Retuned shots stay the cyan exception.
 - The priest is the same materials at boss scale: pearl helmet, a taller black glass visor, a cut robe (chest bodice, skirt panels sitting outside the shell, gold seams, shoulder yoke, bell sleeves, a heavy hem roll, wide back cape), gold hem, stole, and chains, raised sleeves, and open pearl gloves with spread fingers. The robe, cape, mantle, bodice, skirt panels, and choir skirts sway with two morph targets (side to side, and a forward billow). The fingers open during a rite, curl on the windup, and idle with a small flex. Amber shows on the palms only while he is winding up or in a rite, and on the visor seam when LIVE can break it. The halo flares when STATIC can hit it. No cyan on the priest. The visor blends two probes: the court probe (skylight, fountain, shop glow) when you stand in the mall, the aisle probe (candles, nave) when you stand in the wing, and a mix across the doorway from z=-17 to z=-12.
@@ -166,9 +166,13 @@ A baked court lightmap for the skylight and fountain. Shin grime parented to the
 
 Segmented Tessera fingers and thumbs, shared by the choir, fanned so they read at close range. The priest robe is a cut garment over the old shell: bodice, skirt panels, gold seams, bell sleeves, a weighted hem, and a wider cape. Same combat numbers. No lighting changes.
 
-### Phase 4 — this pass
+### Phase 4
 
 Three remotes, one per channel. LIVE Clicker, STATIC Scatter, DEAD AIR Phaser. Magazines are Signal batteries, separate from the Signal meter. Kills drop cells. The court clear and the wing clear refill every mag. The PA retune refunds a few. No fourth weapon: the horn stays the utility. The reserved id `arsenal` still must not spawn as an encounter. Hurt spheres are unchanged.
+
+### Phase 4.1 — this pass
+
+Six respawning battery pads replace the two one-shot floor cells. Three are in the court and three are in the radio wing. A pad feeds the held remote +6 and the other magazines +2, then recharges in 16 seconds. Kill drops and room-clear refills stay. Hurt spheres and the rooms are unchanged.
 
 ### Phase 5 — not started
 

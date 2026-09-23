@@ -41,6 +41,9 @@ export const TUNING = {
   dropDead: 2,
   paRefund: 2,
   paRefundFocus: 2,
+  padRespawn: 16,
+  padFocus: 6,
+  padSide: 2,
 };
 
 export function clamp(v, a, b) {
@@ -229,6 +232,39 @@ export function makeBatteryDrop(enemy) {
     cloaked: false,
     taken: false,
   };
+}
+
+export function padAmounts(channel) {
+  const amounts = { LIVE: TUNING.padSide, STATIC: TUNING.padSide, DEAD_AIR: TUNING.padSide };
+  if (CHANNELS.includes(channel)) amounts[channel] = TUNING.padFocus;
+  return amounts;
+}
+
+export function armPad(pickup, time) {
+  if (!pickup?.pad) return { ...pickup, taken: true };
+  return { ...pickup, taken: true, respawnAt: (time || 0) + TUNING.padRespawn };
+}
+
+export function tickPads(pickups, time) {
+  let changed = false;
+  const next = pickups.map((pickup) => {
+    if (!pickup.pad || !pickup.taken || pickup.respawnAt == null || time < pickup.respawnAt) return pickup;
+    changed = true;
+    return { ...pickup, taken: false, respawnAt: null };
+  });
+  return changed ? next : pickups;
+}
+
+export function pickupLabel(pickup, channel) {
+  if (!pickup) return "";
+  if (pickup.kind === "signal") return "SIGNAL CACHE";
+  if (pickup.kind === "health") return "AID KIT";
+  if (pickup.kind === "battery" && pickup.pad) {
+    const focus = padAmounts(channel)[channel] ?? TUNING.padFocus;
+    return `${shotProfile(channel).name} +${focus}`;
+  }
+  if (pickup.kind === "battery") return "BATTERY";
+  return "";
 }
 
 export function damageAtRange(base, distance, range, falloff) {
@@ -532,7 +568,8 @@ export function applyPickup(state, pickup) {
     };
   }
   if (pickup.kind === "battery") {
-    const granted = grantBatteries(state, pickup.amounts || {});
+    const amounts = pickup.pad ? padAmounts(state.channel) : pickup.amounts || {};
+    const granted = grantBatteries(state, amounts);
     if (granted.gained <= 0) return { state, pickup, took: false };
     return {
       state: granted.state,
