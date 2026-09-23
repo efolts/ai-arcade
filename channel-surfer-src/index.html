@@ -37,6 +37,7 @@
           <div id="channel-readout">
             <span>CHANNEL</span>
             <strong id="ch-name">LIVE</strong>
+            <em id="remote-readout">CLICKER 20/20</em>
           </div>
           <div id="wave-readout">
             <span id="room-label">COURT</span>
@@ -49,7 +50,7 @@
           <div id="prompt"></div>
           <div id="tip"></div>
           <div id="banner"></div>
-          <div id="hint">WASD move · click fire · 1 2 3 · wheel / Q · esc pause</div>
+          <div id="hint">WASD · click fire · 1 2 3 surf · wheel / Q · esc</div>
           <div id="brand">KRCD 7</div>
         </div>
 
@@ -58,9 +59,9 @@
           <h1><span>CHANNEL</span><span>SURFER</span></h1>
           <p class="promise">The FPS where changing the channel changes the fight.</p>
           <div class="cards">
-            <div><b>1 LIVE</b><span>Precise cyan bolt. Signal comes back.</span></div>
-            <div><b>2 STATIC</b><span>Spread shot. Reveals cloaks and visor seams. Drains Signal.</span></div>
-            <div><b>3 DEAD AIR</b><span>Faster. Phase striped shutters. Cannot fire. Drains Signal.</span></div>
+            <div><b>1 LIVE · CLICKER</b><span>Precise cyan bolt. Spends a battery. Signal comes back.</span></div>
+            <div><b>2 STATIC · SCATTER</b><span>Pellet spread. Reveals cloaks and seams. Drains Signal.</span></div>
+            <div><b>3 DEAD AIR · PHASER</b><span>Short bolt through shutters and the veil. Faster. Drains Signal.</span></div>
           </div>
           <p class="controls">WASD move · mouse look · click fire · wheel or Q cycles · E retune · Esc pause · M mute</p>
           <button id="start" type="button">Click or press Enter</button>
@@ -72,11 +73,11 @@
             <h2 id="panel-title">Paused</h2>
             <p id="panel-body"></p>
             <ul id="rules">
-              <li><b>LIVE</b> Hitscan bolt, solid mall, Signal regenerates.</li>
-              <li><b>STATIC</b> Short spread. Reveals the fountain cloak, the alley cache, and visor seams.</li>
-              <li><b>DEAD AIR</b> Phase the east shutter. No firing. Faster drain.</li>
-              <li>Kills restore Signal. Close, burst, and STATIC kills restore more.</li>
-              <li><b>E</b> Aim at the PA horn. Retune stuns the choir and heats your shots.</li>
+              <li><b>LIVE · CLICKER</b> Hitscan bolt, solid mall, Signal regenerates. One battery a shot.</li>
+              <li><b>STATIC · SCATTER</b> Short spread. Reveals the fountain cloak, the alley cache, and visor seams.</li>
+              <li><b>DEAD AIR · PHASER</b> Short bolt that phases shutters and the veil. Faster drain. You still walk through.</li>
+              <li>Empty mag clicks dry. Kills drop batteries. Clearing a room refills them. Signal is separate.</li>
+              <li><b>E</b> Aim at the PA horn. Retune stuns the choir, heats your shots, and refunds a few batteries.</li>
               <li>Clear the court. The north door opens onto the radio wing.</li>
             </ul>
             <p id="panel-meta"></p>

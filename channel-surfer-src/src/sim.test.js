@@ -32,18 +32,23 @@ import {
   TUNING,
   applyEnemyHit,
   applyPickup,
+  batteryMaxes,
   beginShot,
   canFire,
   channelFromCode,
   createRunState,
   cycleChannel,
   damageAtRange,
+  grantBatteries,
   grantHealth,
   grantSignal,
   hurtPlayer,
+  makeBatteryDrop,
   noteHit,
   overlapsCircle,
   pickupVisible,
+  refillBatteries,
+  refundBatteries,
   resolveShot,
   rewardForKill,
   shotProfile,
@@ -136,19 +141,93 @@ describe("signal", () => {
 });
 
 describe("weapons", () => {
-  it("lets LIVE and STATIC fire and stops DEAD AIR", () => {
+  it("binds one remote to each channel and spends a battery", () => {
     const live = beginShot(createRunState());
     assert.equal(live.fired, true);
+    assert.equal(live.reason, "ok");
     assert.equal(live.profile.kind, "hitscan");
+    assert.equal(live.profile.name, "CLICKER");
+    assert.equal(live.profile.phases, false);
     assert.equal(live.profile.pellets, 1);
+    assert.equal(live.state.batteries.LIVE, TUNING.clickerMag - 1);
+    assert.equal(live.state.signal, TUNING.signalMax);
     assert.equal(canFire(live.state), false);
+    const cooled = { ...live.state, fireCooldown: 0 };
+    const again = beginShot(cooled);
+    assert.equal(again.fired, true);
+    const waiting = beginShot(again.state);
+    assert.equal(waiting.fired, false);
+    assert.equal(waiting.reason, "wait");
+    assert.equal(waiting.state.batteries.LIVE, again.state.batteries.LIVE);
+
     const stat = beginShot(switchChannel(createRunState(), "STATIC").state);
+    assert.equal(stat.fired, true);
     assert.equal(stat.profile.kind, "spread");
+    assert.equal(stat.profile.name, "SCATTER");
     assert.equal(stat.profile.pellets, TUNING.staticPellets);
+    assert.equal(stat.profile.phases, false);
     assert.ok(stat.profile.range < live.profile.range);
+    assert.equal(stat.state.batteries.STATIC, TUNING.scatterMag - 1);
+
     const dead = beginShot(switchChannel(createRunState(), "DEAD_AIR").state);
-    assert.equal(dead.fired, false);
-    assert.equal(dead.profile.kind, "none");
+    assert.equal(dead.fired, true);
+    assert.equal(dead.profile.kind, "phase");
+    assert.equal(dead.profile.name, "PHASER");
+    assert.equal(dead.profile.phases, true);
+    assert.ok(dead.profile.range < stat.profile.range);
+    assert.ok(dead.profile.range > 4);
+    assert.equal(dead.state.batteries.DEAD_AIR, TUNING.phaserMag - 1);
+
+    const dryState = {
+      ...createRunState(),
+      batteries: { LIVE: 0, STATIC: TUNING.scatterMag, DEAD_AIR: TUNING.phaserMag },
+    };
+    const dry = beginShot(dryState);
+    assert.equal(dry.fired, false);
+    assert.equal(dry.reason, "dry");
+    assert.equal(canFire(dryState), false);
+    assert.equal(dry.state.batteries.LIVE, 0);
+    const swapped = beginShot(switchChannel(dryState, "STATIC").state);
+    assert.equal(swapped.fired, true);
+    assert.equal(swapped.profile.name, "SCATTER");
+  });
+
+  it("refills batteries from drops, room clears, and the PA", () => {
+    const empty = { ...createRunState(), batteries: { LIVE: 1, STATIC: 0, DEAD_AIR: 0 } };
+    const drop = makeBatteryDrop({ id: "west", x: 1, z: 2 });
+    assert.equal(drop.kind, "battery");
+    assert.equal(drop.cloaked, false);
+    const picked = applyPickup(empty, drop);
+    assert.equal(picked.took, true);
+    assert.equal(picked.state.batteries.LIVE, 1 + TUNING.dropLive);
+    assert.equal(picked.state.batteries.STATIC, TUNING.dropStatic);
+    assert.equal(picked.state.batteries.DEAD_AIR, TUNING.dropDead);
+    const capped = grantBatteries(createRunState(), { LIVE: 50, STATIC: 1, DEAD_AIR: 1 });
+    assert.equal(capped.state.batteries.LIVE, TUNING.clickerMag);
+    assert.equal(capped.gained, 0);
+    const fullCell = applyPickup(createRunState(), drop);
+    assert.equal(fullCell.took, false);
+    assert.equal(fullCell.pickup.taken, false);
+    const refilled = refillBatteries(empty);
+    assert.deepEqual(refilled.batteries, batteryMaxes());
+    const refund = refundBatteries({ ...empty, channel: "DEAD_AIR" });
+    assert.equal(refund.state.batteries.LIVE, 1 + TUNING.paRefund);
+    assert.equal(refund.state.batteries.STATIC, TUNING.paRefund);
+    assert.equal(refund.state.batteries.DEAD_AIR, TUNING.paRefund + TUNING.paRefundFocus);
+  });
+
+  it("lets the Phaser through a phase gate and stops the Clicker", () => {
+    const enemy = { id: "beyond", x: 13.2, y: 0, z: 0.02, alive: true, hittable: true };
+    const origin = { x: 9.4, y: 1.2, z: 0.02 };
+    const dir = { x: 1, y: 0, z: 0 };
+    const blocked = resolveShot(origin, dir, 20, [enemy], cols);
+    assert.equal(blocked.kind, "world");
+    assert.equal(blocked.id, "phase-gate");
+    const phased = resolveShot(origin, dir, 20, [enemy], cols, { phase: true });
+    assert.equal(phased.kind, "enemy");
+    assert.equal(phased.id, "beyond");
+    const short = resolveShot(origin, dir, 3, [enemy], cols, { phase: true });
+    assert.equal(short, null);
   });
 
   it("keeps LIVE useful past STATIC range", () => {
@@ -241,6 +320,12 @@ describe("court layout", () => {
     for (const enemy of [...ENEMIES, ...CHAPEL_ENEMIES]) assert.equal(reserved.has(enemy.id), false);
     assert.ok(LEASHES.alley);
     assert.equal(PICKUPS.find((p) => p.cloaked).kind, "signal");
+    const cells = PICKUPS.filter((p) => p.kind === "battery");
+    assert.equal(cells.length, 2);
+    for (const cell of cells) {
+      assert.equal(cell.cloaked, false);
+      assert.equal(overlapsCircle(cell.x, cell.z, TUNING.playerRadius, cols, "LIVE"), null, cell.id);
+    }
   });
 
   it("spawns the player and every Tessera in open floor", () => {

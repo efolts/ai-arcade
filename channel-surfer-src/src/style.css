@@ -165,6 +165,17 @@ html, body {
 }
 #stage.ch-static #channel-readout strong { color: #f2f2f2; text-shadow: none; }
 #stage.ch-dead #channel-readout strong { color: #9aa3b2; text-shadow: none; }
+#channel-readout em {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+#stage.ch-live #channel-readout em { color: var(--cyan); }
+#stage.ch-static #channel-readout em { color: #f2f2f2; }
+#stage.ch-dead #channel-readout em { color: #9aa3b2; }
 
 #wave-readout {
   position: absolute;

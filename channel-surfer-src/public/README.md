@@ -23,7 +23,7 @@ Open `index.html` (or the Pages URL ending in `/channel-surfer/`). The playfield
 | M | Mute |
 | R | Restart. From a radio-wing death, retry that wing |
 
-**LIVE** — precise cyan bolt, normal mall. **STATIC** — drains Signal, spread shot, reveals cloaks and visor seams. **DEAD AIR** — drains Signal, faster, phases through striped shutters and the priest's veil, cannot fire.
+**LIVE Clicker** — precise cyan bolt, one battery a shot, normal mall. **STATIC Scatter** — drains Signal, pellet spread, reveals cloaks and visor seams. **DEAD AIR Phaser** — drains Signal, faster, a short bolt that phases striped shutters and the priest's veil. Empty magazines click dry. Kills drop batteries. Clearing a room refills them. Signal is still the channel meter.
 
 Clear the court and the north door opens into the radio wing. The Visor Priest broadcasts three rites. Each one wants a different channel. Tessera and the priest are ceramic shells with black glass visors: pearl, gold, and amber attacks. Tessera hands have segmented fingers. The priest's robe is a cut garment. The court and the nave both have baked light. Visors reflect the court or the aisle, depending on where you stand. Cyan stays on the CRT lens, the bolt, and the Signal UI.
 

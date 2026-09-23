@@ -135,6 +135,14 @@ export function createAudio() {
         case "static":
           noiseBurst(0.13, 0.22, 640);
           break;
+        case "phase":
+          tone(220, 0.12, "sine", 0.06, 90);
+          noiseBurst(0.07, 0.08, 480);
+          break;
+        case "dry":
+          noiseBurst(0.03, 0.08, 1800);
+          tone(140, 0.04, "square", 0.03, 90);
+          break;
         case "deny":
           tone(86, 0.09, "sine", 0.07, 48);
           break;

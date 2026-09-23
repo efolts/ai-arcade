@@ -29,10 +29,34 @@ export const TUNING = {
   playerRadius: 0.36,
   boltDamage: 8,
   speed: { LIVE: 6.3, STATIC: 5.4, DEAD_AIR: 9.6 },
+  clickerMag: 20,
+  scatterMag: 8,
+  phaserMag: 6,
+  phaserDamage: 26,
+  phaserRange: 8,
+  phaserFalloff: 0.4,
+  phaserCooldown: 0.48,
+  dropLive: 5,
+  dropStatic: 2,
+  dropDead: 2,
+  paRefund: 2,
+  paRefundFocus: 2,
 };
 
 export function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
+}
+
+export function batteryMaxes() {
+  return {
+    LIVE: TUNING.clickerMag,
+    STATIC: TUNING.scatterMag,
+    DEAD_AIR: TUNING.phaserMag,
+  };
+}
+
+export function fullBatteries() {
+  return batteryMaxes();
 }
 
 export function createRunState() {
@@ -42,6 +66,7 @@ export function createRunState() {
     health: TUNING.healthMax,
     fireCooldown: 0,
     hurtTimer: 0,
+    batteries: fullBatteries(),
   };
 }
 
@@ -96,45 +121,113 @@ export function movementSpeed(channel) {
   return TUNING.speed[channel] ?? TUNING.speed.LIVE;
 }
 
+function magCount(state, channel) {
+  const max = batteryMaxes()[channel] ?? 0;
+  if (!state.batteries || state.batteries[channel] == null) return max;
+  return state.batteries[channel];
+}
+
 export function canFire(state) {
-  return state.channel !== "DEAD_AIR" && state.fireCooldown <= 0 && state.health > 0;
+  if (state.health <= 0 || state.fireCooldown > 0) return false;
+  const profile = shotProfile(state.channel);
+  return profile.kind !== "none" && magCount(state, state.channel) >= profile.cost;
 }
 
 export function shotProfile(channel) {
   if (channel === "LIVE") {
     return {
       kind: "hitscan",
+      name: "CLICKER",
       pellets: 1,
       spread: 0,
       damage: TUNING.liveDamage,
       range: TUNING.liveRange,
       falloff: TUNING.liveFalloff,
       cooldown: TUNING.liveCooldown,
+      cost: 1,
+      phases: false,
     };
   }
   if (channel === "STATIC") {
     return {
       kind: "spread",
+      name: "SCATTER",
       pellets: TUNING.staticPellets,
       spread: TUNING.staticSpread,
       damage: TUNING.staticPellet,
       range: TUNING.staticRange,
       falloff: TUNING.staticFalloff,
       cooldown: TUNING.staticCooldown,
+      cost: 1,
+      phases: false,
     };
   }
-  return { kind: "none", pellets: 0, spread: 0, damage: 0, range: 0, falloff: 1, cooldown: 0 };
+  if (channel === "DEAD_AIR") {
+    return {
+      kind: "phase",
+      name: "PHASER",
+      pellets: 1,
+      spread: 0,
+      damage: TUNING.phaserDamage,
+      range: TUNING.phaserRange,
+      falloff: TUNING.phaserFalloff,
+      cooldown: TUNING.phaserCooldown,
+      cost: 1,
+      phases: true,
+    };
+  }
+  return { kind: "none", name: "", pellets: 0, spread: 0, damage: 0, range: 0, falloff: 1, cooldown: 0, cost: 0, phases: false };
 }
 
 export function beginShot(state) {
   const profile = shotProfile(state.channel);
-  if (!canFire(state) || profile.kind === "none") {
-    return { state, profile: shotProfile("DEAD_AIR"), fired: false };
-  }
+  if (state.health <= 0) return { state, profile, fired: false, reason: "dead" };
+  if (profile.kind === "none") return { state, profile, fired: false, reason: "none" };
+  if (state.fireCooldown > 0) return { state, profile, fired: false, reason: "wait" };
+  const have = magCount(state, state.channel);
+  if (have < profile.cost) return { state, profile, fired: false, reason: "dry" };
+  const batteries = { ...(state.batteries || fullBatteries()), [state.channel]: have - profile.cost };
   return {
-    state: { ...state, fireCooldown: profile.cooldown },
+    state: { ...state, batteries, fireCooldown: profile.cooldown },
     profile,
     fired: true,
+    reason: "ok",
+  };
+}
+
+export function grantBatteries(state, amounts = {}) {
+  const max = batteryMaxes();
+  const batteries = { ...(state.batteries || fullBatteries()) };
+  let gained = 0;
+  for (const channel of CHANNELS) {
+    const add = amounts[channel] || 0;
+    if (add <= 0) continue;
+    const next = clamp(batteries[channel] + add, 0, max[channel]);
+    gained += next - batteries[channel];
+    batteries[channel] = next;
+  }
+  return { state: { ...state, batteries }, gained };
+}
+
+export function refillBatteries(state) {
+  return { ...state, batteries: fullBatteries() };
+}
+
+export function refundBatteries(state) {
+  const amounts = { LIVE: TUNING.paRefund, STATIC: TUNING.paRefund, DEAD_AIR: TUNING.paRefund };
+  if (CHANNELS.includes(state.channel)) amounts[state.channel] += TUNING.paRefundFocus;
+  return grantBatteries(state, amounts);
+}
+
+export function makeBatteryDrop(enemy) {
+  return {
+    id: "drop-" + enemy.id,
+    kind: "battery",
+    x: enemy.x,
+    z: enemy.z,
+    amounts: { LIVE: TUNING.dropLive, STATIC: TUNING.dropStatic, DEAD_AIR: TUNING.dropDead },
+    cloaked: false,
+    taken: false,
   };
 }
 
@@ -329,7 +422,8 @@ export function tickReveal(enemy, dt, channel) {
   return syncExposure({ ...enemy, reveal }, channel);
 }
 
-export function resolveShot(origin, dir, range, enemies, colliders) {
+export function resolveShot(origin, dir, range, enemies, colliders, options = {}) {
+  const solids = options.phase ? colliders.filter((c) => !c.phaseGate) : colliders;
   let bestT = range;
   let hit = null;
   for (const e of enemies) {
@@ -355,7 +449,7 @@ export function resolveShot(origin, dir, range, enemies, colliders) {
       }
     }
   }
-  const world = rayWorld(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, bestT, colliders);
+  const world = rayWorld(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, bestT, solids);
   if (world && world.t < bestT) {
     return {
       kind: "world",
@@ -433,6 +527,15 @@ export function applyPickup(state, pickup) {
     if (state.health >= TUNING.healthMax) return { state, pickup, took: false };
     return {
       state: grantHealth(state, pickup.amount),
+      pickup: { ...pickup, taken: true },
+      took: true,
+    };
+  }
+  if (pickup.kind === "battery") {
+    const granted = grantBatteries(state, pickup.amounts || {});
+    if (granted.gained <= 0) return { state, pickup, took: false };
+    return {
+      state: granted.state,
       pickup: { ...pickup, taken: true },
       took: true,
     };

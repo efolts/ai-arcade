@@ -1,4 +1,4 @@
-/** Phase 3.5 character detail on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
+/** Phase 4 arsenal on the two-room slice. Collision and encounters are unchanged. Later phases stay in RESERVED_CONTENT. */
 
 export const PHASE = 3;
 
@@ -33,6 +33,22 @@ export const CHAPEL_ENEMIES = [
 export const PICKUPS = [
   { id: "signal-cache", kind: "signal", x: 13.7, z: 1.6, amount: 48, cloaked: true },
   { id: "aid-kit", kind: "health", x: 13.7, z: -6.4, amount: 36, cloaked: false },
+  {
+    id: "cell-court",
+    kind: "battery",
+    x: -6.2,
+    z: 5.8,
+    amounts: { LIVE: 8, STATIC: 4, DEAD_AIR: 3 },
+    cloaked: false,
+  },
+  {
+    id: "cell-nave",
+    kind: "battery",
+    x: 2.4,
+    z: -16.7,
+    amounts: { LIVE: 8, STATIC: 4, DEAD_AIR: 3 },
+    cloaked: false,
+  },
 ];
 
 const CHAPEL_LEASH = { minX: -7.2, maxX: 7.2, minZ: -23.35, maxZ: -15.9 };

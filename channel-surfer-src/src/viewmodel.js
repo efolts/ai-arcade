@@ -55,6 +55,28 @@ export function createViewmodel(camera, textures) {
   antenna.rotation.x = 0.5;
   const tip = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), metal);
   tip.position.set(0.11, 0.1, -0.2);
+  const fork = new THREE.Group();
+  for (const side of [-1, 1]) {
+    const prong = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.005, 0.16, 6), metal);
+    prong.position.set(side * 0.045, 0.03, -0.16);
+    prong.rotation.x = 1.15;
+    prong.rotation.z = side * -0.55;
+    const nub = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), metal);
+    nub.position.set(side * 0.09, 0.07, -0.22);
+    fork.add(prong, nub);
+  }
+  fork.visible = false;
+  const bladeMat = new THREE.MeshStandardMaterial({ color: 0xc5ced6, roughness: 0.22, metalness: 0.7, envMapIntensity: 0.45 });
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.028, 0.46), bladeMat);
+  blade.position.set(0.02, -0.01, -0.38);
+  const bladeEdge = new THREE.Mesh(
+    new THREE.BoxGeometry(0.004, 0.008, 0.2),
+    new THREE.MeshBasicMaterial({ color: 0xd5dde6 })
+  );
+  bladeEdge.position.set(0.02, -0.01, -0.58);
+  const phaseKit = new THREE.Group();
+  phaseKit.add(blade, bladeEdge);
+  phaseKit.visible = false;
   const capGeo = new THREE.SphereGeometry(0.045, 12, 8);
   capGeo.scale(1.2, 0.62, 1.35);
   const nose = new THREE.Mesh(capGeo, wood);
@@ -65,7 +87,7 @@ export function createViewmodel(camera, textures) {
   gripBar.position.set(-0.068, -0.03, 0.04);
   const gripR = gripBar.clone();
   gripR.position.x = 0.108;
-  root.add(antenna, tip, nose, tail, gripBar, gripR);
+  root.add(antenna, tip, fork, phaseKit, nose, tail, gripBar, gripR);
   for (let i = 0; i < 4; i++) {
     const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.012, 6), dark);
     hole.rotation.x = Math.PI / 2;
@@ -177,6 +199,10 @@ export function createViewmodel(camera, textures) {
       }
       primed = true;
       channel = next;
+      antenna.visible = next === "LIVE";
+      tip.visible = next === "LIVE";
+      fork.visible = next === "STATIC";
+      phaseKit.visible = next === "DEAD_AIR";
       if (next === "LIVE") {
         lensMat.color.setHex(0x67f6ff);
         glow.color.setHex(0x67f6ff);
@@ -191,11 +217,19 @@ export function createViewmodel(camera, textures) {
       }
     },
     fire(kind) {
-      kick = kind === "spread" ? 0.12 : 0.055;
-      if (kind !== "none") grip = kind === "spread" ? 0.85 : 0.62;
-      flashT = kind === "none" ? 0 : 0.045;
-      flashMat.color.set(kind === "spread" ? 0xf4f4f4 : 0xc6fbff);
-      flash.scale.setScalar(kind === "spread" ? 1.35 : 1);
+      if (kind === "dry" || kind === "none") {
+        click = 0.14;
+        kick = 0.02;
+        flashT = 0;
+        return;
+      }
+      kick = kind === "spread" ? 0.12 : kind === "phase" ? 0.08 : 0.055;
+      grip = kind === "spread" ? 0.85 : kind === "phase" ? 0.5 : 0.62;
+      flashT = 0.045;
+      flashMat.color.set(kind === "spread" ? 0xf4f4f4 : kind === "phase" ? 0xd5dde6 : 0xc6fbff);
+      flash.scale.setScalar(kind === "spread" ? 1.35 : kind === "phase" ? 0.7 : 1);
+      if (kind === "phase") flash.position.z = -0.62;
+      else flash.position.z = -0.24;
     },
     setVisible(visible) {
       root.visible = visible;

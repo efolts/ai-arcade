@@ -661,6 +661,25 @@ export function createWorld(scene) {
   aid.position.set(aidDef.x, 0.2, aidDef.z);
   scene.add(aid);
 
+  const cellBody = new THREE.CylinderGeometry(0.055, 0.055, 0.2, 8);
+  const cellCap = new THREE.CylinderGeometry(0.03, 0.03, 0.04, 8);
+  const cellMat = new THREE.MeshStandardMaterial({ color: 0x2a241c, roughness: 0.45, metalness: 0.35 });
+  const cellCapMat = new THREE.MeshBasicMaterial({ color: 0x67f6ff });
+  const cells = new Map();
+  function makeCell() {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(cellBody, cellMat);
+    const cap = new THREE.Mesh(cellCap, cellCapMat);
+    cap.position.y = 0.12;
+    group.add(body, cap);
+    group.traverse((obj) => {
+      obj.castShadow = false;
+      obj.receiveShadow = false;
+    });
+    scene.add(group);
+    return group;
+  }
+
   const hemi = new THREE.HemisphereLight(0xe8e0d4, 0x3a3228, 0.74);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.35);
@@ -767,6 +786,23 @@ export function createWorld(scene) {
     setPickup(which, visible) {
       if (which === "cache") cache.visible = visible;
       if (which === "aid") aid.visible = visible;
+    },
+    syncCells(list) {
+      const live = new Set();
+      for (const pickup of list) {
+        if (pickup.kind !== "battery" || pickup.taken) continue;
+        live.add(pickup.id);
+        let group = cells.get(pickup.id);
+        if (!group) {
+          group = makeCell();
+          cells.set(pickup.id, group);
+        }
+        group.visible = true;
+        group.position.set(pickup.x, 0.28 + Math.sin(lastTime * 2.2 + pickup.x) * 0.03, pickup.z);
+      }
+      for (const [id, group] of cells) {
+        if (!live.has(id)) group.visible = false;
+      }
     },
     update(time, channel, focus) {
       if (focus) {

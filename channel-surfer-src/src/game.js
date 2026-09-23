@@ -21,16 +21,21 @@ import {
   applyEnemyHit,
   createRunState,
   applyPickup,
+  batteryMaxes,
   beginShot,
   clamp,
   cycleChannel,
   damageAtRange,
   grantSignal,
   hurtPlayer,
+  makeBatteryDrop,
   noteHit,
   pickupVisible,
+  refillBatteries,
+  refundBatteries,
   resolveShot,
   rewardForKill,
+  shotProfile,
   segmentClear,
   spreadDirs,
   switchChannel,
@@ -318,6 +323,8 @@ export function createGame(canvas, audio) {
       ...createChapelEnemies().map((enemy) => ({ ...enemy, dormant: false })),
     ];
     priest = { ...createPriest(), active: true };
+    const placed = createPickups();
+    pickups = [...pickups.filter((pickup) => pickup.z > -14.5), ...placed.filter((pickup) => pickup.z < -14.5)];
     doorOpen = true;
     choirSilenced = false;
     wingDelay = 1.25;
@@ -365,7 +372,7 @@ export function createGame(canvas, audio) {
       state = result.state;
       swaps += 1;
       flash = 0.45;
-      if (serialBanner) banner(LABEL[state.channel]);
+      if (serialBanner) banner(LABEL[state.channel] + " · " + shotProfile(state.channel).name);
       audio.play(SWITCH_SFX[state.channel]);
       present(state.channel);
     } else if (result.result === "denied") {
@@ -387,15 +394,17 @@ export function createGame(canvas, audio) {
       z: origin.z + forward.z * 0.42 + right.z * 0.14 - up.z * 0.1,
     };
     const retuned = time < retuneUntil;
-    const tracerColor = begun.profile.kind === "hitscan" || retuned ? [0.45, 0.97, 1] : [0.82, 0.82, 0.82];
+    const ownColor =
+      begun.profile.kind === "hitscan" ? [0.45, 0.97, 1] : begun.profile.kind === "phase" ? [0.74, 0.8, 0.84] : [0.9, 0.9, 0.9];
+    const tracerColor = retuned ? [0.45, 0.97, 1] : ownColor;
     const cols = liveColliders();
     let connected = false;
     let riteBroken = false;
-    recoil = Math.min(0.07, recoil + (begun.profile.kind === "spread" ? 0.05 : 0.014));
+    recoil = Math.min(0.07, recoil + (begun.profile.kind === "spread" ? 0.05 : begun.profile.kind === "phase" ? 0.03 : 0.014));
     viewmodel.fire(begun.profile.kind);
-    audio.play(begun.profile.kind === "spread" ? "static" : "live");
+    audio.play(begun.profile.kind === "spread" ? "static" : begun.profile.kind === "phase" ? "phase" : "live");
     for (const dir of dirs) {
-      const hit = resolveShot(origin, dir, begun.profile.range, enemies, cols);
+      const hit = resolveShot(origin, dir, begun.profile.range, enemies, cols, { phase: begun.profile.phases });
       const priestHit = priest.alive ? resolvePriestHit(origin, dir, begun.profile.range, priest, state.channel) : null;
       const usePriest = !!(priestHit && (!hit || priestHit.t < hit.t));
       const chosen = usePriest ? priestHit : hit;
@@ -449,6 +458,7 @@ export function createGame(canvas, audio) {
           burst: noted.burst,
         });
         state = reward.state;
+        dropBattery(applied.enemy);
         burst(hit.x, hit.y, hit.z, [1, 0.68, 0.25], 18);
         audio.play("death");
         banner(reward.aggressive ? "AGGRESSIVE +" + reward.amount : "SIGNAL +" + reward.amount);
@@ -456,6 +466,12 @@ export function createGame(canvas, audio) {
     }
     if (connected && !riteBroken) audio.play("hit");
     if (tracers.length > TR) tracers.splice(0, tracers.length - TR);
+  }
+
+  function dropBattery(enemy) {
+    const id = "drop-" + enemy.id;
+    if (pickups.some((pickup) => pickup.id === id)) return;
+    pickups.push(makeBatteryDrop(enemy));
   }
 
   function noteBreak(answered) {
@@ -511,6 +527,7 @@ export function createGame(canvas, audio) {
     const courtLeft = enemies.some((enemy) => enemy.alive && enemy.room !== "chapel");
     if (!doorOpen && !courtLeft) {
       doorOpen = true;
+      state = refillBatteries(state);
       banner("RADIO WING");
       audio.play("door");
       queueTip("wing", "North door is open. The radio wing is still on the air.");
@@ -551,6 +568,8 @@ export function createGame(canvas, audio) {
         hijackCooldownUntil = tried.cooldownUntil;
         retuneUntil = time + HIJACK_TUNING.retune;
         enemies = applyRetune(enemies, horn, HIJACK_TUNING.radius, HIJACK_TUNING.stun);
+        const refund = refundBatteries(state);
+        state = refund.state;
         banner("PA RETUNE");
         audio.play("hijack");
         burst(horn.x, horn.y, horn.z, [0.45, 0.97, 1], 28);
@@ -657,16 +676,18 @@ export function createGame(canvas, audio) {
 
     if (arm > 0) arm -= dt;
     else if (input.fireDown) {
-      if (state.channel === "DEAD_AIR") {
+      const ready = beginShot(state);
+      if (!ready.fired && ready.reason === "dry") {
         if (!denyLatch) {
           denyLatch = true;
-          audio.play("deny");
-          viewmodel.fire("none");
+          audio.play("dry");
+          viewmodel.fire("dry");
+          banner("NO BATTERY");
         }
-      } else {
+      } else if (ready.fired) {
         denyLatch = false;
         shoot();
-      }
+      } else denyLatch = false;
     } else denyLatch = false;
 
     const nextBolts = [];
@@ -720,12 +741,12 @@ export function createGame(canvas, audio) {
       banner(pickup.kind === "signal" ? "SIGNAL CACHE" : "AID KIT");
     }
 
-    if (time > 0.45) queueTip("intro", "LIVE — precise cyan bolt. Keys 1–3, wheel, or Q.");
+    if (time > 0.45) queueTip("intro", "1 LIVE Clicker, 2 STATIC Scatter, 3 DEAD AIR Phaser. Each shot spends a battery.");
     if (Math.hypot(player.x, player.z) < 7.5 || time > 11) {
       queueTip("cloak", "A Tessera is cloaked in the fountain. STATIC reveals it and every visor seam.");
     }
     if (Math.hypot(player.x - 10.4, player.z) < 6.2 || time > 20) {
-      queueTip("gate", "Striped shutter is DEAD AIR. You move faster and cannot fire.");
+      queueTip("gate", "Striped shutter is DEAD AIR. The Phaser fires through it. Clicker and Scatter stop.");
     }
     if (player.x > 12.1 && pickups.some((pickup) => pickup.cloaked && !pickup.taken)) {
       queueTip("cache", "Something in the alley is off-channel. STATIC reveals a signal cache.");
@@ -754,7 +775,7 @@ export function createGame(canvas, audio) {
         enemies = enemies.map((enemy) =>
           enemy.room === "chapel" && enemy.alive ? { ...enemy, alive: false, hittable: false } : enemy
         );
-        state = grantSignal(state, 40);
+        state = refillBatteries(grantSignal(state, 40));
         banner("OFF THE AIR");
         audio.play("death");
         burst(priest.x, 2.1, priest.z, [0.96, 0.8, 0.38], 34);
@@ -910,6 +931,7 @@ export function createGame(canvas, audio) {
       const aid = pickups.find((pickup) => pickup.kind === "health");
       world.setPickup("cache", !!(cache && !cache.taken && state.channel === "STATIC" && mode !== "title"));
       world.setPickup("aid", !!(aid && !aid.taken));
+      world.syncCells(pickups);
       world.setDoor(doorOpen);
       world.setVeil(!!(priest.alive && priest.veilUp), mode === "title" ? "LIVE" : state.channel);
       world.setHijack({
@@ -939,11 +961,15 @@ export function createGame(canvas, audio) {
       const wingCount =
         enemies.filter((enemy) => enemy.alive && enemy.room === "chapel").length + (priest.alive ? 1 : 0);
       const playing = mode === "play";
+      const profile = shotProfile(state.channel);
       return {
         mode,
         health: state.health,
         signal: state.signal,
         channel: state.channel,
+        remote: profile.name,
+        ammo: state.batteries[state.channel],
+        ammoMax: batteryMaxes()[state.channel],
         enemies: inWing ? wingCount : courtCount,
         roomLabel: inWing ? "RADIO" : "COURT",
         countLabel: inWing ? "ON AIR" : "TESSERA",

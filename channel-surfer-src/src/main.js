@@ -27,6 +27,7 @@ const healthNum = document.getElementById("health-num");
 const signalFill = document.getElementById("signal-fill");
 const signalNum = document.getElementById("signal-num");
 const chName = document.getElementById("ch-name");
+const remoteReadout = document.getElementById("remote-readout");
 const enemyCount = document.getElementById("enemy-count");
 const roomLabel = document.getElementById("room-label");
 const countLabel = document.getElementById("count-label");
@@ -168,6 +169,7 @@ function paint(hud) {
   healthNum.textContent = String(Math.ceil(hud.health));
   signalNum.textContent = String(Math.ceil(hud.signal));
   chName.textContent = hud.channel === "DEAD_AIR" ? "DEAD AIR" : hud.channel;
+  if (remoteReadout) remoteReadout.textContent = `${hud.remote || ""}  ${hud.ammo ?? 0}/${hud.ammoMax ?? 0}`;
   enemyCount.textContent = String(hud.enemies);
   roomLabel.textContent = hud.roomLabel || "COURT";
   countLabel.textContent = hud.countLabel || "TESSERA";
