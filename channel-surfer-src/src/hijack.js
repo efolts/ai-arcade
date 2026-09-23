@@ -6,7 +6,7 @@ export const HIJACK_CATALOG = [
   { id: "pa-horn", phase: 2, status: "playable", effect: "stun", prompt: "E  RETUNE PA" },
   { id: "sprinkler", phase: 6, status: "playable", effect: "slow", prompt: "E  OPEN SPRINKLERS" },
   { id: "security-shutter", phase: 7, status: "playable", effect: "slam", prompt: "E  SLAM SHUTTER" },
-  { id: "security-camera", phase: 3, status: "reserved", effect: "mark" },
+  { id: "security-camera", phase: 8, status: "playable", effect: "mark", prompt: "E  ROLL CAMERA" },
 ];
 
 export const HIJACK_TUNING = {
@@ -23,6 +23,8 @@ export const HIJACK_TUNING = {
   slam: 2.2,
   slamRadius: 14,
   slamKnock: 1.25,
+  reveal: 5.5,
+  mark: 5.5,
 };
 
 export function aimHijack({ origin, dir, point, maxDist, cone, blocked }) {
@@ -80,5 +82,17 @@ export function applyShutter(enemies, point, radius, duration, knock = HIJACK_TU
       z = Math.min(leash.maxZ - 0.2, Math.max(leash.minZ + 0.2, z));
     }
     return { ...enemy, x, z, stun: Math.max(enemy.stun || 0, duration), windup: 0 };
+  });
+}
+
+/** Reveals cloaked Tessera in one room and marks everyone there. No stun and no slow. */
+export function applyCamera(enemies, room, revealFor, markFor) {
+  return enemies.map((enemy) => {
+    if (!enemy.alive || enemy.room !== room) return enemy;
+    return {
+      ...enemy,
+      reveal: enemy.cloaked ? Math.max(enemy.reveal || 0, revealFor) : enemy.reveal || 0,
+      marked: Math.max(enemy.marked || 0, markFor),
+    };
   });
 }

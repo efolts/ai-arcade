@@ -549,6 +549,36 @@ export function createWorld(scene) {
   scene.add(shutter);
   addSign("SHUTTER", "HOLD E", shutterDef.x + 0.16, shutterDef.y + 1.15, shutterDef.z, 1.35, 0.4, Math.PI / 2, "#1c140c", "#f0d48a");
 
+  const cameras = [];
+  for (const def of HIJACK_SPAWNS.filter((item) => item.id === "security-camera")) {
+    const group = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.2), materials.brass);
+    body.castShadow = false;
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.24), materials.dark);
+    hood.position.set(0.1, 0.08, 0);
+    hood.castShadow = false;
+    const lens = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.07, 0.1, 10),
+      new THREE.MeshBasicMaterial({ color: 0xffb14a })
+    );
+    lens.rotation.z = Math.PI / 2;
+    lens.position.x = 0.18;
+    const beam = new THREE.Mesh(
+      new THREE.ConeGeometry(0.32, 1.35, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffb14a, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })
+    );
+    beam.rotation.z = -Math.PI / 2;
+    beam.position.x = 0.85;
+    group.add(body, hood, lens, beam);
+    group.position.set(def.x, def.y, def.z);
+    if (def.room === "court") group.rotation.y = -Math.PI / 2;
+    scene.add(group);
+    cameras.push({ lens, beam, x: def.x, z: def.z });
+    const signY = def.y + 0.42;
+    if (def.room === "court") addSign("CAMERA", "HOLD E", def.x, signY, def.z + 0.2, 1.35, 0.38, 0, "#1c140c", "#f0d48a");
+    else addSign("CAMERA", "HOLD E", def.x + 0.2, signY, def.z, 1.35, 0.38, Math.PI / 2, "#1c140c", "#f0d48a");
+  }
+
   const kioskPearl = std({ color: 0xf4efe6, roughness: 0.42, metalness: 0.08 });
   const kioskInk = std({ color: 0x100e0c, roughness: 0.16, metalness: 0.62, emissive: 0x1a1208, emissiveIntensity: 0.16 });
   const kioskGold = std({ color: 0xd4b15a, roughness: 0.32, metalness: 0.74, emissive: 0x8a6a28, emissiveIntensity: 0.22 });
@@ -890,8 +920,13 @@ export function createWorld(scene) {
   let hornHot = false;
   let sprinklerAimed = false;
   let shutterAimed = false;
+  let cameraAimed = false;
+  let cameraAimedX = 0;
+  let cameraAimedZ = 0;
   let pulse = 0;
   let pulseTarget = "pa-horn";
+  let pulseX = 0;
+  let pulseZ = 0;
   let lastTime = 0;
 
   function placeDoor(slot) {
@@ -946,15 +981,20 @@ export function createWorld(scene) {
       dirVeilMat.emissive.setHex(0xc47a22);
       dirVeilMat.emissiveIntensity = ghost ? 0.7 : 0.4;
     },
-    setHijack({ aimed, hot, id }) {
+    setHijack({ aimed, hot, id, x = 0, z = 0 }) {
       hornAimed = !!aimed && id === "pa-horn";
       hornHot = !!hot;
       sprinklerAimed = !!aimed && id === "sprinkler";
       shutterAimed = !!aimed && id === "security-shutter";
+      cameraAimed = !!aimed && id === "security-camera";
+      cameraAimedX = x;
+      cameraAimedZ = z;
     },
-    pulseHijack(which = "pa-horn") {
+    pulseHijack(which = "pa-horn", point = null) {
       pulse = 0.48;
       pulseTarget = which || "pa-horn";
+      pulseX = point ? point.x : 0;
+      pulseZ = point ? point.z : 0;
     },
     syncDirectory(boss) {
       if (!boss) return;
@@ -1062,6 +1102,12 @@ export function createWorld(scene) {
       shutterPanel.position.y = 0.55 - drop * 1.05;
       shutterPanel.material.emissiveIntensity = slamming || shutterAimed ? 0.85 : 0.28;
       shutterLamp.material.color.setHex(slamming || shutterAimed ? 0xfff1c8 : 0xffb14a);
+      for (const cam of cameras) {
+        const aimedCam = cameraAimed && Math.hypot(cam.x - cameraAimedX, cam.z - cameraAimedZ) < 0.35;
+        const liveCam = pulseTarget === "camera" && pulse > 0 && Math.hypot(cam.x - pulseX, cam.z - pulseZ) < 0.35;
+        cam.lens.material.color.setHex(aimedCam || liveCam ? 0xfff1c8 : 0xffb14a);
+        cam.beam.material.opacity = liveCam ? 0.16 + pulse * 0.4 : aimedCam ? 0.07 : 0;
+      }
       flicker.intensity = 18 + Math.sin(time * 28) * 10 + (Math.random() < 0.04 ? -12 : 0);
       if (channel === "STATIC") {
         const s = 1 + Math.sin(time * 6) * 0.08;

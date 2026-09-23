@@ -17,7 +17,7 @@ import {
   resolveDirectoryHit,
   tickDirectory,
 } from "./directory.js";
-import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyRetune, applyShutter, applySprinkler, tryHijack } from "./hijack.js";
+import { HIJACK_CATALOG, HIJACK_TUNING, aimHijack, applyCamera, applyRetune, applyShutter, applySprinkler, tryHijack } from "./hijack.js";
 import {
   BLOCKS,
   BOUNDS,
@@ -71,6 +71,7 @@ import {
   resolveShot,
   rewardForKill,
   segmentClear,
+  syncExposure,
   shotProfile,
   switchChannel,
   tickPads,
@@ -650,21 +651,21 @@ describe("radio wing", () => {
 });
 
 describe("pa horn", () => {
-  it("keeps the horn, the sprinkler, and the shutter playable", () => {
+  it("keeps every shipped hijack playable", () => {
     assert.deepEqual(
       HIJACK_CATALOG.filter((item) => item.status === "playable").map((item) => item.id),
-      ["pa-horn", "sprinkler", "security-shutter"]
+      ["pa-horn", "sprinkler", "security-shutter", "security-camera"]
     );
     assert.deepEqual(
-      HIJACK_CATALOG.filter((item) => item.status === "reserved").map((item) => item.id).sort(),
-      ["security-camera"]
+      HIJACK_CATALOG.filter((item) => item.status === "reserved").map((item) => item.id),
+      []
     );
     assert.equal(HIJACK_CATALOG.find((item) => item.id === "security-shutter").effect, "slam");
+    assert.equal(HIJACK_CATALOG.find((item) => item.id === "security-camera").effect, "mark");
     assert.equal(HIJACK_CATALOG.some((item) => item.id === "broadcast-echo"), false);
     assert.equal(RESERVED_CONTENT.some((item) => item.id === "broadcast-echo"), true);
     assert.equal(HIJACK_SPAWNS[0].id, "pa-horn");
-    assert.equal(HIJACK_SPAWNS.find((item) => item.id === "sprinkler").id, "sprinkler");
-    assert.equal(HIJACK_SPAWNS.find((item) => item.id === "security-shutter").room, "service");
+    assert.equal(HIJACK_SPAWNS.filter((item) => item.id === "security-camera").length, 2);
   });
 
   it("aims only while looking at the horn and in range", () => {
@@ -758,6 +759,36 @@ describe("pa horn", () => {
       assert.ok(enemy.z > leash.minZ && enemy.z < leash.maxZ, id);
     }
     assert.equal(BLOCKS.filter((block) => block.phaseGate).length, 3);
+  });
+
+  it("reveals and marks one room without stunning or slowing it", () => {
+    const cams = HIJACK_SPAWNS.filter((item) => item.id === "security-camera");
+    const courtCam = cams.find((item) => item.room === "court");
+    const serviceCam = cams.find((item) => item.room === "service");
+    const open = activeColliders({ doorOpen: true, serviceOpen: true });
+    assert.equal(segmentClear(0, 1.58, 0, courtCam.x, courtCam.y, courtCam.z, open), true);
+    assert.equal(segmentClear(0, 1.58, -34.2, serviceCam.x, serviceCam.y, serviceCam.z, open), true);
+    const roster = [...createEnemies(), ...createChapelEnemies(), ...createServiceEnemies()];
+    const court = applyCamera(roster, "court", HIJACK_TUNING.reveal, HIJACK_TUNING.mark);
+    const fountain = court.find((enemy) => enemy.id === "fountain");
+    const shown = syncExposure(fountain, "LIVE");
+    assert.equal(shown.visible, true);
+    assert.equal(shown.hittable, true);
+    assert.ok(fountain.marked >= HIJACK_TUNING.mark);
+    assert.equal(fountain.stun || 0, 0);
+    assert.equal(fountain.slow || 0, 0);
+    assert.ok(court.find((enemy) => enemy.id === "north-l").marked >= HIJACK_TUNING.mark);
+    assert.equal(court.find((enemy) => enemy.id === "choir-l").marked || 0, 0);
+    assert.equal(court.find((enemy) => enemy.id === "service-ghost").reveal || 0, 0);
+    const service = applyCamera(roster, "service", HIJACK_TUNING.reveal, HIJACK_TUNING.mark);
+    const ghost = syncExposure(service.find((enemy) => enemy.id === "service-ghost"), "LIVE");
+    assert.equal(ghost.visible, true);
+    assert.equal(service.find((enemy) => enemy.id === "north-l").marked || 0, 0);
+    assert.equal(service.find((enemy) => enemy.id === "choir-ghost").marked || 0, 0);
+    const marked = applyEnemyHit({ ...fountain, hittable: true, hp: 80 }, { weak: false, damage: 20 });
+    assert.equal(marked.dealt, 25);
+    const plain = applyEnemyHit({ ...createEnemies()[0], hittable: true, hp: 80 }, { weak: false, damage: 20 });
+    assert.equal(plain.dealt, 20);
   });
 });
 

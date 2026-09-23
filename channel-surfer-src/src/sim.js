@@ -643,6 +643,7 @@ export function applyEnemyHit(enemy, { weak, damage }) {
   }
   let dealt = damage;
   if (weak && enemy.exposed) dealt *= TUNING.weakMult;
+  if ((enemy.marked || 0) > 0) dealt *= 1.25;
   const hp = enemy.hp - dealt;
   const killed = hp <= 0;
   return {

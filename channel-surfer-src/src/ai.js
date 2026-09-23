@@ -15,7 +15,11 @@ export function stepEnemy(input, dt, ctx) {
   if (!input.alive) return { enemy: input, shot: null };
   if (input.dormant) {
     return {
-      enemy: { ...input, hurt: Math.max(0, (input.hurt || 0) - dt) },
+      enemy: {
+        ...input,
+        hurt: Math.max(0, (input.hurt || 0) - dt),
+        marked: Math.max(0, (input.marked || 0) - dt),
+      },
       shot: null,
     };
   }
@@ -32,6 +36,7 @@ export function stepEnemy(input, dt, ctx) {
   e = tickReveal(e, 0, ctx.channel);
 
   if ((e.slow || 0) > 0) e.slow = Math.max(0, e.slow - dt);
+  if ((e.marked || 0) > 0) e.marked = Math.max(0, e.marked - dt);
   if ((e.stun || 0) > 0) {
     e.stun -= dt;
     e.windup = 0;

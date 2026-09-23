@@ -13,7 +13,7 @@ import {
   resolveDirectoryHit,
   tickDirectory,
 } from "./directory.js";
-import { HIJACK_TUNING, aimHijack, applyRetune, applyShutter, applySprinkler, tryHijack } from "./hijack.js";
+import { HIJACK_TUNING, aimHijack, applyCamera, applyRetune, applyShutter, applySprinkler, tryHijack } from "./hijack.js";
 import {
   BOUNDS,
   CHAPEL_ENTRY,
@@ -215,6 +215,8 @@ export function createGame(canvas, audio) {
   let hijackCooldownUntil = 0;
   let hijackAimed = false;
   let hijackId = "";
+  let hijackX = 0;
+  let hijackZ = 0;
   let prompt = "";
   let promptKind = "";
   let riteText = "";
@@ -765,6 +767,8 @@ export function createGame(canvas, audio) {
     }
     hijackAimed = !!aimedSpawn;
     hijackId = aimedSpawn ? aimedSpawn.id : "";
+    hijackX = aimedSpawn ? aimedSpawn.x : 0;
+    hijackZ = aimedSpawn ? aimedSpawn.z : 0;
     const hot = time < retuneUntil;
     const cooling = hijackCooldownUntil > time;
     if (hijackId === "sprinkler" && hijackAimed) {
@@ -772,6 +776,9 @@ export function createGame(canvas, audio) {
       promptKind = cooling ? "cool" : "ready";
     } else if (hijackId === "security-shutter" && hijackAimed) {
       prompt = cooling ? "SHUTTER RECHARGING" : "E  SLAM SHUTTER";
+      promptKind = cooling ? "cool" : "ready";
+    } else if (hijackId === "security-camera" && hijackAimed) {
+      prompt = cooling ? "CAMERA RECHARGING" : "E  ROLL CAMERA";
       promptKind = cooling ? "cool" : "ready";
     } else if (hijackAimed && hijackId === "pa-horn") {
       prompt = hot ? "PA RETUNED" : cooling ? "PA RECHARGING" : "E  RETUNE PA";
@@ -809,6 +816,16 @@ export function createGame(canvas, audio) {
         flash = Math.max(flash, 0.24);
         shake = Math.max(shake, 0.05);
         world.pulseHijack("shutter");
+      } else if (aimedSpawn.id === "security-camera") {
+        hijackCooldownUntil = tried.cooldownUntil;
+        enemies = applyCamera(enemies, aimedSpawn.room, HIJACK_TUNING.reveal, HIJACK_TUNING.mark);
+        addXp(TUNING.xpHijack);
+        banner("CAMERA");
+        audio.play("hijack");
+        burst(aimedSpawn.x, aimedSpawn.y, aimedSpawn.z, [1, 0.78, 0.32], 18);
+        flash = Math.max(flash, 0.16);
+        shake = Math.max(shake, 0.02);
+        world.pulseHijack("camera", aimedSpawn);
       } else if (aimedSpawn.id === "pa-horn") {
         hijackCooldownUntil = tried.cooldownUntil;
         retuneUntil = time + HIJACK_TUNING.retune;
@@ -1022,6 +1039,9 @@ export function createGame(canvas, audio) {
     }
 
     if (time > 0.45) queueTip("intro", "1 LIVE Clicker, 2 STATIC Scatter, 3 DEAD AIR Phaser. Each shot spends a battery.");
+    if (Math.hypot(player.x, player.z + 9.45) < 6.5 || (player.z < -32 && Math.hypot(player.x + 7.55, player.z + 36.55) < 8)) {
+      queueTip("camera", "Aim a security camera and press E. It pulls cloaks onto the air and marks the room.");
+    }
     if (pickups.some((pickup) => pickup.pad && Math.hypot(player.x - pickup.x, player.z - pickup.z) < 4.2)) {
       queueTip("pads", "Amber pads recharge. They feed the remote you are holding, then a little to the others.");
     }
@@ -1255,6 +1275,8 @@ export function createGame(canvas, audio) {
         aimed: mode === "play" && hijackAimed,
         hot: mode === "play" && time < retuneUntil,
         id: hijackId,
+        x: hijackX,
+        z: hijackZ,
       });
       world.update(clock, state.channel, player);
       actors.setProbeBlend(player.z);

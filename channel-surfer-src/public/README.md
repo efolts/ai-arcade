@@ -18,7 +18,7 @@ Open `index.html` (or the Pages URL ending in `/channel-surfer/`). The playfield
 | Click | Fire |
 | 1 / 2 / 3 | LIVE / STATIC / DEAD AIR |
 | Wheel or Q | Cycle channels |
-| E | Retune the PA horn, the service sprinkler, or the west security shutter you are aiming at |
+| E | Retune the PA horn, sprinkler, security shutter, or security camera you are aiming at |
 | Esc | Pause and release the mouse |
 | M | Mute |
 | R | Restart. From a wing death, retry that wing |

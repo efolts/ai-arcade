@@ -2,7 +2,7 @@
 
 The FPS where changing TV channels changes combat and the level.
 
-The playable run is one mall: the KRCD court, the radio wing, the service wing, and the Directory. Phase 4 adds channel-locked remotes and Signal batteries. Phase 4.1 adds respawning battery pads. Phase 5 adds a short level-up that changes tuning numbers. Phase 6 opens the service wing and the Directory finale on that same run. Phase 7 adds a security shutter you can slam. Channels stay the weapon switch. Broadcast Echo and the security camera stay hooks. This document matches what ships.
+The playable run is one mall: the KRCD court, the radio wing, the service wing, and the Directory. Phase 4 adds channel-locked remotes and Signal batteries. Phase 4.1 adds respawning battery pads. Phase 5 adds a short level-up that changes tuning numbers. Phase 6 opens the service wing and the Directory finale on that same run. Phase 7 adds a security shutter you can slam. Phase 8 adds security cameras that reveal cloaks and mark a room. Channels stay the weapon switch. Broadcast Echo stays a hook. This document matches what ships.
 
 ## Promise
 
@@ -94,11 +94,17 @@ The sprinkler is on the east wall. Aim and press E. It slows service Tessera to 
 
 The security shutter is on the west wall, clear of the rack and the cart. It is not a `phaseGate`. The court alley shutter and the rite veils still phase on DEAD AIR. Aim the brass housing and press E. Service Tessera are stunned for 2.2s and knocked about 1.25m away from the shutter, clamped inside the corridor leash. It does not slow them, it does not heat your shots, and it does not refund batteries. The prompt is `E  SLAM SHUTTER`. It shares the hijack cooldown with the horn and the sprinkler.
 
+## Security cameras
+
+Two amber housings, same catalog id. One hangs under the court mezzanine, looking back into the mall. One sits high on the service west wall, above the rack, looking into the aisle. Aim and press E. The prompt is `E  ROLL CAMERA`.
+
+The camera does not stun and does not slow. Cloaked Tessera in that room are revealed for 5.5s, the same reveal the STATIC channel uses, so a cloak shows on LIVE. Every living Tessera in that room is marked for 5.5s and takes 1.25× damage. The choir is not marked by the court camera. The court is not marked by the service camera. It pays hijack XP and shares the hijack cooldown.
+
 Clearing the three opens the Directory door, refills magazines, pays the wing XP, and can open a station break.
 
 ## PA horn
 
-The horn, the sprinkler, and the security shutter ship. The catalog in `hijack.js` still reserves a security camera. Broadcast Echo is not in the catalog. All three playable hijacks share one cooldown, so the PA cooldown retune shortens every one of them.
+The horn, the sprinkler, the security shutter, and the security cameras ship. Broadcast Echo is not in the catalog. Every playable hijack shares one cooldown, so the PA cooldown retune shortens every one of them.
 
 The horn is on the west wall of the nave. Aim at it and press E:
 
@@ -210,17 +216,21 @@ A level chip and a cyan XP bar. Cap is level 6. XP comes from Tessera kills, rit
 
 One continuous mall run. Court, radio wing, service wing, Directory. The service wing is the third room: racks, a cloaked Tessera, and the sprinkler hijack. The Directory is one kiosk boss with listing, index, and gate rites, one per channel. Wing checkpoints keep tuning and earlier pads. The clear card is the mall, not the priest.
 
-### Phase 7 — this pass
+### Phase 7
 
-A hijackable security shutter on the service west wall. Press E and it slams the Tessera in that room: a short stun and a knockback, no heat and no battery refund. The alley shutter, the priest veil, and the Directory gate stay Dead Air phase gates. The security camera and Broadcast Echo stay hooks.
+A hijackable security shutter on the service west wall. Press E and it slams the Tessera in that room: a short stun and a knockback, no heat and no battery refund. The alley shutter, the priest veil, and the Directory gate stay Dead Air phase gates.
+
+### Phase 8 — this pass
+
+Security cameras under the court mezzanine and on the service west wall. Press E and that room's cloaks are revealed for a few seconds, and every Tessera there is marked for 1.25× damage. No stun and no slow. Broadcast Echo stays a hook.
 
 ## Hooks
 
 - `level.js` — `BLOCKS`, `ENEMIES`, `CHAPEL_ENEMIES`, `SERVICE_ENEMIES`, `PICKUPS`, `LEASHES`, `RESERVED_CONTENT`, `PHASE`, `activeColliders`. Door flags are separate: radio, service, Directory.
 - `sim.js` — channel, Signal, health, movement, shots, reveal, rewards, XP, and the retune list.
-- `ai.js` — Tessera step. `dormant`, `stun`, and `slow` are data. Enemies never phase.
+- `ai.js` — Tessera step. `dormant`, `stun`, `slow`, and `marked` are data. Enemies never phase.
 - `boss.js` — priest rites, chip damage, and the halo ray.
 - `directory.js` — Directory rites. A new stepper, not a Tessera and not a second priest.
-- `hijack.js` — catalog, aim test, cooldown, retune, sprinkler, shutter slam. Playable entries sit beside `pa-horn`.
+- `hijack.js` — catalog, aim test, cooldown, retune, sprinkler, shutter slam, camera mark. Playable entries sit beside `pa-horn`.
 - `meshkit.js` / `textures.js` / `viewmodel.js` — Phase 3 kits and atlases. They do not own combat rules.
 - Renderer (`world.js`, `actors.js`, `game.js`) reads that data and does not invent rules.

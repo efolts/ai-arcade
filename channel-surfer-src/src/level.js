@@ -26,6 +26,8 @@ export const HIJACK_SPAWNS = [
   { id: "pa-horn", x: -7.05, y: 2.42, z: -17.35 },
   { id: "sprinkler", x: 6.35, y: 2.65, z: -32.55 },
   { id: "security-shutter", x: -7.72, y: 2.45, z: -33.05, room: "service" },
+  { id: "security-camera", x: 0, y: 3.15, z: -9.45, room: "court" },
+  { id: "security-camera", x: -7.55, y: 3.35, z: -36.55, room: "service" },
 ];
 
 export const ENEMIES = [
