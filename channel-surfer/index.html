@@ -11,8 +11,8 @@
     <meta name="theme-color" content="#07080c" />
     <title>CHANNEL SURFER</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <script type="module" crossorigin src="./assets/index-CFO704BM.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CLT_XfNM.css">
+    <script type="module" crossorigin src="./assets/index-2x9K-nzj.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B-r3Ivi6.css">
   </head>
   <body>
     <div id="frame">
@@ -24,18 +24,22 @@
         <div id="flash" aria-hidden="true"></div>
 
         <div id="hud">
-          <div id="bars">
-            <div class="bar">
-              <label>HEALTH</label>
-              <div class="track"><i id="health-fill"></i></div>
-              <b id="health-num">100</b>
-            </div>
-            <div class="bar">
-              <label>SIGNAL</label>
-              <div class="track signal"><i id="signal-fill"></i></div>
-              <b id="signal-num">100</b>
-            </div>
+        <div id="bars">
+          <div class="bar">
+            <label>HEALTH</label>
+            <div class="track"><i id="health-fill"></i></div>
+            <b id="health-num">100</b>
           </div>
+          <div class="bar">
+            <label>SIGNAL</label>
+            <div class="track signal"><i id="signal-fill"></i></div>
+            <b id="signal-num">100</b>
+          </div>
+          <div class="bar xp">
+            <label id="level-chip">LV 1</label>
+            <div class="track"><i id="xp-fill"></i></div>
+          </div>
+        </div>
           <div id="channel-readout">
             <span>CHANNEL</span>
             <strong id="ch-name">LIVE</strong>
@@ -79,6 +83,7 @@
               <li><b>STATIC · SCATTER</b> Short spread. Reveals the fountain cloak, the alley cache, and visor seams.</li>
               <li><b>DEAD AIR · PHASER</b> Short bolt that phases shutters and the veil. Faster drain. You still walk through.</li>
               <li>Empty mag clicks dry. Kills drop batteries. Amber pads recharge and feed the remote you are holding. Clearing a room refills every mag. Signal is separate.</li>
+              <li>Kills, rite breaks, the PA, and a clear room earn a level. Pick one retune at the station break. Channels stay.</li>
               <li><b>E</b> Aim at the PA horn. Retune stuns the choir, heats your shots, and refunds a few batteries.</li>
               <li>Clear the court. The north door opens onto the radio wing.</li>
             </ul>
@@ -87,6 +92,16 @@
               <button id="panel-primary" type="button">Resume</button>
               <button id="panel-secondary" type="button">Restart</button>
             </div>
+          </div>
+        </div>
+
+        <div id="levelup" hidden>
+          <div class="card">
+            <p class="kicker" id="level-kicker">KRCD 7 · LEVEL UP</p>
+            <h2 id="level-title">LEVEL 2</h2>
+            <p id="level-body">Pick one retune. Channels stay the same.</p>
+            <div id="level-picks"></div>
+            <p id="level-keys">1 · 2 · 3</p>
           </div>
         </div>
         <p id="boot-error"></p>

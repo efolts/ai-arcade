@@ -57,7 +57,7 @@ html, body {
   filter: saturate(0.22) brightness(0.7) contrast(0.96);
 }
 
-#noise, #crt, #hurt, #flash, #hud, #title, #panel {
+#noise, #crt, #hurt, #flash, #hud, #title, #panel, #levelup {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -140,6 +140,18 @@ html, body {
 #stage.ch-dead .track.signal i {
   background: var(--amber);
   box-shadow: 0 0 10px rgba(255, 177, 74, 0.35);
+}
+
+.bar.xp { grid-template-columns: 52px 1fr; }
+.bar.xp label { color: var(--cyan); letter-spacing: 0.14em; }
+#stage.ch-static .bar.xp label,
+#stage.ch-dead .bar.xp label { color: var(--cyan); }
+#stage.ch-static .bar.xp .track,
+#stage.ch-dead .bar.xp .track { border-color: rgba(103, 246, 255, 0.45); }
+#stage.ch-static .bar.xp .track i,
+#stage.ch-dead .bar.xp .track i {
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(103, 246, 255, 0.45);
 }
 
 #channel-readout {
@@ -393,6 +405,37 @@ button:hover, button:focus { background: rgba(103, 246, 255, 0.14); outline: non
 }
 #panel[hidden] { display: none; }
 .mode-pause #panel, .mode-clear #panel, .mode-dead #panel { pointer-events: auto; }
+#levelup {
+  display: grid;
+  place-items: center;
+  background: rgba(4, 5, 8, 0.28);
+  pointer-events: none;
+}
+#levelup[hidden] { display: none; }
+.mode-levelup #levelup { pointer-events: auto; }
+#level-body { margin: 0 0 14px; color: var(--ink); line-height: 1.4; }
+#level-picks button {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 20px;
+}
+#level-picks button span {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+#level-keys {
+  margin: 4px 0 0;
+  letter-spacing: 0.18em;
+  color: var(--cyan);
+  font-size: 13px;
+}
+
 .card {
   width: 560px;
   padding: 26px 28px 22px;

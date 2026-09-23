@@ -28,6 +28,14 @@ const signalFill = document.getElementById("signal-fill");
 const signalNum = document.getElementById("signal-num");
 const chName = document.getElementById("ch-name");
 const remoteReadout = document.getElementById("remote-readout");
+const levelChip = document.getElementById("level-chip");
+const xpFill = document.getElementById("xp-fill");
+const levelUp = document.getElementById("levelup");
+const levelKicker = document.getElementById("level-kicker");
+const levelTitle = document.getElementById("level-title");
+const levelBody = document.getElementById("level-body");
+const levelPicks = document.getElementById("level-picks");
+const levelKeys = document.getElementById("level-keys");
 const enemyCount = document.getElementById("enemy-count");
 const roomLabel = document.getElementById("room-label");
 const countLabel = document.getElementById("count-label");
@@ -93,6 +101,14 @@ secondary.addEventListener("click", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (event.repeat) return;
+  if (game.mode === "levelup") {
+    const pick = channelFromCode(event.code);
+    if (pick) {
+      const index = pick === "LIVE" ? 0 : pick === "STATIC" ? 1 : 2;
+      if (game.chooseUpgrade(index) && game.mode === "play") lock();
+    }
+    return;
+  }
   if (event.code === "Space" || event.code.startsWith("Arrow")) event.preventDefault();
   held.add(event.code);
   const channel = channelFromCode(event.code);
@@ -156,6 +172,43 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+function paintLevel(hud) {
+  if (!levelUp) return;
+  const show = hud.mode === "levelup";
+  levelUp.hidden = !show;
+  if (!show) {
+    levelUp.dataset.offers = "";
+    return;
+  }
+  levelKicker.textContent = hud.levelReason === "break" ? "KRCD 7 · STATION BREAK" : "KRCD 7 · LEVEL UP";
+  levelTitle.textContent = "LEVEL " + (hud.level || 1);
+  levelBody.textContent =
+    hud.levelReason === "break"
+      ? "Court is clear. Pick a retune before the wing."
+      : "Pick a retune. Channels stay the same.";
+  const offers = hud.offers || [];
+  const key = offers.map((offer) => offer.id).join("|");
+  levelKeys.textContent = offers.map((_, index) => index + 1).join("  ·  ");
+  if (levelUp.dataset.offers === key) return;
+  levelUp.dataset.offers = key;
+  levelPicks.replaceChildren();
+  offers.forEach((offer, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    const name = document.createElement("b");
+    name.textContent = `${index + 1}  ${offer.name}`;
+    const detail = document.createElement("span");
+    detail.textContent = offer.detail;
+    button.append(name, detail);
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      audio.ensure();
+      if (game.chooseUpgrade(index) && game.mode === "play") lock();
+    });
+    levelPicks.appendChild(button);
+  });
+}
+
 function fmt(seconds) {
   if (!(seconds > 0)) return "—";
   return seconds.toFixed(1) + "s";
@@ -170,6 +223,8 @@ function paint(hud) {
   signalNum.textContent = String(Math.ceil(hud.signal));
   chName.textContent = hud.channel === "DEAD_AIR" ? "DEAD AIR" : hud.channel;
   if (remoteReadout) remoteReadout.textContent = `${hud.remote || ""}  ${hud.ammo ?? 0}/${hud.ammoMax ?? 0}`;
+  if (levelChip) levelChip.textContent = `LV ${hud.level || 1}`;
+  if (xpFill) xpFill.style.width = Math.max(0, Math.min(100, Math.round((hud.xp || 0) * 100))) + "%";
   enemyCount.textContent = String(hud.enemies);
   roomLabel.textContent = hud.roomLabel || "COURT";
   countLabel.textContent = hud.countLabel || "TESSERA";
@@ -196,6 +251,8 @@ function paint(hud) {
   }
   const showPanel = hud.mode === "pause" || hud.mode === "clear" || hud.mode === "dead";
   panel.hidden = !showPanel;
+  paintLevel(hud);
+  if (hud.mode === "levelup" && document.pointerLockElement) document.exitPointerLock();
   if (!showPanel) return;
   if (hud.mode === "pause") {
     panelKicker.textContent = "KRCD 7 · STILL ON AIR";

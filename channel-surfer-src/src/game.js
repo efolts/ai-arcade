@@ -21,6 +21,7 @@ import {
   applyEnemyHit,
   createRunState,
   applyPickup,
+  applyUpgrade,
   armPad,
   batteryMaxes,
   beginShot,
@@ -28,9 +29,11 @@ import {
   cycleChannel,
   damageAtRange,
   grantSignal,
+  grantXp,
   hurtPlayer,
   makeBatteryDrop,
   noteHit,
+  offersFor,
   pickupLabel,
   pickupVisible,
   refillBatteries,
@@ -44,8 +47,10 @@ import {
   tickPads,
   tickResources,
   tryMove,
+  tuningOf,
   rayWorld,
   movementSpeed,
+  xpProgress,
 } from "./sim.js";
 import { createViewmodel } from "./viewmodel.js";
 import { bakeAisleProbe, bakeCourtProbe, createWorld } from "./world.js";
@@ -184,6 +189,7 @@ export function createGame(canvas, audio) {
   let priest = null;
   let pickups = [];
   let bolts = [];
+  let levelReason = "level";
   let doorOpen = false;
   let diedInChapel = false;
   let choirSilenced = false;
@@ -320,7 +326,13 @@ export function createGame(canvas, audio) {
   }
 
   function retryChapel() {
-    state = { ...createRunState(), signal: 80 };
+    const kept = {
+      level: state.level,
+      xp: state.xp,
+      pending: state.pending,
+      mods: { ...(state.mods || {}) },
+    };
+    state = refillBatteries({ ...createRunState(), signal: 80, ...kept });
     enemies = [
       ...enemies.filter((enemy) => enemy.room !== "chapel"),
       ...createChapelEnemies().map((enemy) => ({ ...enemy, dormant: false })),
@@ -375,7 +387,7 @@ export function createGame(canvas, audio) {
       state = result.state;
       swaps += 1;
       flash = 0.45;
-      if (serialBanner) banner(LABEL[state.channel] + " · " + shotProfile(state.channel).name);
+      if (serialBanner) banner(LABEL[state.channel] + " · " + shotProfile(state.channel, state).name);
       audio.play(SWITCH_SFX[state.channel]);
       present(state.channel);
     } else if (result.result === "denied") {
@@ -461,6 +473,7 @@ export function createGame(canvas, audio) {
           burst: noted.burst,
         });
         state = reward.state;
+        addXp(TUNING.xpKill);
         dropBattery(applied.enemy);
         burst(hit.x, hit.y, hit.z, [1, 0.68, 0.25], 18);
         audio.play("death");
@@ -484,6 +497,21 @@ export function createGame(canvas, audio) {
     burst(priest.x, 2.15, priest.z, [0.96, 0.78, 0.32], 20);
     flash = Math.max(flash, 0.34);
     if (priest.alive) banner("RITE BROKEN");
+    addXp(TUNING.xpRite);
+  }
+
+  function addXp(amount) {
+    const gained = grantXp(state, amount);
+    state = gained.state;
+    if (gained.leveled > 0 && doorOpen) openLevelUp("level");
+    else if (gained.leveled > 0) banner("LEVEL " + state.level);
+    return gained;
+  }
+
+  function openLevelUp(reason) {
+    if ((state.pending || 0) <= 0 || mode !== "play") return;
+    levelReason = reason;
+    mode = "levelup";
   }
 
   function priestBolt() {
@@ -528,12 +556,20 @@ export function createGame(canvas, audio) {
     player.pitch = clamp(player.pitch - input.lookY * 0.00215, -1.35, 1.35);
 
     const courtLeft = enemies.some((enemy) => enemy.alive && enemy.room !== "chapel");
+    let broke = false;
     if (!doorOpen && !courtLeft) {
       doorOpen = true;
+      broke = true;
       state = refillBatteries(state);
+      const cleared = grantXp(state, TUNING.xpCourt);
+      state = cleared.state;
       banner("RADIO WING");
       audio.play("door");
       queueTip("wing", "North door is open. The radio wing is still on the air.");
+    }
+    if (doorOpen && (state.pending || 0) > 0 && mode === "play") {
+      openLevelUp(broke ? "break" : "level");
+      return;
     }
     if (doorOpen && player.z < -15.05) {
       for (let i = 0; i < enemies.length; i++) {
@@ -565,7 +601,7 @@ export function createGame(canvas, audio) {
     else prompt = hot ? "PA RETUNED" : "";
     promptKind = hot ? "hot" : hijackAimed && cooling ? "cool" : hijackAimed ? "ready" : "";
     if (input.use && hijackAimed) {
-      const tried = tryHijack({ cooldownUntil: hijackCooldownUntil }, time);
+      const tried = tryHijack({ cooldownUntil: hijackCooldownUntil }, time, tuningOf(state).paCooldown);
       if (!tried.ok) audio.play("deny");
       else {
         hijackCooldownUntil = tried.cooldownUntil;
@@ -573,6 +609,7 @@ export function createGame(canvas, audio) {
         enemies = applyRetune(enemies, horn, HIJACK_TUNING.radius, HIJACK_TUNING.stun);
         const refund = refundBatteries(state);
         state = refund.state;
+        addXp(TUNING.xpHijack);
         banner("PA RETUNE");
         audio.play("hijack");
         burst(horn.x, horn.y, horn.z, [0.45, 0.97, 1], 28);
@@ -784,11 +821,17 @@ export function createGame(canvas, audio) {
           enemy.room === "chapel" && enemy.alive ? { ...enemy, alive: false, hittable: false } : enemy
         );
         state = refillBatteries(grantSignal(state, 40));
+        const cleared = grantXp(state, TUNING.xpWing);
+        state = cleared.state;
         banner("OFF THE AIR");
         audio.play("death");
         burst(priest.x, 2.1, priest.z, [0.96, 0.8, 0.38], 34);
         burst(priest.x, 2.75, priest.z, [0.9, 0.72, 0.28], 16);
         wingDelay = 1.25;
+      }
+      if ((state.pending || 0) > 0 && mode === "play") {
+        openLevelUp("level");
+        return;
       }
       wingDelay -= dt;
       if (wingDelay <= 0) {
@@ -963,13 +1006,29 @@ export function createGame(canvas, audio) {
       renderer.shadowMap.autoUpdate = true;
       renderer.setRenderTarget(null);
     },
+    chooseUpgrade(index) {
+      if (mode !== "levelup") return false;
+      const offers = offersFor(state);
+      const pick = offers[index];
+      if (!pick) return false;
+      const applied = applyUpgrade(state, pick.id);
+      if (!applied.applied) return false;
+      state = applied.state;
+      banner(pick.name);
+      audio.play("pickup");
+      if ((state.pending || 0) > 0 && offersFor(state).length) return true;
+      state = { ...state, pending: 0 };
+      mode = "play";
+      return true;
+    },
     hud() {
       const inWing = player.z < -14.85;
       const courtCount = enemies.filter((enemy) => enemy.alive && enemy.room !== "chapel").length;
       const wingCount =
         enemies.filter((enemy) => enemy.alive && enemy.room === "chapel").length + (priest.alive ? 1 : 0);
       const playing = mode === "play";
-      const profile = shotProfile(state.channel);
+      const profile = shotProfile(state.channel, state);
+      const offers = mode === "levelup" ? offersFor(state) : [];
       return {
         mode,
         health: state.health,
@@ -977,7 +1036,11 @@ export function createGame(canvas, audio) {
         channel: state.channel,
         remote: profile.name,
         ammo: state.batteries[state.channel],
-        ammoMax: batteryMaxes()[state.channel],
+        ammoMax: batteryMaxes(state)[state.channel],
+        level: state.level || 1,
+        xp: xpProgress(state),
+        levelReason,
+        offers: offers.map((offer) => ({ id: offer.id, name: offer.name, detail: offer.detail })),
         enemies: inWing ? wingCount : courtCount,
         roomLabel: inWing ? "RADIO" : "COURT",
         countLabel: inWing ? "ON AIR" : "TESSERA",

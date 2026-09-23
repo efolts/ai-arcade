@@ -30,8 +30,10 @@ import {
 } from "./level.js";
 import {
   TUNING,
+  UPGRADES,
   applyEnemyHit,
   applyPickup,
+  applyUpgrade,
   armPad,
   batteryMaxes,
   beginShot,
@@ -43,9 +45,11 @@ import {
   grantBatteries,
   grantHealth,
   grantSignal,
+  grantXp,
   hurtPlayer,
   makeBatteryDrop,
   noteHit,
+  offersFor,
   overlapsCircle,
   pickupLabel,
   pickupVisible,
@@ -59,6 +63,8 @@ import {
   tickResources,
   tickReveal,
   tryMove,
+  tuningOf,
+  xpToNext,
 } from "./sim.js";
 
 const cols = courtColliders();
@@ -327,6 +333,94 @@ describe("weapons", () => {
     const intoSouth = resolveShot({ x: 0, y: 1.4, z: 10 }, { x: 0, y: 0, z: 1 }, 30, [], cols);
     assert.equal(intoSouth.kind, "world");
     assert.equal(intoSouth.id, "wall-s");
+  });
+});
+
+describe("level up", () => {
+  it("banks XP into a short list of tuning picks and caps the slice", () => {
+    assert.equal(TUNING.paCooldown, HIJACK_TUNING.cooldown);
+    assert.equal(tuningOf(createRunState()).paCooldown, HIJACK_TUNING.cooldown);
+    assert.equal(createRunState().level, 1);
+    assert.equal(xpToNext(1), TUNING.xpBase);
+    const kill = grantXp(createRunState(), TUNING.xpKill);
+    assert.equal(kill.leveled, 0);
+    assert.equal(kill.state.signal, TUNING.signalMax);
+    assert.equal(kill.state.level, 1);
+
+    let court = createRunState();
+    for (let i = 0; i < 6; i++) court = grantXp(court, TUNING.xpKill).state;
+    court = grantXp(court, TUNING.xpCourt).state;
+    assert.equal(court.level, 3);
+    assert.equal(court.pending, 2);
+    assert.equal(court.xp, 6 * TUNING.xpKill + TUNING.xpCourt - xpToNext(1) - xpToNext(2));
+
+    const offers = offersFor(court);
+    assert.equal(offers.length, 3);
+    assert.equal(new Set(offers.map((offer) => offer.id)).size, 3);
+    assert.ok(offers.every((offer) => UPGRADES.some((item) => item.id === offer.id)));
+    const blocked = applyUpgrade({ ...court, pending: 0 }, offers[0].id);
+    assert.equal(blocked.applied, false);
+
+    const clicker = applyUpgrade({ ...createRunState(), pending: 1, batteries: { LIVE: 2, STATIC: 1, DEAD_AIR: 0 } }, "clicker-mag");
+    assert.equal(clicker.applied, true);
+    assert.equal(clicker.state.pending, 0);
+    assert.equal(clicker.state.batteries.LIVE, 2 + TUNING.magClicker);
+    assert.equal(batteryMaxes(clicker.state).LIVE, TUNING.clickerMag + TUNING.magClicker);
+    assert.equal(shotProfile("LIVE", clicker.state).name, "CLICKER");
+
+    const fan = applyUpgrade(switchChannel({ ...createRunState(), pending: 1 }, "STATIC").state, "scatter-fan");
+    assert.equal(shotProfile("STATIC", fan.state).pellets, TUNING.staticPellets + TUNING.pelletStep);
+
+    let reach = { ...createRunState(), pending: 3 };
+    reach = applyUpgrade(reach, "phaser-reach").state;
+    reach = applyUpgrade(reach, "phaser-reach").state;
+    const phaser = shotProfile("DEAD_AIR", reach);
+    assert.equal(phaser.range, TUNING.phaserRange + TUNING.phaserStep * 2);
+    assert.ok(phaser.range < TUNING.staticRange);
+    const again = applyUpgrade(reach, "phaser-reach");
+    assert.equal(again.applied, false);
+    assert.equal(again.state.pending, 1);
+
+    const quiet = applyUpgrade(switchChannel({ ...createRunState(), pending: 1, signal: 40 }, "DEAD_AIR").state, "quiet-air");
+    const drained = tickResources(quiet.state, 1);
+    assert.ok(Math.abs(drained.state.signal - (40 - (TUNING.deadDrain - TUNING.drainStep))) < 1e-6);
+
+    const cells = applyUpgrade(
+      { ...createRunState(), pending: 1, batteries: { LIVE: TUNING.clickerMag, STATIC: TUNING.scatterMag, DEAD_AIR: TUNING.phaserMag } },
+      "battery-max"
+    );
+    assert.equal(cells.state.batteries.LIVE, TUNING.clickerMag + TUNING.batteryLive);
+    assert.equal(cells.state.batteries.STATIC, TUNING.scatterMag + TUNING.batteryStatic);
+    assert.equal(cells.state.batteries.DEAD_AIR, TUNING.phaserMag + TUNING.batteryDead);
+
+    const surf = applyUpgrade({ ...createRunState(), pending: 1 }, "fast-surf");
+    const shot = beginShot(surf.state);
+    assert.ok(shot.profile.cooldown < TUNING.liveCooldown);
+    assert.equal(shot.state.fireCooldown, tuningOf(surf.state).liveCooldown);
+
+    const horn = applyUpgrade({ ...createRunState(), pending: 1 }, "pa-cycle");
+    assert.equal(tuningOf(horn.state).paCooldown, TUNING.paCooldown - TUNING.paStep);
+    const hijack = tryHijack({ cooldownUntil: 0 }, 3, tuningOf(horn.state).paCooldown);
+    assert.equal(hijack.cooldownUntil, 3 + TUNING.paCooldown - TUNING.paStep);
+
+    const feed = applyUpgrade({ ...createRunState(), pending: 1, signal: 10 }, "live-feed");
+    const regen = tickResources(feed.state, 1);
+    assert.ok(Math.abs(regen.state.signal - (10 + TUNING.liveRegen + TUNING.regenStep)) < 1e-6);
+
+    const cappedMods = { ...createRunState(), level: 4, pending: 1, mods: { "clicker-mag": TUNING.upgradeStacks } };
+    assert.equal(offersFor(cappedMods).some((offer) => offer.id === "clicker-mag"), false);
+
+    let climb = createRunState();
+    let total = 0;
+    for (let level = 1; level < TUNING.maxLevel; level++) total += xpToNext(level);
+    climb = grantXp(climb, total).state;
+    assert.equal(climb.level, TUNING.maxLevel);
+    assert.equal(climb.pending, TUNING.maxLevel - 1);
+    assert.ok(TUNING.maxLevel >= 5 && TUNING.maxLevel <= 8);
+    const overflow = grantXp(climb, 500);
+    assert.equal(overflow.leveled, 0);
+    assert.equal(overflow.state.pending, TUNING.maxLevel - 1);
+    assert.equal(overflow.state.channel, "LIVE");
   });
 });
 

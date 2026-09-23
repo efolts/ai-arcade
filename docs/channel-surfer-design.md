@@ -2,7 +2,7 @@
 
 The FPS where changing TV channels changes combat and the level.
 
-The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 4 adds channel-locked remotes and Signal batteries on that slice. Phase 4.1 adds respawning battery pads so a fight can be recharged without waiting for a room clear. Phases 5–6 stay on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
+The playable slice is still two rooms: the KRCD mall court and the radio wing, with one PA hijack and the Visor Priest. Phase 4 adds channel-locked remotes and Signal batteries on that slice. Phase 4.1 adds respawning battery pads so a fight can be recharged without waiting for a room clear. Phase 5 adds a short level-up that changes tuning numbers. Channels stay the weapon switch. Phase 6 stays on the hooks in `channel-surfer-src/src/level.js` and `hijack.js`. This document matches what ships.
 
 ## Promise
 
@@ -56,9 +56,11 @@ Each channel has its own battery magazine. Surfing is the weapon switch: 1, 2, 3
 
 Kills restore Signal and drop a one-shot battery cell (5 Clicker, 2 Scatter, 2 Phaser, clamped to the mag). Six pads hold a cell that comes back: east of the fountain, south of the food counter, and on the approach to the north door in the court; the center aisle, the east pews, and the altar approach in the radio wing. Picking one up feeds the remote you are holding (+6) and puts +2 in each other magazine. The banner names that remote (`CLICKER +6`). A full load leaves the pad alone. The pad stays on the floor, dim and amber, and the cell returns after 16 seconds. Clearing the court refills every magazine. Clearing the wing refills them again and still pays 40 Signal. A close kill, a STATIC kill, or a burst (another hit within 0.48s) restores 26 Signal. A spaced long-range LIVE tap restores 10. Standing in LIVE also refills the Signal bar, slowly.
 
+You start at level 1 and cap at level 6. A Tessera kill pays 16 XP, a rite break pays 28, a PA retune pays 18, and each room clear pays 48. Leaving a level costs 40, then 52, 64, 76, and 88. Levels earned in the court wait for the station break when the north door opens. Levels in the radio wing pause where you stand. Each break offers three retunes (fewer if the list is short). Press 1, 2, or 3, or click. The picks change numbers: Clicker magazine +4, Scatter pellets +2, Phaser range +2, Dead Air drain −3, every magazine a little larger, faster remote recovery, PA cooldown −4s, or LIVE regen +3. Each pick stacks twice. A magazine pick loads the extra rounds. Pads and kill drops still fill whatever is left, so the bigger mag does not replace the pads. A wing retry keeps the level. A court death clears it. The reserved id `upgrades` still must not spawn as an encounter.
+
 The cloaked Tessera cannot be hit until STATIC (or until you bump it, which cracks the cloak for a moment). After you leave STATIC its reveal lingers about 4.2s, long enough to finish on LIVE. Ordinary Tessera only take visor bonus damage while STATIC is actually up.
 
-Clicker and Scatter stop on a `phaseGate`. The Phaser does not. DEAD AIR still walks through the same volumes. The Phaser is short (8 m) so it is a way through the shutter and the veil, not a second long gun.
+Clicker and Scatter stop on a `phaseGate`. The Phaser does not. DEAD AIR still walks through the same volumes. The Phaser starts at 8 m so it is a way through the shutter and the veil, not a second long gun. A level-up can add 2 m, twice, and it still stays inside Scatter's 13 m.
 
 Hurt has brief invulnerability so amber bolts do not stack in one frame.
 
@@ -170,13 +172,13 @@ Segmented Tessera fingers and thumbs, shared by the choir, fanned so they read a
 
 Three remotes, one per channel. LIVE Clicker, STATIC Scatter, DEAD AIR Phaser. Magazines are Signal batteries, separate from the Signal meter. Kills drop cells. The court clear and the wing clear refill every mag. The PA retune refunds a few. No fourth weapon: the horn stays the utility. The reserved id `arsenal` still must not spawn as an encounter. Hurt spheres are unchanged.
 
-### Phase 4.1 — this pass
+### Phase 4.1
 
 Six respawning battery pads replace the two one-shot floor cells. Three are in the court and three are in the radio wing. A pad feeds the held remote +6 and the other magazines +2, then recharges in 16 seconds. Kill drops and room-clear refills stay. Hurt spheres and the rooms are unchanged.
 
-### Phase 5 — not started
+### Phase 5 — this pass
 
-Level-up that modifies `TUNING` (pellet count, drain rate, phase speed). Not a tree that replaces channels.
+A level chip and a cyan XP bar. Cap is level 6. XP comes from Tessera kills, rite breaks, PA retunes, and room clears. The court banks those levels until the north door, then a station break offers three numeric retunes. The wing pauses on the level-up itself. Picks stack twice and do not replace channels. Hurt spheres and the rooms are unchanged. The reserved id `upgrades` still must not spawn as an encounter.
 
 ### Phase 6 — not started
 
@@ -187,7 +189,7 @@ Broadcast Echo (a ghost that replays a channel timeline) and the rest of the hij
 ## Hooks
 
 - `level.js` — `BLOCKS`, `ENEMIES`, `CHAPEL_ENEMIES`, `PICKUPS`, `LEASHES`, `RESERVED_CONTENT`, `PHASE`, `activeColliders`.
-- `sim.js` — channel, Signal, health, movement, shots, reveal, rewards.
+- `sim.js` — channel, Signal, health, movement, shots, reveal, rewards, XP, and the retune list.
 - `ai.js` — Tessera step. `dormant` and `stun` are data. Enemies never phase.
 - `boss.js` — priest rites, chip damage, and the halo ray. New bosses should be new steppers, not extra Tessera.
 - `hijack.js` — catalog, aim test, cooldown, retune. Add a playable entry beside `pa-horn` instead of a special case in the renderer.

@@ -44,17 +44,70 @@ export const TUNING = {
   padRespawn: 16,
   padFocus: 6,
   padSide: 2,
+  maxLevel: 6,
+  xpBase: 40,
+  xpStep: 12,
+  xpKill: 16,
+  xpRite: 28,
+  xpCourt: 48,
+  xpWing: 48,
+  xpHijack: 18,
+  paCooldown: 16,
+  upgradeStacks: 2,
+  magClicker: 4,
+  pelletStep: 2,
+  phaserStep: 2,
+  drainStep: 3,
+  batteryLive: 3,
+  batteryStatic: 1,
+  batteryDead: 1,
+  surfLive: 0.03,
+  surfStatic: 0.08,
+  surfPhaser: 0.08,
+  paStep: 4,
+  regenStep: 3,
 };
+
+export const UPGRADES = [
+  { id: "clicker-mag", name: "CLICKER MAG", detail: `+${TUNING.magClicker} shots`, max: TUNING.upgradeStacks },
+  { id: "scatter-fan", name: "SCATTER FAN", detail: `+${TUNING.pelletStep} pellets`, max: TUNING.upgradeStacks },
+  { id: "phaser-reach", name: "PHASER REACH", detail: `+${TUNING.phaserStep} meters`, max: TUNING.upgradeStacks },
+  { id: "quiet-air", name: "QUIET AIR", detail: `Drain −${TUNING.drainStep}`, max: TUNING.upgradeStacks },
+  { id: "battery-max", name: "BATTERY MAX", detail: `+${TUNING.batteryLive} / +${TUNING.batteryStatic} / +${TUNING.batteryDead} magazines`, max: TUNING.upgradeStacks },
+  { id: "fast-surf", name: "FAST SURF", detail: "Shoot sooner", max: TUNING.upgradeStacks },
+  { id: "pa-cycle", name: "PA CYCLE", detail: `Horn −${TUNING.paStep}s`, max: TUNING.upgradeStacks },
+  { id: "live-feed", name: "LIVE FEED", detail: `Regen +${TUNING.regenStep}`, max: TUNING.upgradeStacks },
+];
 
 export function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
-export function batteryMaxes() {
+export function tuningOf(state) {
+  const mods = state?.mods || {};
+  const surf = mods.surf || 0;
   return {
-    LIVE: TUNING.clickerMag,
-    STATIC: TUNING.scatterMag,
-    DEAD_AIR: TUNING.phaserMag,
+    ...TUNING,
+    clickerMag: TUNING.clickerMag + (mods.clickerMag || 0) + (mods.batteryLive || 0),
+    scatterMag: TUNING.scatterMag + (mods.batteryStatic || 0),
+    phaserMag: TUNING.phaserMag + (mods.batteryDead || 0),
+    staticPellets: TUNING.staticPellets + (mods.staticPellets || 0),
+    phaserRange: TUNING.phaserRange + (mods.phaserRange || 0),
+    deadDrain: Math.max(8, TUNING.deadDrain - (mods.deadDrain || 0)),
+    liveRegen: TUNING.liveRegen + (mods.liveRegen || 0),
+    liveCooldown: Math.max(0.11, +(TUNING.liveCooldown - surf * TUNING.surfLive).toFixed(2)),
+    staticCooldown: Math.max(0.32, +(TUNING.staticCooldown - surf * TUNING.surfStatic).toFixed(2)),
+    phaserCooldown: Math.max(0.3, +(TUNING.phaserCooldown - surf * TUNING.surfPhaser).toFixed(2)),
+    paCooldown: Math.max(8, TUNING.paCooldown - (mods.paCut || 0)),
+  };
+}
+
+export function batteryMaxes(state) {
+  const tuned = tuningOf(state);
+  return {
+    LIVE: tuned.clickerMag,
+    STATIC: tuned.scatterMag,
+    DEAD_AIR: tuned.phaserMag,
   };
 }
 
@@ -70,6 +123,10 @@ export function createRunState() {
     fireCooldown: 0,
     hurtTimer: 0,
     batteries: fullBatteries(),
+    level: 1,
+    xp: 0,
+    pending: 0,
+    mods: {},
   };
 }
 
@@ -103,10 +160,11 @@ export function tickResources(state, dt) {
   let forced = false;
   fireCooldown = Math.max(0, fireCooldown - dt);
   hurtTimer = Math.max(0, hurtTimer - dt);
+  const tuned = tuningOf(state);
   if (channel === "LIVE") {
-    signal = Math.min(TUNING.signalMax, signal + TUNING.liveRegen * dt);
+    signal = Math.min(TUNING.signalMax, signal + tuned.liveRegen * dt);
   } else {
-    const drain = channel === "STATIC" ? TUNING.staticDrain : TUNING.deadDrain;
+    const drain = channel === "STATIC" ? TUNING.staticDrain : tuned.deadDrain;
     signal -= drain * dt;
     if (signal <= 0) {
       signal = 0;
@@ -125,18 +183,19 @@ export function movementSpeed(channel) {
 }
 
 function magCount(state, channel) {
-  const max = batteryMaxes()[channel] ?? 0;
+  const max = batteryMaxes(state)[channel] ?? 0;
   if (!state.batteries || state.batteries[channel] == null) return max;
   return state.batteries[channel];
 }
 
 export function canFire(state) {
   if (state.health <= 0 || state.fireCooldown > 0) return false;
-  const profile = shotProfile(state.channel);
+  const profile = shotProfile(state.channel, state);
   return profile.kind !== "none" && magCount(state, state.channel) >= profile.cost;
 }
 
-export function shotProfile(channel) {
+export function shotProfile(channel, state) {
+  const tuned = tuningOf(state);
   if (channel === "LIVE") {
     return {
       kind: "hitscan",
@@ -146,7 +205,7 @@ export function shotProfile(channel) {
       damage: TUNING.liveDamage,
       range: TUNING.liveRange,
       falloff: TUNING.liveFalloff,
-      cooldown: TUNING.liveCooldown,
+      cooldown: tuned.liveCooldown,
       cost: 1,
       phases: false,
     };
@@ -155,12 +214,12 @@ export function shotProfile(channel) {
     return {
       kind: "spread",
       name: "SCATTER",
-      pellets: TUNING.staticPellets,
+      pellets: tuned.staticPellets,
       spread: TUNING.staticSpread,
       damage: TUNING.staticPellet,
       range: TUNING.staticRange,
       falloff: TUNING.staticFalloff,
-      cooldown: TUNING.staticCooldown,
+      cooldown: tuned.staticCooldown,
       cost: 1,
       phases: false,
     };
@@ -172,9 +231,9 @@ export function shotProfile(channel) {
       pellets: 1,
       spread: 0,
       damage: TUNING.phaserDamage,
-      range: TUNING.phaserRange,
+      range: tuned.phaserRange,
       falloff: TUNING.phaserFalloff,
-      cooldown: TUNING.phaserCooldown,
+      cooldown: tuned.phaserCooldown,
       cost: 1,
       phases: true,
     };
@@ -183,13 +242,13 @@ export function shotProfile(channel) {
 }
 
 export function beginShot(state) {
-  const profile = shotProfile(state.channel);
+  const profile = shotProfile(state.channel, state);
   if (state.health <= 0) return { state, profile, fired: false, reason: "dead" };
   if (profile.kind === "none") return { state, profile, fired: false, reason: "none" };
   if (state.fireCooldown > 0) return { state, profile, fired: false, reason: "wait" };
   const have = magCount(state, state.channel);
   if (have < profile.cost) return { state, profile, fired: false, reason: "dry" };
-  const batteries = { ...(state.batteries || fullBatteries()), [state.channel]: have - profile.cost };
+  const batteries = { ...(state.batteries || fullBatteries(state)), [state.channel]: have - profile.cost };
   return {
     state: { ...state, batteries, fireCooldown: profile.cooldown },
     profile,
@@ -199,8 +258,8 @@ export function beginShot(state) {
 }
 
 export function grantBatteries(state, amounts = {}) {
-  const max = batteryMaxes();
-  const batteries = { ...(state.batteries || fullBatteries()) };
+  const max = batteryMaxes(state);
+  const batteries = { ...(state.batteries || fullBatteries(state)) };
   let gained = 0;
   for (const channel of CHANNELS) {
     const add = amounts[channel] || 0;
@@ -213,13 +272,87 @@ export function grantBatteries(state, amounts = {}) {
 }
 
 export function refillBatteries(state) {
-  return { ...state, batteries: fullBatteries() };
+  return { ...state, batteries: fullBatteries(state) };
 }
 
 export function refundBatteries(state) {
   const amounts = { LIVE: TUNING.paRefund, STATIC: TUNING.paRefund, DEAD_AIR: TUNING.paRefund };
   if (CHANNELS.includes(state.channel)) amounts[state.channel] += TUNING.paRefundFocus;
   return grantBatteries(state, amounts);
+}
+
+export function xpToNext(level) {
+  if (level >= TUNING.maxLevel) return 0;
+  return TUNING.xpBase + (Math.max(1, level) - 1) * TUNING.xpStep;
+}
+
+export function xpProgress(state) {
+  const need = xpToNext(state?.level || 1);
+  if (!need) return 1;
+  return clamp((state?.xp || 0) / need, 0, 1);
+}
+
+export function grantXp(state, amount) {
+  const add = Math.max(0, amount || 0);
+  if (add <= 0) return { state, leveled: 0 };
+  let level = state.level || 1;
+  let xp = state.xp || 0;
+  let pending = state.pending || 0;
+  if (level >= TUNING.maxLevel) return { state, leveled: 0 };
+  xp += add;
+  let leveled = 0;
+  while (level < TUNING.maxLevel) {
+    const need = xpToNext(level);
+    if (!(need > 0) || xp < need) break;
+    xp -= need;
+    level += 1;
+    pending += 1;
+    leveled += 1;
+  }
+  if (level >= TUNING.maxLevel) xp = 0;
+  return { state: { ...state, level, xp, pending }, leveled };
+}
+
+function stackMods(mods, id) {
+  const next = { ...(mods || {}) };
+  if (id === "clicker-mag") next.clickerMag = (next.clickerMag || 0) + TUNING.magClicker;
+  else if (id === "scatter-fan") next.staticPellets = (next.staticPellets || 0) + TUNING.pelletStep;
+  else if (id === "phaser-reach") next.phaserRange = (next.phaserRange || 0) + TUNING.phaserStep;
+  else if (id === "quiet-air") next.deadDrain = (next.deadDrain || 0) + TUNING.drainStep;
+  else if (id === "battery-max") {
+    next.batteryLive = (next.batteryLive || 0) + TUNING.batteryLive;
+    next.batteryStatic = (next.batteryStatic || 0) + TUNING.batteryStatic;
+    next.batteryDead = (next.batteryDead || 0) + TUNING.batteryDead;
+  } else if (id === "fast-surf") next.surf = (next.surf || 0) + 1;
+  else if (id === "pa-cycle") next.paCut = (next.paCut || 0) + TUNING.paStep;
+  else if (id === "live-feed") next.liveRegen = (next.liveRegen || 0) + TUNING.regenStep;
+  next[id] = (mods?.[id] || 0) + 1;
+  return next;
+}
+
+export function offersFor(state) {
+  const open = UPGRADES.filter((upgrade) => (state?.mods?.[upgrade.id] || 0) < upgrade.max);
+  const count = Math.min(3, open.length);
+  const start = open.length ? (state?.level || 1) % open.length : 0;
+  const picks = [];
+  for (let i = 0; i < count; i++) picks.push(open[(start + i) % open.length]);
+  return picks;
+}
+
+export function applyUpgrade(state, id) {
+  const upgrade = UPGRADES.find((item) => item.id === id);
+  if (!upgrade || (state.pending || 0) <= 0) return { state, applied: false };
+  if ((state.mods?.[id] || 0) >= upgrade.max) return { state, applied: false };
+  const mods = stackMods(state.mods, id);
+  const next = { ...state, mods, pending: state.pending - 1 };
+  const before = batteryMaxes(state);
+  const after = batteryMaxes(next);
+  const batteries = { ...(state.batteries || fullBatteries(state)) };
+  for (const channel of CHANNELS) {
+    const have = batteries[channel] ?? before[channel];
+    batteries[channel] = Math.min(after[channel], have + Math.max(0, after[channel] - before[channel]));
+  }
+  return { state: { ...next, batteries }, applied: true, upgrade };
 }
 
 export function makeBatteryDrop(enemy) {
@@ -261,7 +394,7 @@ export function pickupLabel(pickup, channel) {
   if (pickup.kind === "health") return "AID KIT";
   if (pickup.kind === "battery" && pickup.pad) {
     const focus = padAmounts(channel)[channel] ?? TUNING.padFocus;
-    return `${shotProfile(channel).name} +${focus}`;
+    return `${shotProfile(channel, null).name} +${focus}`;
   }
   if (pickup.kind === "battery") return "BATTERY";
   return "";

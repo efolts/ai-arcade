@@ -27,10 +27,11 @@ export function aimHijack({ origin, dir, point, maxDist, cone, blocked }) {
   return { aimed: dot >= Math.cos(cone), dist, dot };
 }
 
-export function tryHijack(state, now) {
+export function tryHijack(state, now, cooldown = HIJACK_TUNING.cooldown) {
   const until = state.cooldownUntil || 0;
   if (until > now) return { ok: false, reason: "cooldown", cooldownUntil: until };
-  return { ok: true, cooldownUntil: now + HIJACK_TUNING.cooldown };
+  const wait = cooldown > 0 ? cooldown : HIJACK_TUNING.cooldown;
+  return { ok: true, cooldownUntil: now + wait };
 }
 
 /** Stuns chapel Tessera near the horn. The priest is not in this list and is not skipped by the retune. */
